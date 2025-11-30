@@ -26,8 +26,8 @@ export default function PropertyDetail() {
         api.getProperty(id!),
         api.getComps(id!),
       ]);
-      setProperty(propData.property);
-      setComps(compsData.comps || []);
+      setProperty((propData as any).property);
+      setComps((compsData as any).comps || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load property');
     } finally {
@@ -45,7 +45,7 @@ export default function PropertyDetail() {
       setAnalyzing(true);
       setError('');
       const result = await api.analyzeProperty(id!);
-      setValuation(result.valuation);
+      setValuation((result as any).valuation);
     } catch (err: any) {
       setError(err.message || 'Analysis failed');
     } finally {
