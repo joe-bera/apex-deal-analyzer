@@ -24,21 +24,16 @@ Complete deployment instructions for the Apex Deal Analyzer application.
    - Click "New Project"
    - Select "Deploy from GitHub repo"
    - Choose `apex-deal-analyzer` repository
+   - Railway will auto-detect the configuration from `railway.toml`
 
-3. **Configure Service** (IMPORTANT for monorepo)
-   - After project creation, click on your service
-   - Go to **Settings** tab
-   - Scroll to **Service Settings**
-   - Set **Root Directory**: `backend`
-   - Set **Watch Paths**: `backend/**`
+3. **Verify Configuration** (Auto-detected from railway.toml)
+   - Railway will automatically use the monorepo configuration
+   - Build: `cd backend && npm install && npm run build`
+   - Start: `cd backend && npm start`
+   - Health check: `/api/health`
+   - No need to manually set Root Directory!
 
-4. **Configure Build & Start** (Optional, auto-detected via nixpacks.toml)
-   - Railway will auto-detect using the provided config files
-   - Build command: `npm install && npm run build` (from nixpacks.toml)
-   - Start command: `npm start` (from Procfile/nixpacks.toml)
-   - If needed, you can override in Settings → Deploy
-
-5. **Add Environment Variables**
+4. **Add Environment Variables**
    ```
    NODE_ENV=production
    PORT=3001
@@ -58,14 +53,16 @@ Complete deployment instructions for the Apex Deal Analyzer application.
    FRONTEND_URL=https://your-frontend-url.vercel.app
    ```
 
-6. **Deploy**
+5. **Deploy**
    - Railway will automatically deploy
    - Check the deployment logs for any errors
-   - Get your backend URL: `https://your-app.up.railway.app`
+   - Wait for build to complete (~2-3 minutes)
 
-7. **Note Your Backend URL**
-   - Copy the URL provided by Railway (in Settings → Domains)
+6. **Get Your Backend URL**
+   - Go to Settings → Networking/Domains
+   - Copy your Railway URL: `https://your-app.up.railway.app`
    - You'll need this for the frontend configuration
+   - Test it: `https://your-app.up.railway.app/api/health`
 
 ### Option B: Render
 
