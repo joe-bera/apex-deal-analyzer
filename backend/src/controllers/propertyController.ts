@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 import { ExtractedPropertyData } from '../services/extractionService';
+import { analyzePropertyValue } from '../services/valuationService';
 
 /**
  * Create property from extracted document data
@@ -379,6 +380,94 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
     } else {
       console.error('Delete property error:', error);
       res.status(500).json({ success: false, error: 'Failed to delete property' });
+    }
+  }
+};
+
+/**
+ * Analyze property value using AI and comps
+ * POST /api/properties/:id/analyze
+ */
+export const analyzePropertyValuation = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { id } = req.params;
+
+    // Get property
+    const { data: property, error: propError } = await supabaseAdmin
+      .from('properties')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (propError || !property) {
+      throw new AppError(404, 'Property not found');
+    }
+
+    // Check access
+    if (property.created_by !== req.user.id) {
+      throw new AppError(403, 'You do not have access to this property');
+    }
+
+    // Get all comps for this property
+    const { data: comps, error: compsError } = await supabaseAdmin
+      .from('comps')
+      .select('*')
+      .eq('property_id', id);
+
+    if (compsError) {
+      console.error('Error fetching comps:', compsError);
+      throw new AppError(500, 'Failed to fetch comps');
+    }
+
+    if (!comps || comps.length === 0) {
+      throw new AppError(400, 'No comparables found. Please add at least one comp before running analysis.');
+    }
+
+    console.log(`Analyzing property ${id} with ${comps.length} comps...`);
+
+    // Run AI valuation analysis
+    const valuation = await analyzePropertyValue(property, comps);
+
+    // Save analysis result
+    const { data: deal, error: dealError } = await supabaseAdmin
+      .from('deals')
+      .insert({
+        property_id: id,
+        created_by: req.user.id,
+        deal_name: `Valuation Analysis - ${new Date().toISOString().split('T')[0]}`,
+        valuation_result: valuation,
+        status: 'completed',
+      })
+      .select()
+      .single();
+
+    if (dealError) {
+      console.error('Error saving deal:', dealError);
+      // Continue even if saving fails
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Valuation analysis completed',
+      valuation,
+      deal_id: deal?.id,
+    });
+  } catch (error: any) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Valuation analysis error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to analyze property valuation'
+      });
     }
   }
 };

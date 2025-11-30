@@ -100,4 +100,27 @@ export const api = {
 
   deleteProperty: (id: string) =>
     request(`/properties/${id}`, { method: 'DELETE' }),
+
+  // Comps
+  getComps: (propertyId: string) =>
+    request(`/properties/${propertyId}/comps`),
+
+  addComp: (propertyId: string, compData: any) =>
+    request(`/properties/${propertyId}/comps`, {
+      method: 'POST',
+      body: JSON.stringify(compData),
+    }),
+
+  updateComp: (compId: string, updates: any) =>
+    request(`/comps/${compId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+
+  deleteComp: (compId: string) =>
+    request(`/comps/${compId}`, { method: 'DELETE' }),
+
+  // Valuation Analysis
+  analyzeProperty: (propertyId: string) =>
+    request(`/properties/${propertyId}/analyze`, { method: 'POST' }),
 };

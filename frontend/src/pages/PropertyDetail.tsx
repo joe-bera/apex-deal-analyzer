@@ -1,245 +1,385 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export default function PropertyDetail() {
-  const { id } = useParams<{ id: string }>();
-  const [property, setProperty] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { id } = useParams();
   const navigate = useNavigate();
+  const [property, setProperty] = useState<any>(null);
+  const [comps, setComps] = useState<any[]>([]);
+  const [valuation, setValuation] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [showAddComp, setShowAddComp] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (id) {
-      api
-        .getProperty(id)
-        .then((data: any) => setProperty(data.property))
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
+      loadPropertyData();
     }
   }, [id]);
 
-  const formatCurrency = (value: number | null | undefined) =>
-    value ? `$${value.toLocaleString()}` : 'N/A';
+  const loadPropertyData = async () => {
+    try {
+      setLoading(true);
+      const [propData, compsData] = await Promise.all([
+        api.getProperty(id!),
+        api.getComps(id!),
+      ]);
+      setProperty(propData.property);
+      setComps(compsData.comps || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load property');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const formatNumber = (value: number | null | undefined) =>
-    value ? value.toLocaleString() : 'N/A';
+  const handleAnalyze = async () => {
+    if (comps.length === 0) {
+      alert('Please add at least one comparable sale before running analysis.');
+      return;
+    }
+
+    try {
+      setAnalyzing(true);
+      setError('');
+      const result = await api.analyzeProperty(id!);
+      setValuation(result.valuation);
+    } catch (err: any) {
+      setError(err.message || 'Analysis failed');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleAddComp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      await api.addComp(id!, {
+        comp_address: formData.get('address'),
+        comp_city: formData.get('city'),
+        comp_state: formData.get('state'),
+        comp_zip_code: formData.get('zip'),
+        comp_property_type: formData.get('type'),
+        comp_square_footage: formData.get('sqft') ? parseInt(formData.get('sqft') as string) : null,
+        comp_year_built: formData.get('year') ? parseInt(formData.get('year') as string) : null,
+        comp_sale_price: parseFloat(formData.get('price') as string),
+        comp_sale_date: formData.get('date'),
+        comp_price_per_sqft: formData.get('pricesf') ? parseFloat(formData.get('pricesf') as string) : null,
+      });
+
+      await loadPropertyData();
+      setShowAddComp(false);
+      e.currentTarget.reset();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add comp');
+    }
+  };
+
+  const formatCurrency = (value?: number) => {
+    if (!value) return 'N/A';
+    return `$${value.toLocaleString()}`;
+  };
+
+  const formatNumber = (value?: number) => {
+    if (!value) return 'N/A';
+    return value.toLocaleString();
+  };
 
   if (loading) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          <p className="mt-2 text-gray-600">Loading property...</p>
-        </div>
-      </Layout>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading property...</div>
+      </div>
     );
   }
 
-  if (error || !property) {
+  if (!property) {
     return (
-      <Layout>
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error || 'Property not found'}
-        </div>
-      </Layout>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-red-600">Property not found</div>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-start">
-          <div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Link to="/dashboard" className="text-sm text-blue-600 hover:text-blue-700 mb-2 inline-block">
+                ← Back to Properties
+              </Link>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {property.address || 'Vacant Land'}, {property.city}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {property.property_type?.replace('_', ' ').toUpperCase()} • {property.state} {property.zip_code}
+              </p>
+            </div>
             <button
-              onClick={() => navigate('/dashboard')}
-              className="text-sm text-gray-600 hover:text-gray-900 mb-2"
+              onClick={handleAnalyze}
+              disabled={analyzing || comps.length === 0}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
             >
-              ← Back to Properties
+              {analyzing ? 'Analyzing...' : 'Run AI Valuation'}
             </button>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {property.address || 'Property Details'}
-            </h1>
-            <p className="text-gray-600">
-              {[property.city, property.state, property.zip_code].filter(Boolean).join(', ')}
-            </p>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Basic Info */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Property Type</dt>
-                <dd className="mt-1 text-sm text-gray-900 capitalize">
-                  {property.property_type || 'N/A'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Subtype</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.subtype || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">APN</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.apn || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Zoning</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.zoning || 'N/A'}</dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* Size & Physical */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Size & Physical</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Building Size</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatNumber(property.building_size)} SF
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Lot Size</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatNumber(property.lot_size)} SF
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Year Built</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.year_built || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Stories</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.stories || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Parking Spaces</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {property.parking_spaces || 'N/A'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* Financial Metrics */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Financial Metrics</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Price</dt>
-                <dd className="mt-1 text-sm font-semibold text-gray-900">
-                  {formatCurrency(property.price)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Price per SF</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatCurrency(property.price_per_sqft)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">CAP Rate</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {property.cap_rate ? `${(property.cap_rate * 100).toFixed(2)}%` : 'N/A'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">NOI</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatCurrency(property.noi)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Gross Income</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatCurrency(property.gross_income)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Operating Expenses</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {formatCurrency(property.operating_expenses)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        {/* Market & Lease Info */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Market Information</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Market</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.market || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Submarket</dt>
-                <dd className="mt-1 text-sm text-gray-900">{property.submarket || 'N/A'}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Lease Information</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Occupancy Rate</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {property.occupancy_rate
-                    ? `${(property.occupancy_rate * 100).toFixed(0)}%`
-                    : 'N/A'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Tenant</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {property.additional_data?.tenant_name || 'N/A'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        {/* Documents */}
-        {property.documents && property.documents.length > 0 && (
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Documents</h2>
-            <ul className="divide-y divide-gray-200">
-              {property.documents.map((doc: any) => (
-                <li key={doc.id} className="py-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{doc.file_name}</p>
-                      <p className="text-sm text-gray-500 capitalize">
-                        {doc.document_type?.replace('_', ' ')} •{' '}
-                        {new Date(doc.uploaded_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded ${
-                        doc.extraction_status === 'completed'
-                          ? 'bg-green-100 text-green-800'
-                          : doc.extraction_status === 'failed'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
-                    >
-                      {doc.extraction_status}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
           </div>
         )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Valuation Results */}
+            {valuation && (
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">AI Valuation Analysis</h2>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600 mb-1">Estimated Market Value</div>
+                    <div className="text-4xl font-bold text-blue-900">{formatCurrency(valuation.estimated_value)}</div>
+                    <div className="text-sm text-gray-600 mt-2">
+                      Range: {formatCurrency(valuation.value_range?.low)} - {formatCurrency(valuation.value_range?.high)}
+                    </div>
+                    <div className="text-sm font-medium text-gray-700 mt-1">
+                      Confidence: {valuation.confidence_level}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Analysis</h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{valuation.analysis}</p>
+                  </div>
+
+                  {valuation.key_findings && valuation.key_findings.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-2">Key Findings</h3>
+                      <ul className="list-disc list-inside space-y-1">
+                        {valuation.key_findings.map((finding: string, i: number) => (
+                          <li key={i} className="text-gray-700">{finding}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {valuation.recommendations && valuation.recommendations.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-2">Recommendations</h3>
+                      <ul className="list-disc list-inside space-y-1">
+                        {valuation.recommendations.map((rec: string, i: number) => (
+                          <li key={i} className="text-gray-700">{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {valuation.market_insights && (
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-2">Market Insights</h3>
+                      <p className="text-gray-700">{valuation.market_insights}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Comparable Sales */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Comparable Sales ({comps.length})</h2>
+                <button
+                  onClick={() => setShowAddComp(!showAddComp)}
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {showAddComp ? 'Cancel' : '+ Add Comp'}
+                </button>
+              </div>
+
+              {showAddComp && (
+                <form onSubmit={handleAddComp} className="bg-gray-50 rounded-lg p-4 mb-4 border">
+                  <div className="grid grid-cols-2 gap-4">
+                    <input name="address" required placeholder="Address *" className="border rounded px-3 py-2" />
+                    <input name="city" required placeholder="City *" className="border rounded px-3 py-2" />
+                    <input name="state" required placeholder="State *" maxLength={2} className="border rounded px-3 py-2" />
+                    <input name="zip" placeholder="Zip Code" className="border rounded px-3 py-2" />
+                    <select name="type" required className="border rounded px-3 py-2">
+                      <option value="">Property Type *</option>
+                      <option value="warehouse">Warehouse</option>
+                      <option value="distribution_center">Distribution Center</option>
+                      <option value="manufacturing">Manufacturing</option>
+                      <option value="flex_space">Flex Space</option>
+                      <option value="land">Land</option>
+                      <option value="office">Office</option>
+                      <option value="retail">Retail</option>
+                      <option value="industrial">Industrial</option>
+                    </select>
+                    <input name="sqft" type="number" placeholder="Square Feet" className="border rounded px-3 py-2" />
+                    <input name="year" type="number" placeholder="Year Built" className="border rounded px-3 py-2" />
+                    <input name="price" type="number" step="0.01" required placeholder="Sale Price *" className="border rounded px-3 py-2" />
+                    <input name="date" type="date" required className="border rounded px-3 py-2" />
+                    <input name="pricesf" type="number" step="0.01" placeholder="Price/SF" className="border rounded px-3 py-2" />
+                  </div>
+                  <button type="submit" className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Add Comparable
+                  </button>
+                </form>
+              )}
+
+              {comps.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No comparable sales added yet. Add comps to run valuation analysis.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {comps.map((comp) => (
+                    <div key={comp.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-semibold text-gray-900">{comp.comp_address}</div>
+                          <div className="text-sm text-gray-600">
+                            {comp.comp_city}, {comp.comp_state} • {comp.comp_property_type}
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                            <div><span className="text-gray-600">Sale Price:</span> <span className="font-medium">{formatCurrency(comp.comp_sale_price)}</span></div>
+                            <div><span className="text-gray-600">Sale Date:</span> {new Date(comp.comp_sale_date).toLocaleDateString()}</div>
+                            {comp.comp_square_footage && (
+                              <div><span className="text-gray-600">Size:</span> {formatNumber(comp.comp_square_footage)} SF</div>
+                            )}
+                            {comp.comp_price_per_sqft && (
+                              <div><span className="text-gray-600">Price/SF:</span> ${comp.comp_price_per_sqft}/SF</div>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Delete this comp?')) {
+                              await api.deleteComp(comp.id);
+                              await loadPropertyData();
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-700 text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Property Details */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Property Details</h2>
+              <div className="space-y-3 text-sm">
+                {property.apn && (
+                  <div>
+                    <div className="text-gray-600">APN</div>
+                    <div className="font-medium">{property.apn}</div>
+                  </div>
+                )}
+                {property.building_size && (
+                  <div>
+                    <div className="text-gray-600">Building Size</div>
+                    <div className="font-medium">{formatNumber(property.building_size)} SF</div>
+                  </div>
+                )}
+                {property.lot_size && (
+                  <div>
+                    <div className="text-gray-600">Lot Size</div>
+                    <div className="font-medium">{property.lot_size} acres</div>
+                  </div>
+                )}
+                {property.year_built && (
+                  <div>
+                    <div className="text-gray-600">Year Built</div>
+                    <div className="font-medium">{property.year_built}</div>
+                  </div>
+                )}
+                {property.price && (
+                  <div>
+                    <div className="text-gray-600">List Price</div>
+                    <div className="font-medium text-lg">{formatCurrency(property.price)}</div>
+                  </div>
+                )}
+                {property.price_per_sqft && (
+                  <div>
+                    <div className="text-gray-600">Price per SF</div>
+                    <div className="font-medium">${property.price_per_sqft}/SF</div>
+                  </div>
+                )}
+                {property.cap_rate && (
+                  <div>
+                    <div className="text-gray-600">Cap Rate</div>
+                    <div className="font-medium">{property.cap_rate}%</div>
+                  </div>
+                )}
+                {property.noi && (
+                  <div>
+                    <div className="text-gray-600">NOI</div>
+                    <div className="font-medium">{formatCurrency(property.noi)}</div>
+                  </div>
+                )}
+                {property.market && (
+                  <div>
+                    <div className="text-gray-600">Market</div>
+                    <div className="font-medium">{property.market}</div>
+                  </div>
+                )}
+                {property.submarket && (
+                  <div>
+                    <div className="text-gray-600">Submarket</div>
+                    <div className="font-medium">{property.submarket}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Actions</h2>
+              <div className="space-y-2">
+                <button
+                  onClick={() => navigate('/upload')}
+                  className="w-full text-left px-4 py-2 rounded border hover:bg-gray-50"
+                >
+                  Upload Document
+                </button>
+                <button
+                  onClick={async () => {
+                    if (confirm('Delete this property?')) {
+                      await api.deleteProperty(id!);
+                      navigate('/dashboard');
+                    }
+                  }}
+                  className="w-full text-left px-4 py-2 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  Delete Property
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </Layout>
+    </div>
   );
 }

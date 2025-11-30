@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes';
 import testRoutes from './routes/testRoutes';
 import documentRoutes from './routes/documentRoutes';
 import propertyRoutes from './routes/propertyRoutes';
+import compsRoutes from './routes/compsRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -80,9 +81,7 @@ export const createApp = (): Application => {
   app.use('/api/test', testRoutes);
   app.use('/api/documents', documentRoutes);
   app.use('/api/properties', propertyRoutes);
-
-  // Future routes will be added here:
-  // app.use('/api/comps', compRoutes);
+  app.use('/api', compsRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

@@ -5,6 +5,7 @@ import {
   listProperties,
   updateProperty,
   deleteProperty,
+  analyzePropertyValuation,
 } from '../controllers/propertyController';
 import { authenticate } from '../middleware/auth';
 
@@ -29,5 +30,8 @@ router.patch('/:id', authenticate, updateProperty);
 
 // Delete property (soft delete)
 router.delete('/:id', authenticate, deleteProperty);
+
+// Analyze property valuation with AI
+router.post('/:id/analyze', authenticate, analyzePropertyValuation);
 
 export default router;
