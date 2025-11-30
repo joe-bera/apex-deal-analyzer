@@ -37,13 +37,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const data: any = await api.login(email, password);
-    localStorage.setItem('token', data.token);
+    localStorage.setItem('token', data.session.access_token);
     setUser(data.user);
   };
 
   const signup = async (email: string, password: string, fullName: string) => {
     const data: any = await api.signup(email, password, fullName);
-    localStorage.setItem('token', data.token);
+    // Signup doesn't return a session, user needs to login
     setUser(data.user);
   };
 
