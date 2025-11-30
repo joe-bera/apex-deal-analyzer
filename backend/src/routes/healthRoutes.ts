@@ -9,7 +9,7 @@ const router = Router();
  *
  * Returns server status and basic system info
  */
-router.get('/health', async (req: Request, res: Response) => {
+router.get('/health', async (_req: Request, res: Response) => {
   const startTime = Date.now();
 
   try {
@@ -50,7 +50,7 @@ router.get('/health', async (req: Request, res: Response) => {
  * Readiness probe endpoint (for Kubernetes/Docker)
  * GET /api/ready
  */
-router.get('/ready', async (req: Request, res: Response) => {
+router.get('/ready', async (_req: Request, res: Response) => {
   try {
     // Check if database is ready
     const { error } = await supabase.from('profiles').select('count').limit(1);
@@ -59,9 +59,9 @@ router.get('/ready', async (req: Request, res: Response) => {
       return res.status(503).json({ ready: false, reason: 'Database not ready' });
     }
 
-    res.status(200).json({ ready: true });
+    return res.status(200).json({ ready: true });
   } catch (error) {
-    res.status(503).json({ ready: false, reason: 'Service initialization failed' });
+    return res.status(503).json({ ready: false, reason: 'Service initialization failed' });
   }
 });
 
@@ -69,7 +69,7 @@ router.get('/ready', async (req: Request, res: Response) => {
  * Liveness probe endpoint (for Kubernetes/Docker)
  * GET /api/alive
  */
-router.get('/alive', (req: Request, res: Response) => {
+router.get('/alive', (_req: Request, res: Response) => {
   res.status(200).json({ alive: true });
 });
 

@@ -60,14 +60,16 @@ export const getSupabaseClient = (accessToken?: string): SupabaseClient => {
 
 // Test connection on startup
 if (config.server.isDevelopment) {
-  supabase
-    .from('profiles')
-    .select('count')
-    .limit(1)
-    .then(() => {
-      console.log('✅ Supabase connection successful');
-    })
-    .catch((error) => {
-      console.warn('⚠️  Supabase connection test failed (table may not exist yet):', error.message);
-    });
+  (async () => {
+    try {
+      const { error } = await supabase.from('profiles').select('count').limit(1);
+      if (error) {
+        console.warn('⚠️  Supabase connection test failed (table may not exist yet):', error.message);
+      } else {
+        console.log('✅ Supabase connection successful');
+      }
+    } catch (err) {
+      console.warn('⚠️  Supabase connection test failed:', err);
+    }
+  })();
 }
