@@ -19,14 +19,36 @@ export const createApp = (): Application => {
   app.use(helmet()); // Set security headers
 
   // CORS configuration
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://apex-res.com',
+    'https://www.apex-res.com',
+    config.cors.origin,
+  ];
+
   app.use(
     cors({
-      origin: config.cors.origin,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization'],
     })
   );
+
+  // Iframe compatibility headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Frame-Options', 'ALLOW-FROM https://apex-res.com');
+    res.setHeader('X-Frame-Options', 'ALLOW-FROM https://www.apex-res.com');
+    next();
+  });
 
   // Body parsing middleware
   app.use(express.json({ limit: '1mb' })); // Parse JSON bodies
