@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 import { uploadToStorage } from '../services/storageService';
 import { cleanupFile } from '../middleware/upload';
+import { parsePDF, cleanPDFText } from '../services/pdfService';
 
 /**
  * Upload a document (PDF)
@@ -62,6 +63,24 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       }
     }
 
+    // Extract text from PDF before uploading
+    let extractedText = '';
+    let pdfMetadata = {};
+
+    try {
+      const pdfData = await parsePDF(req.file.path);
+      extractedText = cleanPDFText(pdfData.text);
+      pdfMetadata = {
+        num_pages: pdfData.numPages,
+        title: pdfData.info.Title,
+        author: pdfData.info.Author,
+        creation_date: pdfData.info.CreationDate,
+      };
+    } catch (error) {
+      console.error('PDF extraction failed:', error);
+      // Continue with upload even if extraction fails
+    }
+
     // Upload file to Supabase Storage
     const { filePath, publicUrl } = await uploadToStorage(
       req.file.path,
@@ -69,7 +88,7 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       req.user.id
     );
 
-    // Create document record in database
+    // Create document record in database with extracted text
     const { data: document, error: dbError } = await supabaseAdmin
       .from('documents')
       .insert({
@@ -79,7 +98,14 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
         file_path: filePath,
         file_size: req.file.size,
         document_type,
-        extraction_status: 'pending',
+        extraction_status: extractedText ? 'completed' : 'pending',
+        extracted_data: extractedText
+          ? {
+              raw_text: extractedText,
+              metadata: pdfMetadata,
+              extracted_at: new Date().toISOString(),
+            }
+          : null,
       })
       .select()
       .single();
