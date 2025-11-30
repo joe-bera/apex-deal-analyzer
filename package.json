@@ -4,15 +4,10 @@
   "private": true,
   "description": "Commercial Real Estate Deal Analyzer - Monorepo",
   "scripts": {
-    "install": "cd backend && npm install",
     "build": "cd backend && npm run build",
     "start": "cd backend && npm start",
     "dev": "cd backend && npm run dev"
   },
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
