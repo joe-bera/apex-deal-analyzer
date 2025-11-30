@@ -1,6 +1,4 @@
-const API_BASE = import.meta.env.PROD
-  ? 'https://your-backend-url.railway.app'
-  : '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export class APIError extends Error {
   constructor(
