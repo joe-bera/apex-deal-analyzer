@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { config } from './config/env';
 import healthRoutes from './routes/healthRoutes';
+import authRoutes from './routes/authRoutes';
+import testRoutes from './routes/testRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -42,9 +44,10 @@ export const createApp = (): Application => {
 
   // API Routes
   app.use('/api', healthRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/test', testRoutes);
 
   // Future routes will be added here:
-  // app.use('/api/auth', authRoutes);
   // app.use('/api/properties', propertyRoutes);
   // app.use('/api/documents', documentRoutes);
   // app.use('/api/comps', compRoutes);
