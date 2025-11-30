@@ -1,15 +1,38 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
 
 export default function UploadDocument() {
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('offering_memorandum');
+  const [propertyId, setPropertyId] = useState<string>('');
+  const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Load properties for comp selection
+    const loadProperties = async () => {
+      try {
+        const result: any = await api.listProperties();
+        setProperties(result.properties || []);
+      } catch (err) {
+        console.error('Failed to load properties:', err);
+      }
+    };
+    loadProperties();
+
+    // Check if property_id is in URL params
+    const propId = searchParams.get('property_id');
+    if (propId) {
+      setPropertyId(propId);
+      setDocumentType('comp'); // Default to comp if coming from property page
+    }
+  }, [searchParams]);
 
   const documentTypes = [
     { value: 'offering_memorandum', label: 'Offering Memorandum' },
@@ -61,20 +84,34 @@ export default function UploadDocument() {
       return;
     }
 
+    if (documentType === 'comp' && !propertyId) {
+      setError('Please select a property for this comparable');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const result: any = await api.uploadDocument(file, undefined, documentType);
+      // Upload document with property_id if it's a comp
+      const result: any = await api.uploadDocument(
+        file,
+        documentType === 'comp' ? propertyId : undefined,
+        documentType
+      );
       const documentId = result.document.id;
 
       // Extract data from document
       await api.extractDocument(documentId);
 
-      // Create property from extracted data
-      const propertyResult: any = await api.createPropertyFromDocument(documentId);
-
-      navigate(`/properties/${propertyResult.property.id}`);
+      if (documentType === 'comp' && propertyId) {
+        // For comp documents, go back to the property page
+        navigate(`/properties/${propertyId}`);
+      } else {
+        // For other documents, create property from extracted data
+        const propertyResult: any = await api.createPropertyFromDocument(documentId);
+        navigate(`/properties/${propertyResult.property.id}`);
+      }
     } catch (err: any) {
       setError(err.message || 'Upload failed');
     } finally {
@@ -115,6 +152,30 @@ export default function UploadDocument() {
               ))}
             </select>
           </div>
+
+          {documentType === 'comp' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Property *
+              </label>
+              <select
+                value={propertyId}
+                onChange={(e) => setPropertyId(e.target.value)}
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              >
+                <option value="">Choose a property...</option>
+                {properties.map((prop) => (
+                  <option key={prop.id} value={prop.id}>
+                    {prop.address || 'Vacant Land'}, {prop.city} - {prop.property_type}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-sm text-gray-500">
+                This comparable will be added to the selected property
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">PDF File</label>

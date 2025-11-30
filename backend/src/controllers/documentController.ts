@@ -363,9 +363,37 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       throw new AppError(500, 'Failed to save extracted data');
     }
 
+    // If this is a comp document with a property_id, automatically create a comp record
+    if (document.document_type === 'comp' && document.property_id && extractedData) {
+      try {
+        await supabaseAdmin.from('comps').insert({
+          property_id: document.property_id,
+          created_by: req.user.id,
+          comp_address: extractedData.address || 'Unknown',
+          comp_city: extractedData.city || 'Unknown',
+          comp_state: extractedData.state || 'CA',
+          comp_zip_code: extractedData.zip_code,
+          comp_property_type: extractedData.property_type || 'industrial',
+          comp_square_footage: extractedData.building_size,
+          comp_year_built: extractedData.year_built,
+          comp_sale_price: extractedData.price || 0,
+          comp_sale_date: extractedData.sale_date || new Date().toISOString().split('T')[0],
+          comp_price_per_sqft: extractedData.price_per_sqft,
+          comp_cap_rate: extractedData.cap_rate,
+          adjustment_notes: extractedData.notes,
+        });
+        console.log(`Auto-created comp from document ${id} for property ${document.property_id}`);
+      } catch (compError) {
+        console.error('Failed to auto-create comp:', compError);
+        // Don't fail the whole extraction if comp creation fails
+      }
+    }
+
     res.status(200).json({
       success: true,
-      message: 'Property data extracted successfully',
+      message: document.document_type === 'comp' && document.property_id
+        ? 'Comp data extracted and added to property successfully'
+        : 'Property data extracted successfully',
       extracted_data: extractedData,
     });
   } catch (error) {

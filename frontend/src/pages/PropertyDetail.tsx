@@ -112,7 +112,7 @@ export default function PropertyDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <Link to="/dashboard" className="text-sm text-blue-600 hover:text-blue-700 mb-2 inline-block">
+              <Link to="/dashboard" className="text-sm text-primary-600 hover:text-primary-700 mb-2 inline-block">
                 ← Back to Properties
               </Link>
               <h1 className="text-3xl font-bold text-gray-900">
@@ -125,7 +125,7 @@ export default function PropertyDetail() {
             <button
               onClick={handleAnalyze}
               disabled={analyzing || comps.length === 0}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+              className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {analyzing ? 'Analyzing...' : 'Run AI Valuation'}
             </button>
@@ -148,10 +148,10 @@ export default function PropertyDetail() {
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">AI Valuation Analysis</h2>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                <div className="bg-primary-50 border border-primary-200 rounded-lg p-6 mb-6">
                   <div className="text-center">
                     <div className="text-sm text-gray-600 mb-1">Estimated Market Value</div>
-                    <div className="text-4xl font-bold text-blue-900">{formatCurrency(valuation.estimated_value)}</div>
+                    <div className="text-4xl font-bold text-primary-900">{formatCurrency(valuation.estimated_value)}</div>
                     <div className="text-sm text-gray-600 mt-2">
                       Range: {formatCurrency(valuation.value_range?.low)} - {formatCurrency(valuation.value_range?.high)}
                     </div>
@@ -205,7 +205,7 @@ export default function PropertyDetail() {
                 <h2 className="text-xl font-bold text-gray-900">Comparable Sales ({comps.length})</h2>
                 <button
                   onClick={() => setShowAddComp(!showAddComp)}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-primary-600 hover:text-primary-700 font-medium transition-colors"
                 >
                   {showAddComp ? 'Cancel' : '+ Add Comp'}
                 </button>
@@ -235,7 +235,7 @@ export default function PropertyDetail() {
                     <input name="date" type="date" required className="border rounded px-3 py-2" />
                     <input name="pricesf" type="number" step="0.01" placeholder="Price/SF" className="border rounded px-3 py-2" />
                   </div>
-                  <button type="submit" className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                  <button type="submit" className="mt-4 bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 transition-colors font-medium">
                     Add Comparable
                   </button>
                 </form>
@@ -359,10 +359,10 @@ export default function PropertyDetail() {
               <h2 className="text-lg font-bold text-gray-900 mb-4">Actions</h2>
               <div className="space-y-2">
                 <button
-                  onClick={() => navigate('/upload')}
-                  className="w-full text-left px-4 py-2 rounded border hover:bg-gray-50"
+                  onClick={() => navigate(`/upload?property_id=${id}`)}
+                  className="w-full text-left px-4 py-2 rounded border hover:bg-gray-50 transition-colors"
                 >
-                  Upload Document
+                  Upload Comp Document
                 </button>
                 <button
                   onClick={async () => {
