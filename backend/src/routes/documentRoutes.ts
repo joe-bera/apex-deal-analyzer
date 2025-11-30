@@ -4,6 +4,7 @@ import {
   getDocument,
   listDocuments,
   deleteDocument,
+  extractDocument,
 } from '../controllers/documentController';
 import { authenticate } from '../middleware/auth';
 import { upload } from '../middleware/upload';
@@ -23,6 +24,9 @@ router.get('/', authenticate, listDocuments);
 
 // Get single document
 router.get('/:id', authenticate, getDocument);
+
+// Extract property data from document
+router.post('/:id/extract', authenticate, extractDocument);
 
 // Delete document
 router.delete('/:id', authenticate, deleteDocument);

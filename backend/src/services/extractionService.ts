@@ -1,0 +1,281 @@
+import { callClaude, parseClaudeJSON } from './claudeService';
+import { AppError } from '../middleware/errorHandler';
+
+/**
+ * Document types we support for extraction
+ */
+export type DocumentType =
+  | 'offering_memorandum'
+  | 'title_report'
+  | 'comp'
+  | 'lease'
+  | 'appraisal'
+  | 'environmental_report'
+  | 'other';
+
+/**
+ * Extracted property data structure
+ */
+export interface ExtractedPropertyData {
+  // Basic property information
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  apn?: string; // Assessor's Parcel Number
+  property_type?: 'industrial' | 'office' | 'retail' | 'multifamily' | 'land' | 'mixed_use';
+  subtype?: string; // e.g., "warehouse", "flex space", "cold storage"
+
+  // Size and physical characteristics
+  building_size?: number; // square feet
+  lot_size?: number; // square feet or acres
+  year_built?: number;
+  stories?: number;
+  units?: number; // for multifamily
+
+  // Financial metrics
+  price?: number;
+  price_per_sqft?: number;
+  cap_rate?: number;
+  noi?: number; // Net Operating Income
+  gross_income?: number;
+  operating_expenses?: number;
+
+  // Lease information
+  occupancy_rate?: number;
+  lease_rate_per_sqft?: number;
+  lease_term_years?: number;
+  tenant_name?: string;
+
+  // Market data
+  market?: string; // e.g., "Inland Empire", "Coachella Valley"
+  submarket?: string;
+  sale_date?: string;
+  comparable_to?: string; // For comp documents
+
+  // Additional details
+  zoning?: string;
+  parking_spaces?: number;
+  amenities?: string[];
+  notes?: string;
+
+  // Confidence scores (0-100)
+  confidence_scores?: {
+    [key: string]: number;
+  };
+}
+
+/**
+ * System prompt for Claude extraction
+ */
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert commercial real estate analyst specializing in industrial properties in Southern California, particularly the Inland Empire and Coachella Valley markets.
+
+Your task is to extract structured data from real estate documents with high accuracy. You must:
+
+1. Extract only information that is explicitly stated in the document
+2. Use null for fields that are not found or unclear
+3. Convert all measurements to consistent units (square feet for area, dollars for money)
+4. Calculate derived metrics when base data is available (e.g., price_per_sqft from price and building_size)
+5. Assign confidence scores (0-100) for each extracted field based on how clearly it's stated
+6. Focus on industrial properties (warehouses, distribution centers, manufacturing, flex space)
+
+Return your response as valid JSON matching the specified schema.`;
+
+/**
+ * Build extraction prompt based on document type
+ */
+const buildExtractionPrompt = (documentType: DocumentType, text: string): string => {
+  const basePrompt = `Extract structured property data from the following ${documentType.replace('_', ' ')} document.
+
+Document Text:
+---
+${text.slice(0, 50000)}
+---
+
+`;
+
+  let specificInstructions = '';
+
+  switch (documentType) {
+    case 'offering_memorandum':
+      specificInstructions = `This is an Offering Memorandum (OM). Focus on:
+- Property address and location details
+- Building specifications (size, year built, construction type)
+- Financial performance (asking price, NOI, CAP rate, rental income)
+- Tenant information (names, lease terms, occupancy)
+- Property features and amenities
+- Market positioning and comparable sales data`;
+      break;
+
+    case 'title_report':
+      specificInstructions = `This is a Title Report. Focus on:
+- Property legal description and APN
+- Property address
+- Current owner information
+- Lot size and property dimensions
+- Zoning designation
+- Any encumbrances or liens (note in notes field)`;
+      break;
+
+    case 'comp':
+      specificInstructions = `This is a Comparable Sale (Comp) document. Focus on:
+- Subject property this comp relates to (comparable_to field)
+- Comp property address and location
+- Sale price and sale date
+- Building size and price per square foot
+- Property type and characteristics
+- Key differences from subject property`;
+      break;
+
+    case 'lease':
+      specificInstructions = `This is a Lease Agreement. Focus on:
+- Property address
+- Tenant name
+- Lease term (start date, end date, years)
+- Rent amount and lease rate per square foot
+- Leased space size
+- Property type and use
+- Key lease terms (note in notes field)`;
+      break;
+
+    case 'appraisal':
+      specificInstructions = `This is an Appraisal Report. Focus on:
+- Property address and legal description
+- Appraised value
+- Building and lot specifications
+- Year built and condition
+- Comparable sales used in valuation
+- Income approach data (if applicable)
+- Highest and best use analysis`;
+      break;
+
+    case 'environmental_report':
+      specificInstructions = `This is an Environmental Report. Focus on:
+- Property address and APN
+- Site characteristics (lot size, topography)
+- Environmental findings (note in notes field)
+- Property type and historical use
+- Any recommendations or concerns`;
+      break;
+
+    default:
+      specificInstructions = `Extract any available property information including address, size, price, and key characteristics.`;
+  }
+
+  const jsonSchema = `
+Return a JSON object with this exact structure (use null for missing fields):
+
+{
+  "address": "string or null",
+  "city": "string or null",
+  "state": "string or null",
+  "zip_code": "string or null",
+  "apn": "string or null",
+  "property_type": "industrial|office|retail|multifamily|land|mixed_use or null",
+  "subtype": "string or null",
+  "building_size": number or null,
+  "lot_size": number or null,
+  "year_built": number or null,
+  "stories": number or null,
+  "units": number or null,
+  "price": number or null,
+  "price_per_sqft": number or null,
+  "cap_rate": number or null,
+  "noi": number or null,
+  "gross_income": number or null,
+  "operating_expenses": number or null,
+  "occupancy_rate": number or null,
+  "lease_rate_per_sqft": number or null,
+  "lease_term_years": number or null,
+  "tenant_name": "string or null",
+  "market": "string or null",
+  "submarket": "string or null",
+  "sale_date": "YYYY-MM-DD or null",
+  "comparable_to": "string or null",
+  "zoning": "string or null",
+  "parking_spaces": number or null,
+  "amenities": ["array", "of", "strings"] or null,
+  "notes": "string with important details or null",
+  "confidence_scores": {
+    "field_name": 0-100
+  }
+}`;
+
+  return basePrompt + specificInstructions + '\n\n' + jsonSchema;
+};
+
+/**
+ * Extract structured data from document text using Claude
+ *
+ * @param text - Raw text extracted from PDF
+ * @param documentType - Type of document
+ * @returns Extracted property data
+ */
+export const extractPropertyData = async (
+  text: string,
+  documentType: DocumentType
+): Promise<ExtractedPropertyData> => {
+  try {
+    // Validate input
+    if (!text || text.trim().length === 0) {
+      throw new AppError(400, 'No text provided for extraction');
+    }
+
+    // Build prompt based on document type
+    const prompt = buildExtractionPrompt(documentType, text);
+
+    // Call Claude API
+    const response = await callClaude({
+      prompt,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+      maxTokens: 4096,
+      temperature: 0, // Use 0 for deterministic extraction
+    });
+
+    // Parse JSON response
+    const extractedData = parseClaudeJSON<ExtractedPropertyData>(response.content);
+
+    // Validate required fields exist (at minimum we should have some data)
+    const hasData = Object.values(extractedData).some(
+      (value) => value !== null && value !== undefined
+    );
+
+    if (!hasData) {
+      throw new AppError(500, 'No data could be extracted from document');
+    }
+
+    return extractedData;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    console.error('Extraction error:', error);
+    throw new AppError(500, 'Failed to extract property data');
+  }
+};
+
+/**
+ * Re-run extraction with user corrections/hints
+ *
+ * @param text - Document text
+ * @param documentType - Document type
+ * @param hints - User-provided hints or corrections
+ * @returns Extracted property data
+ */
+export const extractWithHints = async (
+  text: string,
+  documentType: DocumentType,
+  hints: string
+): Promise<ExtractedPropertyData> => {
+  const prompt = buildExtractionPrompt(documentType, text);
+  const enhancedPrompt = `${prompt}\n\nAdditional context and corrections from user:\n${hints}`;
+
+  const response = await callClaude({
+    prompt: enhancedPrompt,
+    systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+    maxTokens: 4096,
+    temperature: 0,
+  });
+
+  return parseClaudeJSON<ExtractedPropertyData>(response.content);
+};

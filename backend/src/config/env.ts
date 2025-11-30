@@ -32,8 +32,9 @@ export const config = {
     anonKey: process.env.SUPABASE_ANON_KEY!,
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   },
-  claude: {
-    apiKey: process.env.CLAUDE_API_KEY || '',
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'default-secret-change-in-production',

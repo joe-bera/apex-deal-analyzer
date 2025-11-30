@@ -4,6 +4,7 @@ import { AppError } from '../middleware/errorHandler';
 import { uploadToStorage } from '../services/storageService';
 import { cleanupFile } from '../middleware/upload';
 import { parsePDF, cleanPDFText } from '../services/pdfService';
+import { extractPropertyData, DocumentType } from '../services/extractionService';
 
 /**
  * Upload a document (PDF)
@@ -290,6 +291,97 @@ export const deleteDocument = async (req: Request, res: Response): Promise<void>
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {
       res.status(500).json({ success: false, error: 'Failed to delete document' });
+    }
+  }
+};
+
+/**
+ * Extract property data from document using AI
+ * POST /api/documents/:id/extract
+ */
+export const extractDocument = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { id } = req.params;
+
+    // Get document
+    const { data: document, error: fetchError } = await supabaseAdmin
+      .from('documents')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !document) {
+      throw new AppError(404, 'Document not found');
+    }
+
+    // Check access permission
+    if (document.uploaded_by !== req.user.id) {
+      // TODO: Check if user has access via property ownership or shared_access
+      throw new AppError(403, 'You do not have access to this document');
+    }
+
+    // Check if document has extracted text
+    if (!document.extracted_data?.raw_text) {
+      throw new AppError(400, 'Document has no extracted text. Please re-upload the document.');
+    }
+
+    // Update extraction status to processing
+    await supabaseAdmin
+      .from('documents')
+      .update({ extraction_status: 'processing' })
+      .eq('id', id);
+
+    // Extract property data using Claude
+    const extractedData = await extractPropertyData(
+      document.extracted_data.raw_text,
+      document.document_type as DocumentType
+    );
+
+    // Merge with existing extracted_data
+    const updatedExtractedData = {
+      ...document.extracted_data,
+      structured_data: extractedData,
+      extraction_completed_at: new Date().toISOString(),
+    };
+
+    // Update document with extracted property data
+    const { data: updatedDoc, error: updateError } = await supabaseAdmin
+      .from('documents')
+      .update({
+        extraction_status: 'completed',
+        extracted_data: updatedExtractedData,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError || !updatedDoc) {
+      throw new AppError(500, 'Failed to save extracted data');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Property data extracted successfully',
+      extracted_data: extractedData,
+    });
+  } catch (error) {
+    // Update extraction status to failed
+    if (req.params.id) {
+      await supabaseAdmin
+        .from('documents')
+        .update({ extraction_status: 'failed' })
+        .eq('id', req.params.id);
+    }
+
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Extraction error:', error);
+      res.status(500).json({ success: false, error: 'Failed to extract property data' });
     }
   }
 };
