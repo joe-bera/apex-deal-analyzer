@@ -137,6 +137,22 @@ export interface CreateCompInput {
 // Valuation Types
 // ============================================================================
 
+export interface PricingScenario {
+  price: number;
+  price_per_sqft: number;
+  timeline: string;
+  rationale: string;
+  discount_percentage?: number;
+  premium_percentage?: number;
+}
+
+export interface WholesaleOffer {
+  offer_price: number;
+  arv_percentage: number;
+  potential_profit: number;
+  rationale: string;
+}
+
 export interface ValuationResult {
   estimated_value: number;
   value_range: {
@@ -150,6 +166,13 @@ export interface ValuationResult {
   key_findings: string[];
   recommendations: string[];
   market_insights: string;
+  pricing_scenarios?: {
+    quick_sale: PricingScenario;
+    market_sale: PricingScenario;
+    premium_sale: PricingScenario;
+  };
+  wholesale_offer?: WholesaleOffer;
+  executive_summary?: string;
 }
 
 export interface ComparableAnalysis {
@@ -158,6 +181,60 @@ export interface ComparableAnalysis {
   sale_price: number;
   adjustments: string;
   adjusted_value: number;
+}
+
+// ============================================================================
+// LOI Types
+// ============================================================================
+
+export interface BuyerInfo {
+  buyer_name: string;
+  buyer_company?: string;
+  buyer_address?: string;
+  buyer_city?: string;
+  buyer_state?: string;
+  buyer_zip?: string;
+  buyer_phone?: string;
+  buyer_email?: string;
+}
+
+export interface LOIParams {
+  offer_price: number;
+  earnest_money?: number;
+  due_diligence_days?: number;
+  closing_days?: number;
+  contingencies?: string[];
+  special_terms?: string;
+}
+
+export interface LOI {
+  id?: string;
+  property_id: string;
+  created_by?: string;
+  buyer_name: string;
+  buyer_company?: string;
+  buyer_email?: string;
+  offer_price: number;
+  earnest_money: number;
+  due_diligence_days: number;
+  closing_days: number;
+  contingencies: string[];
+  loi_html: string;
+  loi_text: string;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  generated_at: string;
+  created_at?: string;
+}
+
+export interface LOIResponse {
+  success: boolean;
+  message: string;
+  loi: LOI;
+}
+
+export interface LOIsResponse {
+  success: boolean;
+  lois: LOI[];
 }
 
 // ============================================================================

@@ -11,6 +11,10 @@ import type {
   ValuationResponse,
   CreateCompInput,
   PropertyType,
+  LOI,
+  LOIResponse,
+  BuyerInfo,
+  LOIParams,
 } from '../types';
 import {
   Button,
@@ -37,6 +41,9 @@ export default function PropertyDetail() {
   const [analyzing, setAnalyzing] = useState(false);
   const [addingComp, setAddingComp] = useState(false);
   const [showAddComp, setShowAddComp] = useState(false);
+  const [showLOIForm, setShowLOIForm] = useState(false);
+  const [generatingLOI, setGeneratingLOI] = useState(false);
+  const [generatedLOI, setGeneratedLOI] = useState<LOI | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -144,6 +151,65 @@ export default function PropertyDetail() {
       const message = err instanceof Error ? err.message : 'Failed to delete property';
       setError(message);
     }
+  };
+
+  const handleGenerateLOI = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (generatingLOI) return;
+
+    setGeneratingLOI(true);
+    setError('');
+
+    const formData = new FormData(e.currentTarget);
+
+    const buyerInfo: BuyerInfo = {
+      buyer_name: formData.get('buyer_name') as string,
+      buyer_company: formData.get('buyer_company') as string || undefined,
+      buyer_email: formData.get('buyer_email') as string || undefined,
+      buyer_phone: formData.get('buyer_phone') as string || undefined,
+    };
+
+    const offerParams: LOIParams = {
+      offer_price: parseFloat(formData.get('offer_price') as string),
+      earnest_money: formData.get('earnest_money') ? parseFloat(formData.get('earnest_money') as string) : undefined,
+      due_diligence_days: formData.get('due_diligence_days') ? parseInt(formData.get('due_diligence_days') as string) : 30,
+      closing_days: formData.get('closing_days') ? parseInt(formData.get('closing_days') as string) : 45,
+      special_terms: formData.get('special_terms') as string || undefined,
+    };
+
+    try {
+      const result = await api.generateLOI(id!, buyerInfo, offerParams);
+      setGeneratedLOI((result as LOIResponse).loi);
+      setShowLOIForm(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate LOI';
+      setError(message);
+    } finally {
+      setGeneratingLOI(false);
+    }
+  };
+
+  const handlePrintLOI = () => {
+    if (!generatedLOI) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(generatedLOI.loi_html);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const handleDownloadLOI = () => {
+    if (!generatedLOI) return;
+    const blob = new Blob([generatedLOI.loi_html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `LOI_${property?.address || 'property'}_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const formatCurrency = (value?: number | null) => {
@@ -384,6 +450,234 @@ export default function PropertyDetail() {
                     <p className="text-gray-700">{valuation.market_insights}</p>
                   </div>
                 )}
+
+                {/* Pricing Scenarios */}
+                {valuation.pricing_scenarios && (
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-4">Exit Strategy Pricing</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Quick Sale */}
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="font-semibold text-orange-900">Quick Sale</span>
+                        </div>
+                        <p className="text-2xl font-bold text-orange-900">{formatCurrency(valuation.pricing_scenarios.quick_sale.price)}</p>
+                        <p className="text-sm text-orange-700">${valuation.pricing_scenarios.quick_sale.price_per_sqft}/SF</p>
+                        <p className="text-xs text-orange-600 mt-1">{valuation.pricing_scenarios.quick_sale.timeline}</p>
+                        <p className="text-xs text-orange-600">({valuation.pricing_scenarios.quick_sale.discount_percentage}% below market)</p>
+                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.quick_sale.rationale}</p>
+                      </div>
+
+                      {/* Market Sale */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          <span className="font-semibold text-blue-900">Market Sale</span>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-900">{formatCurrency(valuation.pricing_scenarios.market_sale.price)}</p>
+                        <p className="text-sm text-blue-700">${valuation.pricing_scenarios.market_sale.price_per_sqft}/SF</p>
+                        <p className="text-xs text-blue-600 mt-1">{valuation.pricing_scenarios.market_sale.timeline}</p>
+                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.market_sale.rationale}</p>
+                      </div>
+
+                      {/* Premium Sale */}
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                          <span className="font-semibold text-green-900">Premium Sale</span>
+                        </div>
+                        <p className="text-2xl font-bold text-green-900">{formatCurrency(valuation.pricing_scenarios.premium_sale.price)}</p>
+                        <p className="text-sm text-green-700">${valuation.pricing_scenarios.premium_sale.price_per_sqft}/SF</p>
+                        <p className="text-xs text-green-600 mt-1">{valuation.pricing_scenarios.premium_sale.timeline}</p>
+                        <p className="text-xs text-green-600">(+{valuation.pricing_scenarios.premium_sale.premium_percentage}% above market)</p>
+                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.premium_sale.rationale}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Wholesale Offer */}
+                {valuation.wholesale_offer && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        <span className="font-semibold text-purple-900">Investor/Wholesale Offer ({valuation.wholesale_offer.arv_percentage}% ARV)</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowLOIForm(true)}
+                        leftIcon={
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        }
+                      >
+                        Generate LOI
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-purple-700">Offer Price</p>
+                        <p className="text-3xl font-bold text-purple-900">{formatCurrency(valuation.wholesale_offer.offer_price)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-purple-700">Potential Profit</p>
+                        <p className="text-3xl font-bold text-green-600">{formatCurrency(valuation.wholesale_offer.potential_profit)}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-3">{valuation.wholesale_offer.rationale}</p>
+                  </div>
+                )}
+
+                {/* Executive Summary */}
+                {valuation.executive_summary && (
+                  <div className="bg-gray-900 text-white rounded-xl p-5">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Executive Summary
+                    </h3>
+                    <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* LOI Generation Form Modal */}
+        {showLOIForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Generate Letter of Intent</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLOIForm(false)}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleGenerateLOI} className="space-y-4">
+                  <div className="border-b pb-4 mb-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Buyer Information</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input name="buyer_name" required label="Your Name *" placeholder="John Smith" />
+                      <Input name="buyer_company" label="Company" placeholder="ABC Investments LLC" />
+                      <Input name="buyer_email" type="email" label="Email" placeholder="john@example.com" />
+                      <Input name="buyer_phone" label="Phone" placeholder="(555) 123-4567" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Offer Terms</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        name="offer_price"
+                        type="number"
+                        required
+                        label="Offer Price *"
+                        leftAddon="$"
+                        defaultValue={valuation?.wholesale_offer?.offer_price}
+                      />
+                      <Input
+                        name="earnest_money"
+                        type="number"
+                        label="Earnest Money"
+                        leftAddon="$"
+                        placeholder="1% of offer"
+                      />
+                      <Input
+                        name="due_diligence_days"
+                        type="number"
+                        label="Due Diligence (days)"
+                        defaultValue={30}
+                      />
+                      <Input
+                        name="closing_days"
+                        type="number"
+                        label="Closing (days)"
+                        defaultValue={45}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Special Terms</label>
+                      <textarea
+                        name="special_terms"
+                        rows={3}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                        placeholder="Any special terms or conditions..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t">
+                    <Button type="button" variant="outline" onClick={() => setShowLOIForm(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button type="submit" isLoading={generatingLOI} disabled={generatingLOI} className="flex-1">
+                      {generatingLOI ? 'Generating...' : 'Generate LOI'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Generated LOI Display */}
+        {generatedLOI && (
+          <Card variant="elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle>Letter of Intent Generated</CardTitle>
+                    <p className="text-sm text-gray-500">Offer: {formatCurrency(generatedLOI.offer_price)}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handlePrintLOI}>
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDownloadLOI}>
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setGeneratedLOI(null)}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">{generatedLOI.loi_text}</pre>
               </div>
             </CardContent>
           </Card>

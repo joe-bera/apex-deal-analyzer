@@ -60,6 +60,37 @@ export interface ValuationResult {
   key_findings: string[];
   recommendations: string[];
   market_insights: string;
+  // Executive Summary pricing scenarios
+  pricing_scenarios?: {
+    quick_sale: {
+      price: number;
+      price_per_sqft: number;
+      timeline: string;
+      discount_percentage: number;
+      rationale: string;
+    };
+    market_sale: {
+      price: number;
+      price_per_sqft: number;
+      timeline: string;
+      rationale: string;
+    };
+    premium_sale: {
+      price: number;
+      price_per_sqft: number;
+      timeline: string;
+      premium_percentage: number;
+      rationale: string;
+    };
+  };
+  // Wholesale/investor offer (65% ARV)
+  wholesale_offer?: {
+    offer_price: number;
+    arv_percentage: number;
+    potential_profit: number;
+    rationale: string;
+  };
+  executive_summary?: string;
 }
 
 /**
@@ -138,7 +169,7 @@ ${property.additional_data?.notes ? `\n**Notes:** ${property.additional_data.not
 ${comp.adjustment_notes ? `**Adjustment Notes:** ${comp.adjustment_notes}` : ''}
 `.trim()).join('\n\n');
 
-  return `You are a commercial real estate valuation expert. Analyze the following subject property and comparable sales to provide a comprehensive market valuation.
+  return `You are a commercial real estate valuation expert and investment analyst. Analyze the following subject property and comparable sales to provide a comprehensive market valuation with multiple pricing scenarios for investors and wholesalers.
 
 ${propertyDesc}
 
@@ -148,10 +179,10 @@ ${compsDesc}
 
 # TASK
 
-Please provide a detailed valuation analysis in the following JSON format:
+Provide a detailed valuation analysis with THREE pricing scenarios for different exit strategies, plus a wholesale investor offer. Return the following JSON format:
 
 {
-  "estimated_value": <number - your best estimate of fair market value>,
+  "estimated_value": <number - your best estimate of fair market value (ARV)>,
   "value_range": {
     "low": <number - conservative estimate>,
     "high": <number - optimistic estimate>
@@ -178,15 +209,45 @@ Please provide a detailed valuation analysis in the following JSON format:
     "<recommendation 2>",
     "<recommendation 3>"
   ],
-  "market_insights": "<brief market commentary and trends>"
+  "market_insights": "<brief market commentary and trends>",
+  "pricing_scenarios": {
+    "quick_sale": {
+      "price": <number - discounted price for 30-60 day sale>,
+      "price_per_sqft": <number>,
+      "timeline": "30-60 days",
+      "discount_percentage": <number - typically 10-20% below market>,
+      "rationale": "<why this price achieves quick sale>"
+    },
+    "market_sale": {
+      "price": <number - fair market value for 90-180 day sale>,
+      "price_per_sqft": <number>,
+      "timeline": "90-180 days",
+      "rationale": "<market positioning strategy>"
+    },
+    "premium_sale": {
+      "price": <number - premium price for patient seller, 6-12+ months>,
+      "price_per_sqft": <number>,
+      "timeline": "6-12+ months",
+      "premium_percentage": <number - typically 5-15% above market>,
+      "rationale": "<what justifies premium pricing and longer timeline>"
+    }
+  },
+  "wholesale_offer": {
+    "offer_price": <number - 65% of ARV for wholesale/investor offer>,
+    "arv_percentage": 65,
+    "potential_profit": <number - difference between offer and estimated_value>,
+    "rationale": "<investment thesis and profit potential>"
+  },
+  "executive_summary": "<2-3 paragraph executive summary suitable for investor presentations, covering property highlights, market position, investment opportunity, and recommended strategy>"
 }
 
 Consider:
 - Adjustments for size, age, condition, location differences
-- Current market conditions and trends
+- Current market conditions and trends in Southern California industrial
 - Time adjustments if sales are dated
 - Property type and use appropriateness
 - Market positioning relative to comparables
+- Investor/wholesaler perspective (buying at discount, holding costs, exit strategies)
 - Any unique characteristics or value drivers
 
 Return ONLY the JSON object, no additional text.`;
@@ -220,6 +281,14 @@ function parseValuationResponse(responseText: string): ValuationResult {
       key_findings: parsed.key_findings || [],
       recommendations: parsed.recommendations || [],
       market_insights: parsed.market_insights || 'Market insights not provided',
+      pricing_scenarios: parsed.pricing_scenarios || null,
+      wholesale_offer: parsed.wholesale_offer || {
+        offer_price: Math.round(parsed.estimated_value * 0.65),
+        arv_percentage: 65,
+        potential_profit: Math.round(parsed.estimated_value * 0.35),
+        rationale: 'Standard wholesale offer at 65% of ARV',
+      },
+      executive_summary: parsed.executive_summary || null,
     };
   } catch (error: any) {
     console.error('Error parsing valuation response:', error);

@@ -158,4 +158,20 @@ export const api = {
   // Valuation Analysis
   analyzeProperty: (propertyId: string) =>
     request(`/properties/${propertyId}/analyze`, { method: 'POST' }),
+
+  // LOI Generation
+  generateLOI: (propertyId: string, buyerInfo: any, offerParams: any, useAI = false) =>
+    request(`/properties/${propertyId}/loi`, {
+      method: 'POST',
+      body: JSON.stringify({ buyer_info: buyerInfo, offer_params: offerParams, use_ai: useAI }),
+    }),
+
+  getLOIs: (propertyId: string) =>
+    request(`/properties/${propertyId}/lois`),
+
+  updateLOI: (loiId: string, updates: any) =>
+    request(`/properties/lois/${loiId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
 };

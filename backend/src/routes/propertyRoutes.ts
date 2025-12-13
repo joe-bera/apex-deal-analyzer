@@ -7,6 +7,11 @@ import {
   deleteProperty,
   analyzePropertyValuation,
 } from '../controllers/propertyController';
+import {
+  generatePropertyLOI,
+  getPropertyLOIs,
+  updateLOI,
+} from '../controllers/loiController';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
@@ -74,6 +79,27 @@ router.post(
   aiLimiter,
   validate(uuidParamSchema, 'params'),
   analyzePropertyValuation
+);
+
+// Generate LOI for property
+router.post(
+  '/:propertyId/loi',
+  authenticate,
+  generatePropertyLOI
+);
+
+// Get all LOIs for a property
+router.get(
+  '/:propertyId/lois',
+  authenticate,
+  getPropertyLOIs
+);
+
+// Update LOI (separate route for LOI by ID)
+router.patch(
+  '/lois/:loiId',
+  authenticate,
+  updateLOI
 );
 
 export default router;
