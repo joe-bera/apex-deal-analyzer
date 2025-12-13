@@ -8,6 +8,15 @@ import {
   analyzePropertyValuation,
 } from '../controllers/propertyController';
 import { authenticate } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import {
+  uuidParamSchema,
+  documentIdParamSchema,
+  updatePropertySchema,
+  propertyOverridesSchema,
+  listPropertiesQuerySchema,
+} from '../middleware/validate';
+import { aiLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -17,21 +26,54 @@ const router = Router();
  */
 
 // Create property from extracted document data
-router.post('/from-document/:documentId', authenticate, createPropertyFromDocument);
+router.post(
+  '/from-document/:documentId',
+  authenticate,
+  validate(documentIdParamSchema, 'params'),
+  validate(propertyOverridesSchema, 'body'),
+  createPropertyFromDocument
+);
 
-// List properties
-router.get('/', authenticate, listProperties);
+// List properties with filters
+router.get(
+  '/',
+  authenticate,
+  validate(listPropertiesQuerySchema, 'query'),
+  listProperties
+);
 
 // Get single property with documents
-router.get('/:id', authenticate, getProperty);
+router.get(
+  '/:id',
+  authenticate,
+  validate(uuidParamSchema, 'params'),
+  getProperty
+);
 
 // Update property
-router.patch('/:id', authenticate, updateProperty);
+router.patch(
+  '/:id',
+  authenticate,
+  validate(uuidParamSchema, 'params'),
+  validate(updatePropertySchema, 'body'),
+  updateProperty
+);
 
 // Delete property (soft delete)
-router.delete('/:id', authenticate, deleteProperty);
+router.delete(
+  '/:id',
+  authenticate,
+  validate(uuidParamSchema, 'params'),
+  deleteProperty
+);
 
-// Analyze property valuation with AI
-router.post('/:id/analyze', authenticate, analyzePropertyValuation);
+// Analyze property valuation with AI (rate limited)
+router.post(
+  '/:id/analyze',
+  authenticate,
+  aiLimiter,
+  validate(uuidParamSchema, 'params'),
+  analyzePropertyValuation
+);
 
 export default router;

@@ -6,6 +6,13 @@ import {
   updateComp,
   deleteComp,
 } from '../controllers/compsController';
+import { validate } from '../middleware/validate';
+import {
+  propertyIdParamSchema,
+  compIdParamSchema,
+  createCompSchema,
+  updateCompSchema,
+} from '../middleware/validate';
 
 const router = Router();
 
@@ -15,15 +22,37 @@ const router = Router();
  */
 
 // Get all comps for a property
-router.get('/properties/:propertyId/comps', authenticate, getCompsForProperty);
+router.get(
+  '/properties/:propertyId/comps',
+  authenticate,
+  validate(propertyIdParamSchema, 'params'),
+  getCompsForProperty
+);
 
 // Add a comp to a property
-router.post('/properties/:propertyId/comps', authenticate, addCompToProperty);
+router.post(
+  '/properties/:propertyId/comps',
+  authenticate,
+  validate(propertyIdParamSchema, 'params'),
+  validate(createCompSchema, 'body'),
+  addCompToProperty
+);
 
 // Update a comp
-router.patch('/comps/:compId', authenticate, updateComp);
+router.patch(
+  '/comps/:compId',
+  authenticate,
+  validate(compIdParamSchema, 'params'),
+  validate(updateCompSchema, 'body'),
+  updateComp
+);
 
 // Delete a comp
-router.delete('/comps/:compId', authenticate, deleteComp);
+router.delete(
+  '/comps/:compId',
+  authenticate,
+  validate(compIdParamSchema, 'params'),
+  deleteComp
+);
 
 export default router;

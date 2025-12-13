@@ -20,6 +20,19 @@ if (missingEnvVars.length > 0) {
   );
 }
 
+// Warn about optional but important env vars
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.warn(
+    '⚠️  WARNING: ANTHROPIC_API_KEY is not set. AI extraction and valuation features will fail.'
+  );
+}
+
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default-secret-change-in-production') {
+    throw new Error('JWT_SECRET must be set to a secure value in production');
+  }
+}
+
 // Export configuration object
 export const config = {
   server: {

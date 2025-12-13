@@ -2,16 +2,20 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
+import type { Property, PropertiesResponse } from '../types';
 
 export default function Dashboard() {
-  const [properties, setProperties] = useState<any[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     api
       .listProperties()
-      .then((data: any) => setProperties(data.properties || []))
+      .then((data) => {
+        const response = data as PropertiesResponse;
+        setProperties(response.properties || []);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -118,7 +122,7 @@ export default function Dashboard() {
                       {formatCurrency(property.price)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {property.cap_rate ? `${(property.cap_rate * 100).toFixed(2)}%` : '—'}
+                      {property.cap_rate ? `${property.cap_rate}%` : '—'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <Link

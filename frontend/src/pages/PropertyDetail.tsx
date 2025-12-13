@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import type {
+  Property,
+  Comp,
+  ValuationResult,
+  PropertyResponse,
+  CompsResponse,
+  ValuationResponse,
+  CreateCompInput,
+  PropertyType,
+} from '../types';
 
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [property, setProperty] = useState<any>(null);
-  const [comps, setComps] = useState<any[]>([]);
-  const [valuation, setValuation] = useState<any>(null);
+  const [property, setProperty] = useState<Property | null>(null);
+  const [comps, setComps] = useState<Comp[]>([]);
+  const [valuation, setValuation] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [showAddComp, setShowAddComp] = useState(false);
@@ -26,10 +36,11 @@ export default function PropertyDetail() {
         api.getProperty(id!),
         api.getComps(id!),
       ]);
-      setProperty((propData as any).property);
-      setComps((compsData as any).comps || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load property');
+      setProperty((propData as PropertyResponse).property);
+      setComps((compsData as CompsResponse).comps || []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load property';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -37,7 +48,7 @@ export default function PropertyDetail() {
 
   const handleAnalyze = async () => {
     if (comps.length === 0) {
-      alert('Please add at least one comparable sale before running analysis.');
+      setError('Please add at least one comparable sale before running analysis.');
       return;
     }
 
@@ -45,9 +56,10 @@ export default function PropertyDetail() {
       setAnalyzing(true);
       setError('');
       const result = await api.analyzeProperty(id!);
-      setValuation((result as any).valuation);
-    } catch (err: any) {
-      setError(err.message || 'Analysis failed');
+      setValuation((result as ValuationResponse).valuation);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Analysis failed';
+      setError(message);
     } finally {
       setAnalyzing(false);
     }
@@ -57,42 +69,71 @@ export default function PropertyDetail() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    try {
-      await api.addComp(id!, {
-        comp_address: formData.get('address'),
-        comp_city: formData.get('city'),
-        comp_state: formData.get('state'),
-        comp_zip_code: formData.get('zip'),
-        comp_property_type: formData.get('type'),
-        comp_square_footage: formData.get('sqft') ? parseInt(formData.get('sqft') as string) : null,
-        comp_year_built: formData.get('year') ? parseInt(formData.get('year') as string) : null,
-        comp_sale_price: parseFloat(formData.get('price') as string),
-        comp_sale_date: formData.get('date'),
-        comp_price_per_sqft: formData.get('pricesf') ? parseFloat(formData.get('pricesf') as string) : null,
-      });
+    const compData: CreateCompInput = {
+      comp_address: formData.get('address') as string,
+      comp_city: formData.get('city') as string,
+      comp_state: formData.get('state') as string,
+      comp_zip_code: (formData.get('zip') as string) || undefined,
+      comp_property_type: formData.get('type') as PropertyType,
+      comp_square_footage: formData.get('sqft') ? parseInt(formData.get('sqft') as string) : null,
+      comp_year_built: formData.get('year') ? parseInt(formData.get('year') as string) : null,
+      comp_sale_price: parseFloat(formData.get('price') as string),
+      comp_sale_date: formData.get('date') as string,
+      comp_price_per_sqft: formData.get('pricesf') ? parseFloat(formData.get('pricesf') as string) : null,
+    };
 
+    try {
+      await api.addComp(id!, compData);
       await loadPropertyData();
       setShowAddComp(false);
       e.currentTarget.reset();
-    } catch (err: any) {
-      alert(err.message || 'Failed to add comp');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add comp';
+      setError(message);
     }
   };
 
-  const formatCurrency = (value?: number) => {
-    if (!value) return 'N/A';
+  const handleDeleteComp = async (compId: string) => {
+    if (!window.confirm('Delete this comp?')) return;
+
+    try {
+      await api.deleteComp(compId);
+      await loadPropertyData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete comp';
+      setError(message);
+    }
+  };
+
+  const handleDeleteProperty = async () => {
+    if (!window.confirm('Delete this property? This action cannot be undone.')) return;
+
+    try {
+      await api.deleteProperty(id!);
+      navigate('/dashboard');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete property';
+      setError(message);
+    }
+  };
+
+  const formatCurrency = (value?: number | null) => {
+    if (value === null || value === undefined) return 'N/A';
     return `$${value.toLocaleString()}`;
   };
 
-  const formatNumber = (value?: number) => {
-    if (!value) return 'N/A';
+  const formatNumber = (value?: number | null) => {
+    if (value === null || value === undefined) return 'N/A';
     return value.toLocaleString();
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading property...</div>
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          <p className="mt-2 text-gray-600">Loading property...</p>
+        </div>
       </div>
     );
   }
@@ -100,7 +141,12 @@ export default function PropertyDetail() {
   if (!property) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-red-600">Property not found</div>
+        <div className="text-center">
+          <div className="text-red-600 text-lg">Property not found</div>
+          <Link to="/dashboard" className="text-primary-600 hover:text-primary-700 mt-4 inline-block">
+            ← Back to Properties
+          </Link>
+        </div>
       </div>
     );
   }
@@ -135,8 +181,9 @@ export default function PropertyDetail() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex justify-between items-center">
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">×</button>
           </div>
         )}
 
@@ -171,7 +218,7 @@ export default function PropertyDetail() {
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-2">Key Findings</h3>
                       <ul className="list-disc list-inside space-y-1">
-                        {valuation.key_findings.map((finding: string, i: number) => (
+                        {valuation.key_findings.map((finding, i) => (
                           <li key={i} className="text-gray-700">{finding}</li>
                         ))}
                       </ul>
@@ -182,7 +229,7 @@ export default function PropertyDetail() {
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-2">Recommendations</h3>
                       <ul className="list-disc list-inside space-y-1">
-                        {valuation.recommendations.map((rec: string, i: number) => (
+                        {valuation.recommendations.map((rec, i) => (
                           <li key={i} className="text-gray-700">{rec}</li>
                         ))}
                       </ul>
@@ -267,12 +314,7 @@ export default function PropertyDetail() {
                           </div>
                         </div>
                         <button
-                          onClick={async () => {
-                            if (confirm('Delete this comp?')) {
-                              await api.deleteComp(comp.id);
-                              await loadPropertyData();
-                            }
-                          }}
+                          onClick={() => handleDeleteComp(comp.id)}
                           className="text-red-600 hover:text-red-700 text-sm"
                         >
                           Delete
@@ -365,12 +407,7 @@ export default function PropertyDetail() {
                   Upload Comp Document
                 </button>
                 <button
-                  onClick={async () => {
-                    if (confirm('Delete this property?')) {
-                      await api.deleteProperty(id!);
-                      navigate('/dashboard');
-                    }
-                  }}
+                  onClick={handleDeleteProperty}
                   className="w-full text-left px-4 py-2 rounded border border-red-200 text-red-600 hover:bg-red-50"
                 >
                   Delete Property
