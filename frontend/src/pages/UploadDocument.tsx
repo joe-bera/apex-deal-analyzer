@@ -94,6 +94,8 @@ export default function UploadDocument() {
     setError('');
 
     try {
+      console.log('[Upload] Starting upload, documentType:', documentType, 'propertyId:', propertyId);
+
       // Upload document with property_id if it's a comp
       const result: any = await api.uploadDocument(
         file,
@@ -101,19 +103,26 @@ export default function UploadDocument() {
         documentType
       );
       const documentId = result.document.id;
+      console.log('[Upload] Document uploaded, id:', documentId);
 
       // Extract data from document
+      console.log('[Upload] Starting extraction...');
       await api.extractDocument(documentId);
+      console.log('[Upload] Extraction complete');
 
       if (documentType === 'comp' && propertyId) {
         // For comp documents, go back to the property page
+        console.log('[Upload] Navigating to property:', propertyId);
         navigate(`/properties/${propertyId}`);
       } else {
         // For other documents, create property from extracted data
+        console.log('[Upload] Creating property from document...');
         const propertyResult: any = await api.createPropertyFromDocument(documentId);
+        console.log('[Upload] Property created:', propertyResult.property.id);
         navigate(`/properties/${propertyResult.property.id}`);
       }
     } catch (err: any) {
+      console.error('[Upload] Error:', err);
       setError(err.message || 'Upload failed');
     } finally {
       setLoading(false);
