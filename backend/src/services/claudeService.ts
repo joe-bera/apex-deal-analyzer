@@ -38,12 +38,20 @@ export interface ClaudeResponse {
  */
 export const callClaude = async (params: ClaudeRequest): Promise<ClaudeResponse> => {
   try {
+    // Check if API key is configured
+    if (!config.anthropic.apiKey) {
+      console.error('[ClaudeService] ANTHROPIC_API_KEY is not configured');
+      throw new AppError(500, 'AI extraction is not configured. Please contact support.');
+    }
+
     const {
       prompt,
       systemPrompt = 'You are a commercial real estate data extraction assistant.',
       maxTokens = 4096,
       temperature = 0,
     } = params;
+
+    console.log(`[ClaudeService] Calling Claude API with model: ${config.anthropic.model}`);
 
     const message = await anthropic.messages.create({
       model: config.anthropic.model,
@@ -57,6 +65,8 @@ export const callClaude = async (params: ClaudeRequest): Promise<ClaudeResponse>
         },
       ],
     });
+
+    console.log(`[ClaudeService] Claude API response received, tokens: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
 
     // Extract text content from response
     const textContent = message.content.find((block) => block.type === 'text');

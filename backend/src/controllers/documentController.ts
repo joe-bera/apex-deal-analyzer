@@ -306,6 +306,7 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
     }
 
     const { id } = req.params;
+    console.log(`[DocumentController] Starting extraction for document ${id}`);
 
     // Get document
     const { data: document, error: fetchError } = await supabaseAdmin
