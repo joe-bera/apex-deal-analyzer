@@ -40,7 +40,7 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Calculate portfolio stats
+  // Calculate portfolio stats with health metrics
   const stats = useMemo(() => {
     if (properties.length === 0) {
       return {
@@ -48,6 +48,11 @@ export default function Dashboard() {
         totalValue: 0,
         avgCapRate: 0,
         totalSqft: 0,
+        avgPriceSf: 0,
+        portfolioHealth: 0,
+        diversificationScore: 0,
+        propertiesWithComps: 0,
+        propertiesAnalyzed: 0,
       };
     }
 
@@ -57,12 +62,36 @@ export default function Dashboard() {
       ? capRates.reduce((sum, rate) => sum + rate, 0) / capRates.length
       : 0;
     const totalSqft = properties.reduce((sum, p) => sum + (p.building_size || 0), 0);
+    const avgPriceSf = totalSqft > 0 ? totalValue / totalSqft : 0;
+
+    // Calculate portfolio health metrics
+    const uniqueTypes = new Set(properties.map(p => p.property_type).filter(Boolean));
+    const uniqueMarkets = new Set(properties.map(p => p.market || p.city).filter(Boolean));
+
+    // Diversification score: based on property types and markets
+    const typeDiversity = Math.min((uniqueTypes.size / 5) * 50, 50); // Max 50 points for 5+ types
+    const marketDiversity = Math.min((uniqueMarkets.size / 3) * 50, 50); // Max 50 points for 3+ markets
+    const diversificationScore = typeDiversity + marketDiversity;
+
+    // Data completeness score
+    const propertiesWithPrice = properties.filter(p => p.price).length;
+    const propertiesWithSize = properties.filter(p => p.building_size).length;
+    const propertiesWithCapRate = properties.filter(p => p.cap_rate).length;
+    const dataCompleteness = ((propertiesWithPrice + propertiesWithSize + propertiesWithCapRate) / (properties.length * 3)) * 100;
+
+    // Overall portfolio health (weighted average)
+    const portfolioHealth = Math.round((diversificationScore * 0.4) + (dataCompleteness * 0.6));
 
     return {
       totalProperties: properties.length,
       totalValue,
       avgCapRate,
       totalSqft,
+      avgPriceSf,
+      portfolioHealth,
+      diversificationScore: Math.round(diversificationScore),
+      propertiesWithComps: propertiesWithCapRate, // Using cap rate as proxy for analyzed
+      propertiesAnalyzed: propertiesWithCapRate,
     };
   }, [properties]);
 
@@ -180,45 +209,112 @@ export default function Dashboard() {
             <StatsSkeleton />
           </div>
         ) : properties.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatsCard
-              label="Total Properties"
-              value={stats.totalProperties}
-              icon={
-                <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              }
-            />
-            <StatsCard
-              label="Portfolio Value"
-              value={formatCurrency(stats.totalValue)}
-              variant="highlight"
-              icon={
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-            <StatsCard
-              label="Avg CAP Rate"
-              value={stats.avgCapRate > 0 ? `${stats.avgCapRate.toFixed(2)}%` : '—'}
-              icon={
-                <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              }
-            />
-            <StatsCard
-              label="Total Square Feet"
-              value={`${formatNumber(stats.totalSqft)} SF`}
-              icon={
-                <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                </svg>
-              }
-            />
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatsCard
+                label="Total Properties"
+                value={stats.totalProperties}
+                icon={
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                }
+              />
+              <StatsCard
+                label="Portfolio Value"
+                value={formatCurrency(stats.totalValue)}
+                variant="highlight"
+                icon={
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+              />
+              <StatsCard
+                label="Avg CAP Rate"
+                value={stats.avgCapRate > 0 ? `${stats.avgCapRate.toFixed(2)}%` : '—'}
+                icon={
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                }
+              />
+              <StatsCard
+                label="Total Square Feet"
+                value={`${formatNumber(stats.totalSqft)} SF`}
+                icon={
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                  </svg>
+                }
+              />
+            </div>
+
+            {/* Portfolio Health Card */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-5 text-white">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <svg className="w-16 h-16 transform -rotate-90">
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="28"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.2)"
+                        strokeWidth="6"
+                      />
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="28"
+                        fill="none"
+                        stroke={stats.portfolioHealth >= 70 ? '#10B981' : stats.portfolioHealth >= 40 ? '#F59E0B' : '#EF4444'}
+                        strokeWidth="6"
+                        strokeDasharray={`${(stats.portfolioHealth / 100) * 175.93} 175.93`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">
+                      {stats.portfolioHealth}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Portfolio Health Score</h3>
+                    <p className="text-gray-400 text-sm">
+                      {stats.portfolioHealth >= 70 ? 'Excellent' : stats.portfolioHealth >= 40 ? 'Good' : 'Needs Attention'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-8">
+                  <div>
+                    <p className="text-gray-400 text-xs uppercase tracking-wide">Avg Price/SF</p>
+                    <p className="text-xl font-semibold">${stats.avgPriceSf.toFixed(0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-xs uppercase tracking-wide">Analyzed</p>
+                    <p className="text-xl font-semibold">{stats.propertiesAnalyzed}/{stats.totalProperties}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-xs uppercase tracking-wide">Diversification</p>
+                    <p className="text-xl font-semibold">{stats.diversificationScore}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-xs uppercase tracking-wide">Data Quality</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${stats.portfolioHealth >= 70 ? 'bg-green-500' : stats.portfolioHealth >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                          style={{ width: `${stats.portfolioHealth}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
         ) : null}
 
         {/* Filters & Search */}
