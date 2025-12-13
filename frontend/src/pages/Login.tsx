@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Button } from '../components/ui';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -18,8 +19,9 @@ export default function Login() {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -29,8 +31,10 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 bg-primary-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-3xl">A</span>
+          <div className="mx-auto w-16 h-16 bg-[#B21F24] rounded-lg flex items-center justify-center shadow-lg">
+            <svg className="w-9 h-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">Apex Deal Analyzer</h2>
           <p className="mt-2 text-sm text-gray-600">Sign in to your account</p>
@@ -38,7 +42,10 @@ export default function Login() {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
+              <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               {error}
             </div>
           )}
@@ -54,7 +61,8 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#B21F24] focus:ring-[#B21F24]"
+                placeholder="you@example.com"
               />
             </div>
 
@@ -68,22 +76,24 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#B21F24] focus:ring-[#B21F24]"
+                placeholder="Enter your password"
               />
             </div>
           </div>
 
-          <button
+          <Button
             type="submit"
-            disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            size="lg"
+            isLoading={loading}
+            className="w-full"
           >
             {loading ? 'Signing in...' : 'Sign in'}
-          </button>
+          </Button>
 
           <div className="text-center text-sm">
             <span className="text-gray-600">Don't have an account? </span>
-            <Link to="/signup" className="font-medium text-primary-600 hover:text-primary-500">
+            <Link to="/signup" className="font-medium text-[#B21F24] hover:text-[#991b1f]">
               Sign up
             </Link>
           </div>
