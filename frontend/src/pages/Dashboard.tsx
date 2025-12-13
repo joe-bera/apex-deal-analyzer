@@ -14,8 +14,9 @@ import {
   PropertyCardSkeleton,
   StatsSkeleton,
 } from '../components/ui';
+import { PortfolioCharts } from '../components/charts';
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'analytics';
 type SortOption = 'newest' | 'price-high' | 'price-low' | 'cap-rate' | 'size';
 
 export default function Dashboard() {
@@ -273,6 +274,15 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                   </svg>
                 </button>
+                <button
+                  onClick={() => setViewMode('analytics')}
+                  className={`p-2 ${viewMode === 'analytics' ? 'bg-primary-50 text-primary-600' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  title="Analytics view"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -328,6 +338,8 @@ export default function Dashboard() {
               </svg>
             }
           />
+        ) : viewMode === 'analytics' ? (
+          <PortfolioCharts properties={properties} />
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProperties.map((property) => (
