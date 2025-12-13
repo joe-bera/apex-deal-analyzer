@@ -59,7 +59,10 @@ export const api = {
   uploadDocument: async (file: File, propertyId?: string, documentType?: string) => {
     const token = localStorage.getItem('token');
 
+    console.log('[API] uploadDocument called, token exists:', !!token);
+
     if (!token) {
+      console.error('[API] No token found in localStorage');
       window.location.href = '/login';
       throw new APIError(401, 'Please log in to upload documents.');
     }
@@ -69,15 +72,27 @@ export const api = {
     if (propertyId) formData.append('property_id', propertyId);
     if (documentType) formData.append('document_type', documentType);
 
+    console.log('[API] Uploading to:', `${API_BASE}/documents/upload`);
+
     const response = await fetch(`${API_BASE}/documents/upload`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
 
-    const data = await response.json();
+    console.log('[API] Upload response status:', response.status);
+
+    let data;
+    try {
+      data = await response.json();
+      console.log('[API] Upload response data:', data);
+    } catch (e) {
+      console.error('[API] Failed to parse response as JSON:', e);
+      throw new APIError(response.status, 'Server error - invalid response');
+    }
 
     if (!response.ok) {
+      console.error('[API] Upload failed:', response.status, data);
       if (response.status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
