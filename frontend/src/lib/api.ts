@@ -27,6 +27,12 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
+    // Handle expired/invalid token - redirect to login
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      throw new APIError(401, 'Session expired. Please log in again.');
+    }
     throw new APIError(response.status, data.error || 'Request failed');
   }
 
@@ -52,6 +58,12 @@ export const api = {
   // Documents
   uploadDocument: async (file: File, propertyId?: string, documentType?: string) => {
     const token = localStorage.getItem('token');
+
+    if (!token) {
+      window.location.href = '/login';
+      throw new APIError(401, 'Please log in to upload documents.');
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     if (propertyId) formData.append('property_id', propertyId);
@@ -64,7 +76,15 @@ export const api = {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new APIError(response.status, data.error);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        throw new APIError(401, 'Session expired. Please log in again.');
+      }
+      throw new APIError(response.status, data.error || 'Upload failed');
+    }
     return data;
   },
 
