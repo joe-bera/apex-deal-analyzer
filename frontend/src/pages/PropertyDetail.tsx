@@ -35,6 +35,7 @@ export default function PropertyDetail() {
   const [valuation, setValuation] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [addingComp, setAddingComp] = useState(false);
   const [showAddComp, setShowAddComp] = useState(false);
   const [error, setError] = useState('');
 
@@ -82,6 +83,13 @@ export default function PropertyDetail() {
 
   const handleAddComp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (addingComp) return;
+
+    setAddingComp(true);
+    setError('');
+
     const formData = new FormData(e.currentTarget);
 
     const compData: CreateCompInput = {
@@ -97,14 +105,20 @@ export default function PropertyDetail() {
       comp_price_per_sqft: formData.get('pricesf') ? parseFloat(formData.get('pricesf') as string) : null,
     };
 
+    console.log('[PropertyDetail] Adding comp:', compData);
+
     try {
-      await api.addComp(id!, compData);
+      const result = await api.addComp(id!, compData);
+      console.log('[PropertyDetail] Comp added successfully:', result);
       await loadPropertyData();
       setShowAddComp(false);
       e.currentTarget.reset();
     } catch (err: unknown) {
+      console.error('[PropertyDetail] Failed to add comp:', err);
       const message = err instanceof Error ? err.message : 'Failed to add comp';
       setError(message);
+    } finally {
+      setAddingComp(false);
     }
   };
 
@@ -426,10 +440,12 @@ export default function PropertyDetail() {
                       <Input name="pricesf" type="number" step="0.01" placeholder="Price/SF" label="Price per SF" leftAddon="$" />
                     </div>
                     <div className="mt-5 flex justify-end gap-3">
-                      <Button type="button" variant="ghost" onClick={() => setShowAddComp(false)}>
+                      <Button type="button" variant="ghost" onClick={() => setShowAddComp(false)} disabled={addingComp}>
                         Cancel
                       </Button>
-                      <Button type="submit">Add Comparable</Button>
+                      <Button type="submit" isLoading={addingComp} disabled={addingComp}>
+                        {addingComp ? 'Adding...' : 'Add Comparable'}
+                      </Button>
                     </div>
                   </form>
                 )}
