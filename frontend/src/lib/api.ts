@@ -94,28 +94,37 @@ export const api = {
     }
 
     console.log('[API] Got signed URL, uploading directly to Supabase Storage...');
+    console.log('[API] File details:', { name: file.name, size: file.size, type: file.type });
 
     // Step 2: Upload file directly to Supabase Storage
+    // Read file as ArrayBuffer for reliable upload
+    const fileBuffer = await file.arrayBuffer();
+    console.log('[API] File buffer size:', fileBuffer.byteLength);
+
     let storageResponse;
     try {
       storageResponse = await fetch(uploadUrlData.upload_url, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/pdf',
+          'Content-Type': file.type || 'application/pdf',
         },
-        body: file,
+        body: fileBuffer,
       });
     } catch (networkError) {
       console.error('[API] Network error uploading to storage:', networkError);
       throw new APIError(0, 'Failed to upload file. Please try again.');
     }
 
+    console.log('[API] Storage upload response:', storageResponse.status, storageResponse.statusText);
+
     if (!storageResponse.ok) {
-      console.error('[API] Storage upload failed:', storageResponse.status);
+      const errorText = await storageResponse.text();
+      console.error('[API] Storage upload failed:', storageResponse.status, errorText);
       throw new APIError(storageResponse.status, 'Failed to upload file to storage');
     }
 
     console.log('[API] File uploaded to storage, creating document record...');
+    console.log('[API] Sending file_size:', file.size);
 
     // Step 3: Create document record in backend
     let createResponse;
