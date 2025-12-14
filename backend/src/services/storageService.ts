@@ -157,3 +157,18 @@ export const getPublicUrl = (storagePath: string): string => {
     .getPublicUrl(storagePath);
   return publicUrl;
 };
+
+/**
+ * Get a signed download URL for reading a file (works even if bucket is private)
+ */
+export const getSignedDownloadUrl = async (storagePath: string): Promise<string> => {
+  const { data, error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(storagePath, 3600); // 1 hour
+
+  if (error || !data) {
+    throw new AppError(500, 'Failed to create download URL');
+  }
+
+  return data.signedUrl;
+};

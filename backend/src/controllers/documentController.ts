@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
-import { uploadToStorage, createSignedUploadUrl, getPublicUrl } from '../services/storageService';
+import { uploadToStorage, createSignedUploadUrl, getPublicUrl, getSignedDownloadUrl } from '../services/storageService';
 import { parsePDF, parsePDFFromURL, cleanPDFText } from '../services/pdfService';
 import { extractPropertyData, DocumentType } from '../services/extractionService';
 
@@ -540,17 +540,22 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
       }
     }
 
-    // Get public URL for the uploaded file
+    // Get URLs for the uploaded file
     const publicUrl = getPublicUrl(storage_path);
 
-    // Extract text from PDF
+    // Parse file_size - handle both number and string
+    const parsedFileSize = typeof file_size === 'string' ? parseInt(file_size, 10) : (file_size || 0);
+    console.log('[DocumentController] File size received:', file_size, 'parsed:', parsedFileSize);
+
+    // Extract text from PDF using signed URL (works even if bucket is private)
     let extractedText = '';
     let pdfMetadata = {};
     const MAX_EXTRACTED_TEXT_LENGTH = 500000;
 
     try {
-      console.log('[DocumentController] Parsing PDF from URL:', publicUrl);
-      const pdfData = await parsePDFFromURL(publicUrl);
+      const signedUrl = await getSignedDownloadUrl(storage_path);
+      console.log('[DocumentController] Parsing PDF from signed URL');
+      const pdfData = await parsePDFFromURL(signedUrl);
       extractedText = cleanPDFText(pdfData.text);
 
       if (extractedText.length > MAX_EXTRACTED_TEXT_LENGTH) {
@@ -569,7 +574,7 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
       // Continue with document creation even if extraction fails
     }
 
-    // Create document record
+    // Create document record (file_size must be > 0 due to DB constraint)
     const { data: document, error: dbError } = await supabaseAdmin
       .from('documents')
       .insert({
@@ -577,7 +582,7 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
         uploaded_by: req.user.id,
         file_name,
         file_path: storage_path,
-        file_size: file_size || 0,
+        file_size: parsedFileSize > 0 ? parsedFileSize : 1, // Ensure > 0 for DB constraint
         document_type,
         extraction_status: extractedText ? 'completed' : 'pending',
         extracted_data: extractedText
