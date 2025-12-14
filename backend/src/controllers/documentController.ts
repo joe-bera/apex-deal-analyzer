@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 import { uploadToStorage } from '../services/storageService';
-import { cleanupFile } from '../middleware/upload';
 import { parsePDF, cleanPDFText } from '../services/pdfService';
 import { extractPropertyData, DocumentType } from '../services/extractionService';
 
@@ -39,8 +38,12 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     ];
 
     if (!validTypes.includes(document_type)) {
-      cleanupFile(req.file.path);
       throw new AppError(400, `Invalid document_type. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    // Ensure we have file buffer (memory storage)
+    if (!req.file.buffer) {
+      throw new AppError(400, 'File upload failed - no file data received');
     }
 
     // If property_id provided, verify it exists and user has access
@@ -52,14 +55,12 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
         .single();
 
       if (error || !property) {
-        cleanupFile(req.file.path);
         throw new AppError(404, 'Property not found');
       }
 
       // Check if user owns the property or has access
       if (property.created_by !== req.user.id) {
         // TODO: Check shared_access table for permission
-        cleanupFile(req.file.path);
         throw new AppError(403, 'You do not have access to this property');
       }
     }
@@ -72,7 +73,7 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     const MAX_EXTRACTED_TEXT_LENGTH = 500000; // ~500KB of text
 
     try {
-      const pdfData = await parsePDF(req.file.path);
+      const pdfData = await parsePDF(req.file.buffer);
       extractedText = cleanPDFText(pdfData.text);
 
       // Truncate if too long
@@ -92,9 +93,9 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       // Continue with upload even if extraction fails
     }
 
-    // Upload file to Supabase Storage
+    // Upload file buffer to Supabase Storage
     const { filePath, publicUrl } = await uploadToStorage(
-      req.file.path,
+      req.file.buffer,
       req.file.originalname,
       req.user.id
     );
@@ -121,9 +122,6 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       .select()
       .single();
 
-    // Clean up temporary file
-    cleanupFile(req.file.path);
-
     if (dbError || !document) {
       console.error('[DocumentController] Database error creating document:', dbError);
       console.error('[DocumentController] Extracted text length:', extractedText?.length || 0);
@@ -144,11 +142,6 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       },
     });
   } catch (error) {
-    // Clean up temporary file on error
-    if (req.file) {
-      cleanupFile(req.file.path);
-    }
-
     if (error instanceof AppError) {
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {

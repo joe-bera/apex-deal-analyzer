@@ -1,4 +1,3 @@
-import fs from 'fs';
 import pdf from 'pdf-parse';
 import { AppError } from '../middleware/errorHandler';
 
@@ -20,18 +19,19 @@ export interface PDFParseResult {
 }
 
 /**
- * Extract text and metadata from PDF file
+ * Extract text and metadata from PDF buffer
  *
- * @param filePath - Path to PDF file (local or downloaded)
+ * @param buffer - PDF file buffer (from multer memory storage)
  * @returns Parsed PDF data (text, metadata, page count)
  */
-export const parsePDF = async (filePath: string): Promise<PDFParseResult> => {
+export const parsePDF = async (buffer: Buffer): Promise<PDFParseResult> => {
   try {
-    // Read PDF file
-    const dataBuffer = fs.readFileSync(filePath);
+    if (!buffer || buffer.length === 0) {
+      throw new AppError(400, 'PDF buffer is empty');
+    }
 
     // Parse PDF using pdf-parse
-    const data = await pdf(dataBuffer);
+    const data = await pdf(buffer);
 
     return {
       text: data.text,
@@ -48,6 +48,9 @@ export const parsePDF = async (filePath: string): Promise<PDFParseResult> => {
     };
   } catch (error) {
     console.error('PDF parsing error:', error);
+    if (error instanceof AppError) {
+      throw error;
+    }
     throw new AppError(500, 'Failed to parse PDF file');
   }
 };

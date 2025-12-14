@@ -1,29 +1,26 @@
-import fs from 'fs';
 import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 
 const STORAGE_BUCKET = 'documents';
 
 /**
- * Upload file to Supabase Storage
+ * Upload file buffer to Supabase Storage
  *
- * @param filePath - Local file path
+ * @param fileBuffer - File buffer (from multer memory storage)
  * @param fileName - Desired filename in storage
  * @param userId - User ID for organizing files
  * @returns Public URL of uploaded file
  */
 export const uploadToStorage = async (
-  filePath: string,
+  fileBuffer: Buffer,
   fileName: string,
   userId: string
 ): Promise<{ filePath: string; publicUrl: string }> => {
   try {
-    // Read file from disk
-    const fileBuffer = fs.readFileSync(filePath);
-
     // Generate storage path: users/{userId}/{timestamp}-{filename}
     const timestamp = Date.now();
-    const storagePath = `users/${userId}/${timestamp}-${fileName}`;
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `users/${userId}/${timestamp}-${sanitizedFileName}`;
 
     // Upload to Supabase Storage
     const { data, error } = await supabaseAdmin.storage

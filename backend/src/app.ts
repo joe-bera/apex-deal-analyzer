@@ -16,6 +16,9 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 export const createApp = (): Application => {
   const app = express();
 
+  // Trust proxy for Railway/cloud deployments (needed for rate limiting)
+  app.set('trust proxy', 1);
+
   // Security middleware
   app.use(helmet()); // Set security headers
 
