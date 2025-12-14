@@ -97,12 +97,16 @@ export const parsePDFFromURL = async (url: string): Promise<PDFParseResult> => {
 
 /**
  * Clean and normalize extracted text
+ * - Remove null bytes (PostgreSQL can't store them in text fields)
+ * - Remove other problematic Unicode characters
  * - Remove excessive whitespace
  * - Normalize line breaks
  * - Trim leading/trailing spaces
  */
 export const cleanPDFText = (text: string): string => {
   return text
+    .replace(/\u0000/g, '') // Remove null bytes - PostgreSQL text fields can't store them
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove other control characters (except \t, \n, \r)
     .replace(/\r\n/g, '\n') // Normalize line endings
     .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive newlines
     .replace(/ {2,}/g, ' ') // Remove excessive spaces
