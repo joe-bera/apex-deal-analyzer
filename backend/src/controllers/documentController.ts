@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
-import { uploadToStorage } from '../services/storageService';
-import { parsePDF, cleanPDFText } from '../services/pdfService';
+import { uploadToStorage, createSignedUploadUrl, getPublicUrl } from '../services/storageService';
+import { parsePDF, parsePDFFromURL, cleanPDFText } from '../services/pdfService';
 import { extractPropertyData, DocumentType } from '../services/extractionService';
 
 /**
@@ -440,6 +440,181 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
     } else {
       console.error('Extraction error:', error);
       res.status(500).json({ success: false, error: 'Failed to extract property data' });
+    }
+  }
+};
+
+/**
+ * Get a signed URL for direct upload to Supabase Storage
+ * POST /api/documents/upload-url
+ *
+ * This bypasses Railway's proxy for file uploads
+ */
+export const getUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { file_name, file_size } = req.body;
+
+    if (!file_name) {
+      throw new AppError(400, 'file_name is required');
+    }
+
+    // Validate file size (50MB limit)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    if (file_size && file_size > MAX_FILE_SIZE) {
+      throw new AppError(400, 'File too large. Maximum size is 50MB.');
+    }
+
+    // Create signed upload URL
+    const { signedUrl, storagePath, token } = await createSignedUploadUrl(
+      file_name,
+      req.user.id
+    );
+
+    res.status(200).json({
+      success: true,
+      upload_url: signedUrl,
+      storage_path: storagePath,
+      token,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Get upload URL error:', error);
+      res.status(500).json({ success: false, error: 'Failed to create upload URL' });
+    }
+  }
+};
+
+/**
+ * Create document record after direct upload to Supabase Storage
+ * POST /api/documents/create
+ *
+ * Called after frontend uploads directly to Supabase Storage
+ */
+export const createDocument = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { storage_path, file_name, file_size, property_id, document_type = 'other' } = req.body;
+
+    if (!storage_path || !file_name) {
+      throw new AppError(400, 'storage_path and file_name are required');
+    }
+
+    // Validate document_type
+    const validTypes = [
+      'offering_memorandum',
+      'title_report',
+      'comp',
+      'lease',
+      'appraisal',
+      'environmental_report',
+      'other',
+    ];
+
+    if (!validTypes.includes(document_type)) {
+      throw new AppError(400, `Invalid document_type. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    // If property_id provided, verify it exists and user has access
+    if (property_id) {
+      const { data: property, error } = await supabaseAdmin
+        .from('properties')
+        .select('id, created_by')
+        .eq('id', property_id)
+        .single();
+
+      if (error || !property) {
+        throw new AppError(404, 'Property not found');
+      }
+
+      if (property.created_by !== req.user.id) {
+        throw new AppError(403, 'You do not have access to this property');
+      }
+    }
+
+    // Get public URL for the uploaded file
+    const publicUrl = getPublicUrl(storage_path);
+
+    // Extract text from PDF
+    let extractedText = '';
+    let pdfMetadata = {};
+    const MAX_EXTRACTED_TEXT_LENGTH = 500000;
+
+    try {
+      console.log('[DocumentController] Parsing PDF from URL:', publicUrl);
+      const pdfData = await parsePDFFromURL(publicUrl);
+      extractedText = cleanPDFText(pdfData.text);
+
+      if (extractedText.length > MAX_EXTRACTED_TEXT_LENGTH) {
+        console.log(`[DocumentController] Truncating extracted text from ${extractedText.length} to ${MAX_EXTRACTED_TEXT_LENGTH} chars`);
+        extractedText = extractedText.substring(0, MAX_EXTRACTED_TEXT_LENGTH) + '\n\n[Text truncated due to length...]';
+      }
+
+      pdfMetadata = {
+        num_pages: pdfData.numPages,
+        title: pdfData.info.Title,
+        author: pdfData.info.Author,
+        creation_date: pdfData.info.CreationDate,
+      };
+    } catch (error) {
+      console.error('PDF extraction failed:', error);
+      // Continue with document creation even if extraction fails
+    }
+
+    // Create document record
+    const { data: document, error: dbError } = await supabaseAdmin
+      .from('documents')
+      .insert({
+        property_id: property_id || null,
+        uploaded_by: req.user.id,
+        file_name,
+        file_path: storage_path,
+        file_size: file_size || 0,
+        document_type,
+        extraction_status: extractedText ? 'completed' : 'pending',
+        extracted_data: extractedText
+          ? {
+              raw_text: extractedText,
+              metadata: pdfMetadata,
+              extracted_at: new Date().toISOString(),
+            }
+          : null,
+      })
+      .select()
+      .single();
+
+    if (dbError || !document) {
+      console.error('[DocumentController] Database error creating document:', dbError);
+      throw new AppError(500, 'Failed to create document record');
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Document created successfully',
+      document: {
+        id: document.id,
+        file_name: document.file_name,
+        file_size: document.file_size,
+        document_type: document.document_type,
+        extraction_status: document.extraction_status,
+        uploaded_at: document.uploaded_at,
+        url: publicUrl,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Create document error:', error);
+      res.status(500).json({ success: false, error: 'Failed to create document' });
     }
   }
 };

@@ -106,3 +106,54 @@ export const getSignedUrl = async (
     throw new AppError(500, 'Failed to generate signed URL');
   }
 };
+
+/**
+ * Create a signed upload URL for direct client-side upload
+ * This bypasses the backend for file data, avoiding proxy issues
+ *
+ * @param fileName - Original filename
+ * @param userId - User ID for organizing files
+ * @returns Signed upload URL and the storage path
+ */
+export const createSignedUploadUrl = async (
+  fileName: string,
+  userId: string
+): Promise<{ signedUrl: string; storagePath: string; token: string }> => {
+  try {
+    // Generate storage path: users/{userId}/{timestamp}-{filename}
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `users/${userId}/${timestamp}-${sanitizedFileName}`;
+
+    // Create signed upload URL (valid for 1 hour)
+    const { data, error } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+      console.error('Failed to create signed upload URL:', error);
+      throw new AppError(500, 'Failed to create upload URL');
+    }
+
+    return {
+      signedUrl: data.signedUrl,
+      storagePath,
+      token: data.token,
+    };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(500, 'Failed to create upload URL');
+  }
+};
+
+/**
+ * Get public URL for a storage path
+ */
+export const getPublicUrl = (storagePath: string): string => {
+  const { data: { publicUrl } } = supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(storagePath);
+  return publicUrl;
+};

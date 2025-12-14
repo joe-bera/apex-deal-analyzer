@@ -5,6 +5,8 @@ import {
   listDocuments,
   deleteDocument,
   extractDocument,
+  getUploadUrl,
+  createDocument,
 } from '../controllers/documentController';
 import { authenticate } from '../middleware/auth';
 import { upload } from '../middleware/upload';
@@ -18,7 +20,7 @@ const router = Router();
  * All routes require authentication
  */
 
-// Upload document (with file) - rate limited
+// Upload document (with file) - rate limited (legacy, may not work on some cloud platforms)
 router.post(
   '/upload',
   authenticate,
@@ -26,6 +28,21 @@ router.post(
   upload.single('file'),
   validate(documentUploadSchema, 'body'),
   uploadDocument
+);
+
+// Get signed URL for direct upload to Supabase Storage (recommended)
+router.post(
+  '/upload-url',
+  authenticate,
+  uploadLimiter,
+  getUploadUrl
+);
+
+// Create document record after direct upload
+router.post(
+  '/create',
+  authenticate,
+  createDocument
 );
 
 // List documents

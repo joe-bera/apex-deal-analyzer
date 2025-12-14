@@ -55,7 +55,7 @@ export const api = {
 
   getCurrentUser: () => request<{ user: any }>('/auth/me'),
 
-  // Documents
+  // Documents - Direct upload to Supabase (bypasses backend proxy issues)
   uploadDocument: async (file: File, propertyId?: string, documentType?: string) => {
     const token = localStorage.getItem('token');
 
@@ -67,52 +67,86 @@ export const api = {
       throw new APIError(401, 'Please log in to upload documents.');
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    if (propertyId) formData.append('property_id', propertyId);
-    if (documentType) formData.append('document_type', documentType);
-
-    console.log('[API] Uploading to:', `${API_BASE}/documents/upload`);
-
-    let response;
+    // Step 1: Get signed upload URL from backend
+    console.log('[API] Getting signed upload URL...');
+    let uploadUrlResponse;
     try {
-      response = await fetch(`${API_BASE}/documents/upload`, {
+      uploadUrlResponse = await fetch(`${API_BASE}/documents/upload-url`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_size: file.size,
+        }),
       });
     } catch (networkError) {
-      console.error('[API] Network error during upload:', networkError);
+      console.error('[API] Network error getting upload URL:', networkError);
       throw new APIError(0, 'Network error. Please check your internet connection and try again.');
     }
 
-    console.log('[API] Upload response status:', response.status);
+    const uploadUrlData = await uploadUrlResponse.json();
+    if (!uploadUrlResponse.ok) {
+      console.error('[API] Failed to get upload URL:', uploadUrlData);
+      throw new APIError(uploadUrlResponse.status, uploadUrlData.error || 'Failed to prepare upload');
+    }
 
-    let data;
+    console.log('[API] Got signed URL, uploading directly to Supabase Storage...');
+
+    // Step 2: Upload file directly to Supabase Storage
+    let storageResponse;
     try {
-      data = await response.json();
-      console.log('[API] Upload response data:', data);
-    } catch (e) {
-      console.error('[API] Failed to parse response as JSON:', e);
-      if (response.status === 413) {
-        throw new APIError(413, 'File too large. Please upload a smaller file.');
-      }
-      throw new APIError(response.status, 'Server error - please try again.');
+      storageResponse = await fetch(uploadUrlData.upload_url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/pdf',
+        },
+        body: file,
+      });
+    } catch (networkError) {
+      console.error('[API] Network error uploading to storage:', networkError);
+      throw new APIError(0, 'Failed to upload file. Please try again.');
     }
 
-    if (!response.ok) {
-      console.error('[API] Upload failed:', response.status, data);
-      if (response.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        throw new APIError(401, 'Session expired. Please log in again.');
-      }
-      if (response.status === 413) {
-        throw new APIError(413, 'File too large. Please upload a smaller file.');
-      }
-      throw new APIError(response.status, data.error || 'Upload failed');
+    if (!storageResponse.ok) {
+      console.error('[API] Storage upload failed:', storageResponse.status);
+      throw new APIError(storageResponse.status, 'Failed to upload file to storage');
     }
-    return data;
+
+    console.log('[API] File uploaded to storage, creating document record...');
+
+    // Step 3: Create document record in backend
+    let createResponse;
+    try {
+      createResponse = await fetch(`${API_BASE}/documents/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storage_path: uploadUrlData.storage_path,
+          file_name: file.name,
+          file_size: file.size,
+          property_id: propertyId,
+          document_type: documentType,
+        }),
+      });
+    } catch (networkError) {
+      console.error('[API] Network error creating document:', networkError);
+      throw new APIError(0, 'File uploaded but failed to create record. Please try again.');
+    }
+
+    const createData = await createResponse.json();
+    if (!createResponse.ok) {
+      console.error('[API] Failed to create document:', createData);
+      throw new APIError(createResponse.status, createData.error || 'Failed to create document record');
+    }
+
+    console.log('[API] Document created successfully:', createData.document?.id);
+    return createData;
   },
 
   listDocuments: (params?: Record<string, string>) => {
