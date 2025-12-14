@@ -13,8 +13,17 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+// Store file data immediately to prevent mobile browser issues where File blob expires
+interface FileData {
+  name: string;
+  size: number;
+  type: string;
+  buffer: ArrayBuffer;
+}
+
 export default function UploadDocument() {
   const [file, setFile] = useState<File | null>(null);
+  const [fileData, setFileData] = useState<FileData | null>(null);
   const [documentType, setDocumentType] = useState('offering_memorandum');
   const [propertyId, setPropertyId] = useState<string>('');
   const [properties, setProperties] = useState<any[]>([]);
@@ -68,46 +77,72 @@ export default function UploadDocument() {
     if (file.type !== 'application/pdf') {
       return 'Please upload a PDF file';
     }
+    if (file.size <= 0) {
+      return 'File appears to be empty. Please select a valid PDF file.';
+    }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large (${formatFileSize(file.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`;
     }
     return null;
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  // Read file data immediately to prevent mobile browser File blob expiration
+  const processFile = async (selectedFile: File) => {
+    const validationError = validateFile(selectedFile);
+    if (validationError) {
+      setError(validationError);
+      return false;
+    }
+
+    try {
+      // Read file data immediately - this prevents the mobile browser bug
+      // where File blob data expires after some time
+      const buffer = await selectedFile.arrayBuffer();
+
+      if (buffer.byteLength === 0) {
+        setError('Failed to read file. Please try selecting the file again.');
+        return false;
+      }
+
+      setFileData({
+        name: selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type,
+        buffer,
+      });
+      setFile(selectedFile);
+      setError('');
+      console.log('[Upload] File processed:', selectedFile.name, 'size:', buffer.byteLength);
+      return true;
+    } catch (err) {
+      console.error('[Upload] Error reading file:', err);
+      setError('Failed to read file. Please try again.');
+      return false;
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      const validationError = validateFile(droppedFile);
-      if (validationError) {
-        setError(validationError);
-      } else {
-        setFile(droppedFile);
-        setError('');
-      }
+      await processFile(e.dataTransfer.files[0]);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      const validationError = validateFile(selectedFile);
-      if (validationError) {
-        setError(validationError);
+      const success = await processFile(e.target.files[0]);
+      if (!success) {
         e.target.value = ''; // Reset input
-      } else {
-        setFile(selectedFile);
-        setError('');
       }
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
+    if (!fileData) {
       setError('Please select a file');
       return;
     }
@@ -117,15 +152,24 @@ export default function UploadDocument() {
       return;
     }
 
+    // Double-check that we have valid file data
+    if (fileData.buffer.byteLength === 0) {
+      setError('File data is invalid. Please select the file again.');
+      setFile(null);
+      setFileData(null);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
       console.log('[Upload] Starting upload, documentType:', documentType, 'propertyId:', propertyId);
+      console.log('[Upload] File data:', fileData.name, 'size:', fileData.size, 'buffer:', fileData.buffer.byteLength);
 
       // Upload document with property_id if it's a comp
-      const result: any = await api.uploadDocument(
-        file,
+      const result: any = await api.uploadDocumentWithBuffer(
+        fileData,
         documentType === 'comp' ? propertyId : undefined,
         documentType
       );
@@ -254,9 +298,9 @@ export default function UploadDocument() {
                   <p className="pl-1">or drag and drop</p>
                 </div>
                 <p className="text-xs text-gray-500">PDF up to {MAX_FILE_SIZE_DISPLAY}</p>
-                {file && (
+                {fileData && (
                   <p className="text-sm text-gray-900 font-medium mt-2">
-                    Selected: {file.name} ({formatFileSize(file.size)})
+                    Selected: {fileData.name} ({formatFileSize(fileData.buffer.byteLength)})
                   </p>
                 )}
               </div>

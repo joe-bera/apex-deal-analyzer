@@ -158,6 +158,110 @@ export const api = {
     return createData;
   },
 
+  // Upload with pre-read buffer (prevents mobile browser File blob expiration)
+  uploadDocumentWithBuffer: async (
+    fileData: { name: string; size: number; type: string; buffer: ArrayBuffer },
+    propertyId?: string,
+    documentType?: string
+  ) => {
+    const token = localStorage.getItem('token');
+
+    console.log('[API] uploadDocumentWithBuffer called, token exists:', !!token);
+    console.log('[API] Buffer size:', fileData.buffer.byteLength);
+
+    if (!token) {
+      console.error('[API] No token found in localStorage');
+      window.location.href = '/login';
+      throw new APIError(401, 'Please log in to upload documents.');
+    }
+
+    // Step 1: Get signed upload URL from backend
+    console.log('[API] Getting signed upload URL...');
+    let uploadUrlResponse;
+    try {
+      uploadUrlResponse = await fetch(`${API_BASE}/documents/upload-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          file_name: fileData.name,
+          file_size: fileData.size,
+        }),
+      });
+    } catch (networkError) {
+      console.error('[API] Network error getting upload URL:', networkError);
+      throw new APIError(0, 'Network error. Please check your internet connection and try again.');
+    }
+
+    const uploadUrlData = await uploadUrlResponse.json();
+    if (!uploadUrlResponse.ok) {
+      console.error('[API] Failed to get upload URL:', uploadUrlData);
+      throw new APIError(uploadUrlResponse.status, uploadUrlData.error || 'Failed to prepare upload');
+    }
+
+    console.log('[API] Got signed URL, uploading buffer directly to Supabase Storage...');
+    console.log('[API] Buffer byteLength:', fileData.buffer.byteLength);
+
+    // Step 2: Upload buffer directly to Supabase Storage
+    let storageResponse;
+    try {
+      storageResponse = await fetch(uploadUrlData.upload_url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': fileData.type || 'application/pdf',
+        },
+        body: fileData.buffer,
+      });
+    } catch (networkError) {
+      console.error('[API] Network error uploading to storage:', networkError);
+      throw new APIError(0, 'Failed to upload file. Please try again.');
+    }
+
+    console.log('[API] Storage upload response:', storageResponse.status, storageResponse.statusText);
+
+    if (!storageResponse.ok) {
+      const errorText = await storageResponse.text();
+      console.error('[API] Storage upload failed:', storageResponse.status, errorText);
+      throw new APIError(storageResponse.status, 'Failed to upload file to storage');
+    }
+
+    console.log('[API] File uploaded to storage, creating document record...');
+    console.log('[API] Sending file_size:', fileData.size);
+
+    // Step 3: Create document record in backend
+    let createResponse;
+    try {
+      createResponse = await fetch(`${API_BASE}/documents/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storage_path: uploadUrlData.storage_path,
+          file_name: fileData.name,
+          file_size: fileData.size,
+          property_id: propertyId,
+          document_type: documentType,
+        }),
+      });
+    } catch (networkError) {
+      console.error('[API] Network error creating document:', networkError);
+      throw new APIError(0, 'File uploaded but failed to create record. Please try again.');
+    }
+
+    const createData = await createResponse.json();
+    if (!createResponse.ok) {
+      console.error('[API] Failed to create document:', createData);
+      throw new APIError(createResponse.status, createData.error || 'Failed to create document record');
+    }
+
+    console.log('[API] Document created successfully:', createData.document?.id);
+    return createData;
+  },
+
   listDocuments: (params?: Record<string, string>) => {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
     return request(`/documents${query}`);
