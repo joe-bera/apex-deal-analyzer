@@ -24,6 +24,16 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       throw new AppError(400, 'No file uploaded');
     }
 
+    // Debug logging for file upload
+    console.log('[DocumentController] File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      bufferLength: req.file.buffer?.length || 0,
+      hasBuffer: !!req.file.buffer,
+      fieldname: req.file.fieldname,
+    });
+
     const { property_id, document_type = 'other' } = req.body;
 
     // Validate document_type
