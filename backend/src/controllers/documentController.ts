@@ -68,9 +68,19 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     let extractedText = '';
     let pdfMetadata = {};
 
+    // Limit extracted text to prevent database issues with very large PDFs
+    const MAX_EXTRACTED_TEXT_LENGTH = 500000; // ~500KB of text
+
     try {
       const pdfData = await parsePDF(req.file.path);
       extractedText = cleanPDFText(pdfData.text);
+
+      // Truncate if too long
+      if (extractedText.length > MAX_EXTRACTED_TEXT_LENGTH) {
+        console.log(`[DocumentController] Truncating extracted text from ${extractedText.length} to ${MAX_EXTRACTED_TEXT_LENGTH} chars`);
+        extractedText = extractedText.substring(0, MAX_EXTRACTED_TEXT_LENGTH) + '\n\n[Text truncated due to length...]';
+      }
+
       pdfMetadata = {
         num_pages: pdfData.numPages,
         title: pdfData.info.Title,
@@ -115,6 +125,8 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     cleanupFile(req.file.path);
 
     if (dbError || !document) {
+      console.error('[DocumentController] Database error creating document:', dbError);
+      console.error('[DocumentController] Extracted text length:', extractedText?.length || 0);
       throw new AppError(500, 'Failed to create document record');
     }
 
