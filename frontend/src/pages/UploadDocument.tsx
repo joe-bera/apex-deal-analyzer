@@ -4,6 +4,15 @@ import Layout from '../components/Layout';
 import { api } from '../lib/api';
 import { Button } from '../components/ui';
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE_DISPLAY = '50MB';
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 export default function UploadDocument() {
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('offering_memorandum');
@@ -55,6 +64,16 @@ export default function UploadDocument() {
     }
   };
 
+  const validateFile = (file: File): string | null => {
+    if (file.type !== 'application/pdf') {
+      return 'Please upload a PDF file';
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return `File too large (${formatFileSize(file.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`;
+    }
+    return null;
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -62,19 +81,27 @@ export default function UploadDocument() {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type === 'application/pdf') {
+      const validationError = validateFile(droppedFile);
+      if (validationError) {
+        setError(validationError);
+      } else {
         setFile(droppedFile);
         setError('');
-      } else {
-        setError('Please upload a PDF file');
       }
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setError('');
+      const selectedFile = e.target.files[0];
+      const validationError = validateFile(selectedFile);
+      if (validationError) {
+        setError(validationError);
+        e.target.value = ''; // Reset input
+      } else {
+        setFile(selectedFile);
+        setError('');
+      }
     }
   };
 
@@ -226,10 +253,10 @@ export default function UploadDocument() {
                   </label>
                   <p className="pl-1">or drag and drop</p>
                 </div>
-                <p className="text-xs text-gray-500">PDF up to 10MB</p>
+                <p className="text-xs text-gray-500">PDF up to {MAX_FILE_SIZE_DISPLAY}</p>
                 {file && (
                   <p className="text-sm text-gray-900 font-medium mt-2">
-                    Selected: {file.name}
+                    Selected: {file.name} ({formatFileSize(file.size)})
                   </p>
                 )}
               </div>

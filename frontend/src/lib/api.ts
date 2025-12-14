@@ -74,11 +74,17 @@ export const api = {
 
     console.log('[API] Uploading to:', `${API_BASE}/documents/upload`);
 
-    const response = await fetch(`${API_BASE}/documents/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
+    let response;
+    try {
+      response = await fetch(`${API_BASE}/documents/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } catch (networkError) {
+      console.error('[API] Network error during upload:', networkError);
+      throw new APIError(0, 'Network error. Please check your internet connection and try again.');
+    }
 
     console.log('[API] Upload response status:', response.status);
 
@@ -88,7 +94,10 @@ export const api = {
       console.log('[API] Upload response data:', data);
     } catch (e) {
       console.error('[API] Failed to parse response as JSON:', e);
-      throw new APIError(response.status, 'Server error - invalid response');
+      if (response.status === 413) {
+        throw new APIError(413, 'File too large. Please upload a smaller file.');
+      }
+      throw new APIError(response.status, 'Server error - please try again.');
     }
 
     if (!response.ok) {
@@ -97,6 +106,9 @@ export const api = {
         localStorage.removeItem('token');
         window.location.href = '/login';
         throw new APIError(401, 'Session expired. Please log in again.');
+      }
+      if (response.status === 413) {
+        throw new APIError(413, 'File too large. Please upload a smaller file.');
       }
       throw new APIError(response.status, data.error || 'Upload failed');
     }

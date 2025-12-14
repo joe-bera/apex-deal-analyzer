@@ -55,7 +55,7 @@ export const config = {
   },
   upload: {
     uploadDir: process.env.UPLOAD_DIR || './uploads',
-    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10), // 10 MB default
+    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800', 10), // 50 MB default
     allowedFileTypes: (process.env.ALLOWED_FILE_TYPES || 'application/pdf').split(','),
   },
   rateLimit: {
