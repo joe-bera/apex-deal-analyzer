@@ -4,6 +4,58 @@ import { AppError } from '../middleware/errorHandler';
 import { ExtractedPropertyData } from '../services/extractionService';
 import { analyzePropertyValue } from '../services/valuationService';
 
+// Database property_type enum values
+type DatabasePropertyType = 'warehouse' | 'distribution_center' | 'manufacturing' | 'flex_space' | 'cold_storage' | 'other';
+
+/**
+ * Map extracted property types to database enum values
+ * The extraction service returns broader categories, we need to map them to our industrial-focused enum
+ */
+const mapPropertyTypeToDatabase = (extractedType: string | undefined | null, subtype?: string): DatabasePropertyType => {
+  if (!extractedType) {
+    // Try to infer from subtype if property_type is null
+    if (subtype) {
+      const subtypeLower = subtype.toLowerCase();
+      if (subtypeLower.includes('warehouse')) return 'warehouse';
+      if (subtypeLower.includes('distribution')) return 'distribution_center';
+      if (subtypeLower.includes('manufacturing') || subtypeLower.includes('factory')) return 'manufacturing';
+      if (subtypeLower.includes('flex')) return 'flex_space';
+      if (subtypeLower.includes('cold') || subtypeLower.includes('refrigerat') || subtypeLower.includes('freezer')) return 'cold_storage';
+    }
+    return 'other';
+  }
+
+  const typeLower = extractedType.toLowerCase();
+
+  // Direct matches or mappings
+  if (typeLower === 'warehouse') return 'warehouse';
+  if (typeLower === 'distribution_center' || typeLower.includes('distribution')) return 'distribution_center';
+  if (typeLower === 'manufacturing') return 'manufacturing';
+  if (typeLower === 'flex_space' || typeLower.includes('flex')) return 'flex_space';
+  if (typeLower === 'cold_storage' || typeLower.includes('cold')) return 'cold_storage';
+
+  // Map broader extraction types to our industrial-focused types
+  if (typeLower === 'industrial') {
+    // Try to be more specific based on subtype
+    if (subtype) {
+      const subtypeLower = subtype.toLowerCase();
+      if (subtypeLower.includes('warehouse')) return 'warehouse';
+      if (subtypeLower.includes('distribution')) return 'distribution_center';
+      if (subtypeLower.includes('manufacturing')) return 'manufacturing';
+      if (subtypeLower.includes('flex')) return 'flex_space';
+      if (subtypeLower.includes('cold')) return 'cold_storage';
+    }
+    return 'warehouse'; // Default industrial to warehouse
+  }
+
+  // Non-industrial types go to 'other'
+  if (['office', 'retail', 'multifamily', 'land', 'mixed_use', 'residential'].includes(typeLower)) {
+    return 'other';
+  }
+
+  return 'other';
+};
+
 /**
  * Create property from extracted document data
  * POST /api/properties/from-document/:documentId
@@ -51,6 +103,9 @@ export const createPropertyFromDocument = async (
       ...overrides,
     };
 
+    // Map the extracted property_type to database enum value
+    const mappedPropertyType = mapPropertyTypeToDatabase(propertyData.property_type, propertyData.subtype);
+
     // Create property record
     const { data: property, error: createError } = await supabaseAdmin
       .from('properties')
@@ -61,7 +116,7 @@ export const createPropertyFromDocument = async (
         state: propertyData.state || 'CA',
         zip_code: propertyData.zip_code,
         apn: propertyData.apn,
-        property_type: propertyData.property_type,
+        property_type: mappedPropertyType,
         subtype: propertyData.subtype,
         building_size: propertyData.building_size,
         lot_size: propertyData.lot_size,
