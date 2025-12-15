@@ -12,6 +12,11 @@ import {
   getPropertyLOIs,
   updateLOI,
 } from '../controllers/loiController';
+import {
+  getPhotoUploadUrl,
+  createPhoto,
+  listPhotos,
+} from '../controllers/photoController';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
@@ -21,7 +26,7 @@ import {
   propertyOverridesSchema,
   listPropertiesQuerySchema,
 } from '../middleware/validate';
-import { aiLimiter } from '../middleware/rateLimit';
+import { aiLimiter, uploadLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -100,6 +105,33 @@ router.patch(
   '/lois/:loiId',
   authenticate,
   updateLOI
+);
+
+// =====================================================
+// Photo Routes (nested under property)
+// =====================================================
+
+// Get signed URL for photo upload
+router.post(
+  '/:propertyId/photos/upload-url',
+  authenticate,
+  uploadLimiter,
+  getPhotoUploadUrl
+);
+
+// Create photo record after upload
+router.post(
+  '/:propertyId/photos',
+  authenticate,
+  uploadLimiter,
+  createPhoto
+);
+
+// List all photos for a property
+router.get(
+  '/:propertyId/photos',
+  authenticate,
+  listPhotos
 );
 
 export default router;

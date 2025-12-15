@@ -11,6 +11,7 @@ import type {
   ValuationResponse,
   CreateCompInput,
   PropertyType,
+  PropertyStatus,
   LOI,
   LOIResponse,
   BuyerInfo,
@@ -31,12 +32,25 @@ import {
   EmptyState,
 } from '../components/ui';
 import { CompAnalysisCharts } from '../components/charts';
+import PhotoGallery from '../components/PhotoGallery';
+import { STATUS_OPTIONS } from '../components/StatusBadge';
+
+interface Photo {
+  id: string;
+  file_name: string;
+  file_path: string;
+  photo_type: string;
+  caption?: string;
+  is_primary: boolean;
+  url: string;
+}
 
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [property, setProperty] = useState<Property | null>(null);
   const [comps, setComps] = useState<Comp[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [valuation, setValuation] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -45,6 +59,7 @@ export default function PropertyDetail() {
   const [showLOIForm, setShowLOIForm] = useState(false);
   const [generatingLOI, setGeneratingLOI] = useState(false);
   const [generatedLOI, setGeneratedLOI] = useState<LOI | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -56,17 +71,43 @@ export default function PropertyDetail() {
   const loadPropertyData = async () => {
     try {
       setLoading(true);
-      const [propData, compsData] = await Promise.all([
+      const [propData, compsData, photosData] = await Promise.all([
         api.getProperty(id!),
         api.getComps(id!),
+        api.getPhotos(id!).catch(() => ({ photos: [] })),
       ]);
       setProperty((propData as PropertyResponse).property);
       setComps((compsData as CompsResponse).comps || []);
+      setPhotos((photosData as { photos: Photo[] }).photos || []);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load property';
       setError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPhotos = async () => {
+    try {
+      const photosData = await api.getPhotos(id!);
+      setPhotos((photosData as { photos: Photo[] }).photos || []);
+    } catch (err) {
+      console.error('Failed to load photos:', err);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!property || updatingStatus) return;
+
+    try {
+      setUpdatingStatus(true);
+      await api.updateProperty(id!, { status: newStatus });
+      setProperty({ ...property, status: newStatus as PropertyStatus });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update status';
+      setError(message);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -280,6 +321,29 @@ export default function PropertyDetail() {
                 {property.market && (
                   <Badge variant="default">{property.market}</Badge>
                 )}
+                {/* Status Badge with dropdown */}
+                <div className="relative inline-block">
+                  <select
+                    value={property.status || 'prospect'}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    disabled={updatingStatus}
+                    className="appearance-none bg-transparent border-none cursor-pointer focus:outline-none focus:ring-0 pr-6"
+                  >
+                    {STATUS_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  {updatingStatus && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+                      <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </div>
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
                 {property.address || 'Vacant Land'}
@@ -374,6 +438,17 @@ export default function PropertyDetail() {
             }
           />
         </div>
+
+        {/* Photo Gallery */}
+        <Card>
+          <CardContent className="pt-6">
+            <PhotoGallery
+              propertyId={id!}
+              photos={photos}
+              onPhotosChange={loadPhotos}
+            />
+          </CardContent>
+        </Card>
 
         {/* AI Valuation Results */}
         {valuation && (

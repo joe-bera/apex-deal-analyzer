@@ -333,4 +333,89 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(updates),
     }),
+
+  // Photos
+  getPhotos: (propertyId: string) =>
+    request(`/properties/${propertyId}/photos`),
+
+  uploadPhoto: async (
+    propertyId: string,
+    file: File,
+    photoType: string = 'exterior',
+    caption?: string,
+    isPrimary: boolean = false
+  ) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new APIError(401, 'Please log in to upload photos.');
+    }
+
+    // Step 1: Get signed upload URL
+    const uploadUrlResponse = await fetch(`${API_BASE}/properties/${propertyId}/photos/upload-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        file_name: file.name,
+        file_size: file.size,
+      }),
+    });
+
+    const uploadUrlData = await uploadUrlResponse.json();
+    if (!uploadUrlResponse.ok) {
+      throw new APIError(uploadUrlResponse.status, uploadUrlData.error || 'Failed to prepare upload');
+    }
+
+    // Step 2: Upload file directly to Supabase Storage
+    const fileBuffer = await file.arrayBuffer();
+    const storageResponse = await fetch(uploadUrlData.upload_url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'image/jpeg',
+      },
+      body: fileBuffer,
+    });
+
+    if (!storageResponse.ok) {
+      throw new APIError(storageResponse.status, 'Failed to upload photo to storage');
+    }
+
+    // Step 3: Create photo record
+    const createResponse = await fetch(`${API_BASE}/properties/${propertyId}/photos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        storage_path: uploadUrlData.storage_path,
+        file_name: file.name,
+        file_size: file.size,
+        photo_type: photoType,
+        caption,
+        is_primary: isPrimary,
+      }),
+    });
+
+    const createData = await createResponse.json();
+    if (!createResponse.ok) {
+      throw new APIError(createResponse.status, createData.error || 'Failed to create photo record');
+    }
+
+    return createData;
+  },
+
+  updatePhoto: (photoId: string, updates: { photo_type?: string; caption?: string; is_primary?: boolean }) =>
+    request(`/photos/${photoId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+
+  deletePhoto: (photoId: string) =>
+    request(`/photos/${photoId}`, { method: 'DELETE' }),
+
+  setPrimaryPhoto: (photoId: string) =>
+    request(`/photos/${photoId}/set-primary`, { method: 'POST' }),
 };

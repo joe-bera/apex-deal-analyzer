@@ -22,6 +22,16 @@ export type PropertyType =
   | 'mixed_use'
   | 'other';
 
+export type PropertyStatus =
+  | 'prospect'
+  | 'contacted'
+  | 'pitched'
+  | 'listed'
+  | 'under_contract'
+  | 'sold'
+  | 'dead'
+  | 'watch';
+
 export interface Property {
   id: string;
   created_by: string;
@@ -31,6 +41,7 @@ export interface Property {
   zip_code?: string;
   apn?: string;
   property_type?: PropertyType;
+  status?: PropertyStatus;
   subtype?: string;
   building_size?: number;
   lot_size?: number;

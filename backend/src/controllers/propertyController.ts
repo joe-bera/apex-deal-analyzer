@@ -311,6 +311,7 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
 
     const {
       property_type,
+      status,
       city,
       market,
       min_price,
@@ -323,13 +324,18 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
 
     let query = supabaseAdmin
       .from('properties')
-      .select('*, documents(id, file_name, document_type)', { count: 'exact' })
+      .select('*, documents(id, file_name, document_type), property_photos(id, file_path, is_primary)', { count: 'exact' })
       .eq('created_by', req.user.id)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
 
     // Apply filters
     if (property_type) {
       query = query.eq('property_type', property_type as string);
+    }
+
+    if (status) {
+      query = query.eq('status', status as string);
     }
 
     if (city) {
