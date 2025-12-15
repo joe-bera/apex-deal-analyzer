@@ -67,43 +67,27 @@ COMMENT ON TABLE property_photos IS 'Photos associated with properties for visua
 -- -----------------------------------------------------
 ALTER TABLE property_photos ENABLE ROW LEVEL SECURITY;
 
--- Users can view photos for properties they have access to
-CREATE POLICY "Users can view photos for accessible properties"
+-- Users can view photos for properties they own
+CREATE POLICY "Users can view photos for their properties"
   ON property_photos FOR SELECT
   USING (
     uploaded_by = auth.uid()
     OR EXISTS (
       SELECT 1 FROM properties
       WHERE properties.id = property_photos.property_id
-        AND (
-          properties.created_by = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM shared_access
-            WHERE property_id = properties.id
-              AND user_id = auth.uid()
-              AND can_view = true
-          )
-        )
+        AND properties.created_by = auth.uid()
     )
   );
 
--- Users can upload photos to properties they own or have edit access
-CREATE POLICY "Users can upload photos to accessible properties"
+-- Users can upload photos to their own properties
+CREATE POLICY "Users can upload photos to their properties"
   ON property_photos FOR INSERT
   WITH CHECK (
     uploaded_by = auth.uid()
     AND EXISTS (
       SELECT 1 FROM properties
       WHERE properties.id = property_photos.property_id
-        AND (
-          properties.created_by = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM shared_access
-            WHERE property_id = properties.id
-              AND user_id = auth.uid()
-              AND can_edit = true
-          )
-        )
+        AND properties.created_by = auth.uid()
     )
   );
 
