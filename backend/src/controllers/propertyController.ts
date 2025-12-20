@@ -322,11 +322,13 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
       offset = 0,
     } = req.query;
 
+    // Build select - property_photos may not exist if migration wasn't run
+    const selectFields = '*, documents(id, file_name, document_type)';
+
     let query = supabaseAdmin
       .from('properties')
-      .select('*, documents(id, file_name, document_type), property_photos(id, file_path, is_primary)', { count: 'exact' })
+      .select(selectFields, { count: 'exact' })
       .eq('created_by', req.user.id)
-      .or('is_archived.eq.false,is_archived.is.null')
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -371,7 +373,8 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
     const { data: properties, error, count } = await query;
 
     if (error) {
-      throw new AppError(500, 'Failed to fetch properties');
+      console.error('Supabase query error:', error.message, error.details, error.hint);
+      throw new AppError(500, `Failed to fetch properties: ${error.message}`);
     }
 
     res.status(200).json({
