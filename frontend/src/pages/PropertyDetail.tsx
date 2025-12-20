@@ -62,6 +62,15 @@ export default function PropertyDetail() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState('');
 
+  // Multi-comp upload state
+  const [uploadingComps, setUploadingComps] = useState(false);
+  const [compUploadProgress, setCompUploadProgress] = useState<{
+    current: number;
+    total: number;
+    currentFile: string;
+    results: { file: string; success: boolean; error?: string }[];
+  } | null>(null);
+
   useEffect(() => {
     if (id) {
       loadPropertyData();
@@ -252,6 +261,72 @@ export default function PropertyDetail() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  // Handle multi-comp PDF upload
+  const handleCompFilesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf');
+    if (pdfFiles.length === 0) {
+      setError('Please select PDF files only');
+      return;
+    }
+
+    setUploadingComps(true);
+    setError('');
+    setCompUploadProgress({
+      current: 0,
+      total: pdfFiles.length,
+      currentFile: '',
+      results: [],
+    });
+
+    const results: { file: string; success: boolean; error?: string }[] = [];
+
+    for (let i = 0; i < pdfFiles.length; i++) {
+      const file = pdfFiles[i];
+      setCompUploadProgress(prev => prev ? {
+        ...prev,
+        current: i + 1,
+        currentFile: file.name,
+      } : null);
+
+      try {
+        // Read file buffer
+        const buffer = await file.arrayBuffer();
+
+        // Upload document with comp type
+        const uploadResult: any = await api.uploadDocumentWithBuffer(
+          { name: file.name, size: file.size, type: file.type, buffer },
+          id,
+          'comp'
+        );
+
+        // Extract data from document
+        await api.extractDocument(uploadResult.document.id);
+
+        results.push({ file: file.name, success: true });
+      } catch (err: any) {
+        console.error(`Failed to upload comp ${file.name}:`, err);
+        results.push({ file: file.name, success: false, error: err.message });
+      }
+
+      setCompUploadProgress(prev => prev ? { ...prev, results: [...results] } : null);
+    }
+
+    // Reset file input
+    e.target.value = '';
+
+    // Refresh comps list
+    await loadPropertyData();
+
+    // Show results briefly then clear
+    setTimeout(() => {
+      setUploadingComps(false);
+      setCompUploadProgress(null);
+    }, 2000);
   };
 
   const formatCurrency = (value?: number | null) => {
@@ -782,16 +857,85 @@ export default function PropertyDetail() {
                     <CardTitle>Comparable Sales</CardTitle>
                     <Badge variant="primary">{comps.length}</Badge>
                   </div>
-                  <Button
-                    variant={showAddComp ? 'ghost' : 'outline'}
-                    size="sm"
-                    onClick={() => setShowAddComp(!showAddComp)}
-                  >
-                    {showAddComp ? 'Cancel' : '+ Add Comp'}
-                  </Button>
+                  <div className="flex gap-2">
+                    {/* Hidden file input for multi-comp upload */}
+                    <input
+                      type="file"
+                      id="comp-files-input"
+                      accept=".pdf"
+                      multiple
+                      onChange={handleCompFilesSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById('comp-files-input')?.click()}
+                      disabled={uploadingComps}
+                      leftIcon={
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                      }
+                    >
+                      Upload
+                    </Button>
+                    <Button
+                      variant={showAddComp ? 'ghost' : 'outline'}
+                      size="sm"
+                      onClick={() => setShowAddComp(!showAddComp)}
+                    >
+                      {showAddComp ? 'Cancel' : '+ Add Comp'}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Upload Progress */}
+                {uploadingComps && compUploadProgress && (
+                  <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 mb-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                      <span className="font-medium text-primary-900">
+                        Uploading comp {compUploadProgress.current} of {compUploadProgress.total}
+                      </span>
+                    </div>
+                    {compUploadProgress.currentFile && (
+                      <p className="text-sm text-primary-700 mb-2">
+                        Processing: {compUploadProgress.currentFile}
+                      </p>
+                    )}
+                    {/* Progress bar */}
+                    <div className="w-full bg-primary-200 rounded-full h-2 mb-3">
+                      <div
+                        className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(compUploadProgress.current / compUploadProgress.total) * 100}%` }}
+                      />
+                    </div>
+                    {/* Results */}
+                    {compUploadProgress.results.length > 0 && (
+                      <div className="space-y-1">
+                        {compUploadProgress.results.map((result, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-sm">
+                            {result.success ? (
+                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                            <span className={result.success ? 'text-green-700' : 'text-red-700'}>
+                              {result.file}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Add Comp Form */}
                 {showAddComp && (
                   <form onSubmit={handleAddComp} className="bg-gray-50 rounded-xl p-5 mb-6 border border-gray-200">
