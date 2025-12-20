@@ -326,7 +326,7 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
       .from('properties')
       .select('*, documents(id, file_name, document_type), property_photos(id, file_path, is_primary)', { count: 'exact' })
       .eq('created_by', req.user.id)
-      .eq('is_deleted', false)
+      .eq('is_archived', false)
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -421,10 +421,10 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
       throw new AppError(403, 'You do not have permission to delete this property');
     }
 
-    // Soft delete: mark as deleted
+    // Soft delete: mark as archived
     const { error: deleteError } = await supabaseAdmin
       .from('properties')
-      .update({ is_deleted: true, updated_at: new Date().toISOString() })
+      .update({ is_archived: true, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     if (deleteError) {
