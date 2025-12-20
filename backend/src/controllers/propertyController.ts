@@ -326,7 +326,7 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
       .from('properties')
       .select('*, documents(id, file_name, document_type), property_photos(id, file_path, is_primary)', { count: 'exact' })
       .eq('created_by', req.user.id)
-      .eq('is_archived', false)
+      .or('is_archived.eq.false,is_archived.is.null')
       .order('created_at', { ascending: false });
 
     // Apply filters
