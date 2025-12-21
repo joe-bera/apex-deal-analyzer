@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import autoTable, { FontStyle } from 'jspdf-autotable';
 import type { Property, Comp } from '../types';
 import type { DealAnalysisData } from '../components/DealAnalysisWorksheet';
 import {
@@ -164,15 +164,16 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
     yPos += 5;
 
     // Combined Income & Expense Table
+    const boldStyle: FontStyle = 'bold';
     const proformaData = [
       // Income Section
-      [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Potential Gross Income (PGI)', formatCurrency(analysis.potential_gross_income)],
       [`Less: Vacancy & Credit Loss (${analysis.vacancy_rate}%)`, `(${formatCurrency(vacancyAmount)})`],
       ['Plus: Other Income', formatCurrency(analysis.other_income)],
-      [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: 'bold' } }, { content: formatCurrency(egi), styles: { fontStyle: 'bold' } }],
+      [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: boldStyle } }, { content: formatCurrency(egi), styles: { fontStyle: boldStyle } }],
       // Expense Section
-      [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Property Taxes', formatCurrency(analysis.property_taxes)],
       ['Insurance', formatCurrency(analysis.insurance)],
       ['Utilities', formatCurrency(analysis.utilities)],
@@ -180,9 +181,9 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
       ['Repairs & Maintenance', formatCurrency(analysis.repairs_maintenance)],
       ['Reserves / CapEx', formatCurrency(analysis.reserves_capex)],
       ['Other Expenses', formatCurrency(analysis.other_expenses)],
-      [{ content: 'Total Operating Expenses', styles: { fontStyle: 'bold' } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: 'bold' } }],
+      [{ content: 'Total Operating Expenses', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: boldStyle } }],
       // NOI
-      [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: 'bold', fillColor: COLORS.primary, textColor: [255, 255, 255] } }, { content: formatCurrency(noi), styles: { fontStyle: 'bold', fillColor: COLORS.primary, textColor: [255, 255, 255] } }],
+      [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }, { content: formatCurrency(noi), styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }],
     ];
 
     autoTable(doc, {
@@ -217,17 +218,17 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
     yPos += 5;
 
     const financingData = [
-      [{ content: 'INVESTMENT SUMMARY', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      [{ content: 'INVESTMENT SUMMARY', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Purchase Price', formatCurrency(analysis.purchase_price)],
       [`Loan Amount (${analysis.ltv_percent}% LTV)`, formatCurrency(loanAmount)],
       ['Down Payment', formatCurrency(downPayment)],
       [`Closing Costs (${analysis.closing_costs_percent}%)`, formatCurrency(closingCosts)],
-      [{ content: 'Total Cash Required', styles: { fontStyle: 'bold' } }, { content: formatCurrency(totalCashRequired), styles: { fontStyle: 'bold' } }],
-      [{ content: 'DEBT SERVICE', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      [{ content: 'Total Cash Required', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalCashRequired), styles: { fontStyle: boldStyle } }],
+      [{ content: 'DEBT SERVICE', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Interest Rate', `${analysis.interest_rate}%`],
       ['Amortization Period', `${analysis.amortization_years} years`],
       ['Monthly Payment', formatCurrency(monthlyPayment)],
-      [{ content: 'Annual Debt Service', styles: { fontStyle: 'bold' } }, { content: formatCurrency(annualDebtService), styles: { fontStyle: 'bold' } }],
+      [{ content: 'Annual Debt Service', styles: { fontStyle: boldStyle } }, { content: formatCurrency(annualDebtService), styles: { fontStyle: boldStyle } }],
     ];
 
     autoTable(doc, {
@@ -250,26 +251,26 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
 
     const returnsData = [
       [
-        { content: 'Before-Tax Cash Flow', styles: { fontStyle: 'bold' } },
-        { content: formatCurrency(btcf), styles: { fontStyle: 'bold' } },
+        { content: 'Before-Tax Cash Flow', styles: { fontStyle: boldStyle } },
+        { content: formatCurrency(btcf), styles: { fontStyle: boldStyle } },
       ],
       [
-        { content: 'Cash-on-Cash Return', styles: { fontStyle: 'bold' } },
-        { content: formatPercent(coc), styles: { fontStyle: 'bold', textColor: cocColor } },
+        { content: 'Cash-on-Cash Return', styles: { fontStyle: boldStyle } },
+        { content: formatPercent(coc), styles: { fontStyle: boldStyle, textColor: cocColor } },
       ],
       [
-        { content: 'Debt Service Coverage Ratio (DSCR)', styles: { fontStyle: 'bold' } },
-        { content: `${dscr.toFixed(2)}x`, styles: { fontStyle: 'bold', textColor: dscrColor } },
+        { content: 'Debt Service Coverage Ratio (DSCR)', styles: { fontStyle: boldStyle } },
+        { content: `${dscr.toFixed(2)}x`, styles: { fontStyle: boldStyle, textColor: dscrColor } },
       ],
       [
-        { content: 'CAP Rate (Based on Analysis)', styles: { fontStyle: 'bold' } },
-        { content: formatPercent(capRate), styles: { fontStyle: 'bold' } },
+        { content: 'CAP Rate (Based on Analysis)', styles: { fontStyle: boldStyle } },
+        { content: formatPercent(capRate), styles: { fontStyle: boldStyle } },
       ],
     ];
 
     autoTable(doc, {
       startY: yPos,
-      head: [[{ content: 'KEY RETURNS', colSpan: 2, styles: { fillColor: COLORS.dark, textColor: [255, 255, 255] } }]],
+      head: [[{ content: 'KEY RETURNS', colSpan: 2, styles: { fillColor: COLORS.dark, textColor: [255, 255, 255] as [number, number, number] } }]],
       body: returnsData,
       theme: 'grid',
       styles: { fontSize: 10, cellPadding: 4 },
@@ -315,7 +316,7 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
       head: [['Address', 'City', 'Price', 'SF', '$/SF', 'Date']],
       body: compTableData,
       theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number], fontSize: 8, fontStyle: 'bold' as FontStyle },
       styles: { fontSize: 8, cellPadding: 2, overflow: 'ellipsize' },
       columnStyles: {
         0: { cellWidth: 55 },

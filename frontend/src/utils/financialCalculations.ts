@@ -226,3 +226,218 @@ export function formatRatio(value: number | undefined | null): string {
   if (value === null || value === undefined || !isFinite(value)) return '0.00x';
   return `${value.toFixed(2)}x`;
 }
+
+// ============================================================================
+// Multi-Year Projections
+// ============================================================================
+
+export interface YearProjection {
+  year: number;
+  income: number;
+  expenses: number;
+  noi: number;
+  debtService: number;
+  cashFlow: number;
+  loanBalance: number;
+  equity: number;
+}
+
+export interface ProjectionInputs {
+  initialIncome: number;
+  initialExpenses: number;
+  incomeGrowthRate: number; // percentage
+  expenseGrowthRate: number; // percentage
+  purchasePrice: number;
+  loanAmount: number;
+  interestRate: number; // percentage
+  amortizationYears: number;
+  holdingPeriod: number; // years
+  exitCapRate: number; // percentage
+  sellingCosts: number; // percentage
+}
+
+/**
+ * Calculate remaining loan balance after n years
+ * Using the loan amortization formula
+ */
+export function calculateLoanBalance(
+  originalLoan: number,
+  annualRate: number,
+  amortizationYears: number,
+  yearsElapsed: number
+): number {
+  if (originalLoan === 0 || annualRate === 0) return originalLoan;
+
+  const monthlyRate = annualRate / 100 / 12;
+  const totalPayments = amortizationYears * 12;
+  const paymentsMade = yearsElapsed * 12;
+
+  // Remaining balance formula
+  const remainingBalance = originalLoan *
+    (Math.pow(1 + monthlyRate, totalPayments) - Math.pow(1 + monthlyRate, paymentsMade)) /
+    (Math.pow(1 + monthlyRate, totalPayments) - 1);
+
+  return isFinite(remainingBalance) ? Math.max(0, remainingBalance) : 0;
+}
+
+/**
+ * Generate year-by-year projections
+ */
+export function generateProjections(inputs: ProjectionInputs): YearProjection[] {
+  const {
+    initialIncome,
+    initialExpenses,
+    incomeGrowthRate,
+    expenseGrowthRate,
+    purchasePrice,
+    loanAmount,
+    interestRate,
+    amortizationYears,
+    holdingPeriod,
+  } = inputs;
+
+  const projections: YearProjection[] = [];
+  const annualDebtService = calculateAnnualDebtService(
+    calculateMonthlyPayment(loanAmount, interestRate, amortizationYears)
+  );
+
+  for (let year = 1; year <= holdingPeriod; year++) {
+    // Compound growth for income and expenses
+    const income = initialIncome * Math.pow(1 + incomeGrowthRate / 100, year - 1);
+    const expenses = initialExpenses * Math.pow(1 + expenseGrowthRate / 100, year - 1);
+    const noi = income - expenses;
+    const cashFlow = noi - annualDebtService;
+    const loanBalance = calculateLoanBalance(loanAmount, interestRate, amortizationYears, year);
+
+    // Equity = Property Value (based on current NOI and going-in cap rate) - Loan Balance
+    // For simplicity, we'll use purchase price appreciation based on NOI growth
+    const impliedValue = purchasePrice * Math.pow(1 + incomeGrowthRate / 100, year - 1);
+    const equity = impliedValue - loanBalance;
+
+    projections.push({
+      year,
+      income,
+      expenses,
+      noi,
+      debtService: annualDebtService,
+      cashFlow,
+      loanBalance,
+      equity,
+    });
+  }
+
+  return projections;
+}
+
+/**
+ * Calculate sale proceeds at exit
+ */
+export function calculateSaleProceeds(
+  exitNOI: number,
+  exitCapRate: number,
+  loanBalance: number,
+  sellingCostsPercent: number
+): {
+  salePrice: number;
+  sellingCosts: number;
+  netSaleProceeds: number;
+  loanPayoff: number;
+  netToSeller: number;
+} {
+  const salePrice = calculateValueFromCapRate(exitNOI, exitCapRate);
+  const sellingCosts = salePrice * (sellingCostsPercent / 100);
+  const netSaleProceeds = salePrice - sellingCosts;
+  const netToSeller = netSaleProceeds - loanBalance;
+
+  return {
+    salePrice,
+    sellingCosts,
+    netSaleProceeds,
+    loanPayoff: loanBalance,
+    netToSeller,
+  };
+}
+
+/**
+ * Calculate Internal Rate of Return (IRR) using Newton-Raphson method
+ *
+ * IRR is the discount rate that makes NPV = 0
+ * NPV = Σ (Cash Flow_t / (1 + IRR)^t) = 0
+ */
+export function calculateIRR(cashFlows: number[], maxIterations = 100, tolerance = 0.0001): number {
+  // cashFlows[0] = initial investment (negative)
+  // cashFlows[1..n] = annual cash flows
+  // cashFlows[n] includes sale proceeds
+
+  if (cashFlows.length < 2) return 0;
+  if (cashFlows[0] >= 0) return 0; // Initial investment should be negative
+
+  // Initial guess - use a simple approximation
+  let irr = 0.1; // Start with 10%
+
+  for (let i = 0; i < maxIterations; i++) {
+    let npv = 0;
+    let npvDerivative = 0;
+
+    for (let t = 0; t < cashFlows.length; t++) {
+      const discountFactor = Math.pow(1 + irr, t);
+      npv += cashFlows[t] / discountFactor;
+      if (t > 0) {
+        npvDerivative -= (t * cashFlows[t]) / Math.pow(1 + irr, t + 1);
+      }
+    }
+
+    // Check for convergence
+    if (Math.abs(npv) < tolerance) {
+      return irr * 100; // Return as percentage
+    }
+
+    // Newton-Raphson update
+    if (npvDerivative === 0) break;
+    const newIrr = irr - npv / npvDerivative;
+
+    // Bound the IRR to reasonable range
+    if (newIrr < -0.99) irr = -0.99;
+    else if (newIrr > 10) irr = 10; // 1000% max
+    else irr = newIrr;
+  }
+
+  return irr * 100; // Return as percentage
+}
+
+/**
+ * Calculate Equity Multiple
+ * Total distributions / Total invested capital
+ */
+export function calculateEquityMultiple(
+  totalCashInvested: number,
+  totalCashFlows: number,
+  netSaleProceeds: number
+): number {
+  if (totalCashInvested === 0) return 0;
+  return (totalCashFlows + netSaleProceeds) / totalCashInvested;
+}
+
+/**
+ * Build complete IRR cash flow array for a deal
+ */
+export function buildIRRCashFlows(
+  initialInvestment: number,
+  projections: YearProjection[],
+  netSaleProceeds: number
+): number[] {
+  const cashFlows: number[] = [-initialInvestment]; // Year 0 (negative)
+
+  for (let i = 0; i < projections.length; i++) {
+    let yearCashFlow = projections[i].cashFlow;
+
+    // Add sale proceeds to final year
+    if (i === projections.length - 1) {
+      yearCashFlow += netSaleProceeds;
+    }
+
+    cashFlows.push(yearCashFlow);
+  }
+
+  return cashFlows;
+}

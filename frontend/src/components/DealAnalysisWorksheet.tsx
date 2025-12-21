@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from './ui';
 import type { Property, Comp } from '../types';
 import { generateDealAnalysisPDF } from '../utils/pdfExport';
+import ProjectionTable from './ProjectionTable';
 import {
   calculateVacancyAmount,
   calculateEffectiveGrossIncome,
@@ -85,7 +86,7 @@ interface DealAnalysisWorksheetProps {
   saving?: boolean;
 }
 
-type TabType = 'proforma' | 'financing' | 'summary';
+type TabType = 'proforma' | 'financing' | 'projections' | 'summary';
 
 export default function DealAnalysisWorksheet({
   property,
@@ -189,6 +190,7 @@ export default function DealAnalysisWorksheet({
   const tabs: { id: TabType; label: string }[] = [
     { id: 'proforma', label: 'Income & Expenses' },
     { id: 'financing', label: 'Financing' },
+    { id: 'projections', label: 'Projections' },
     { id: 'summary', label: 'Summary' },
   ];
 
@@ -524,6 +526,19 @@ export default function DealAnalysisWorksheet({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Projections Tab */}
+          {activeTab === 'projections' && (
+            <ProjectionTable
+              initialIncome={egi}
+              initialExpenses={totalExpenses}
+              purchasePrice={data.purchase_price}
+              loanAmount={loanAmount}
+              interestRate={data.interest_rate}
+              amortizationYears={data.amortization_years}
+              totalCashInvested={totalCashRequired}
+            />
           )}
 
           {/* Summary Tab */}
