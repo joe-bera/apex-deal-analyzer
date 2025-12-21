@@ -559,6 +559,7 @@ export default function PropertyDetail() {
         {property && (
           <DealAnalysisWorksheet
             property={property}
+            comps={comps}
             initialData={dealAnalysis || undefined}
             onSave={handleSaveDealAnalysis}
             saving={savingAnalysis}
@@ -1166,6 +1167,7 @@ export default function PropertyDetail() {
       {selectedComp && (
         <CompDetailModal
           comp={selectedComp}
+          subjectProperty={property}
           isOpen={!!selectedComp}
           onClose={() => setSelectedComp(null)}
           onUpdate={handleCompUpdate}

@@ -1,34 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(git --version)",
-      "Bash(gh:*)",
-      "Bash(git init:*)",
-      "Bash(git branch:*)",
-      "Bash(touch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(tree:*)",
-      "Bash(test:*)",
-      "Bash(npm install)",
-      "Bash(npm run dev:*)",
-      "Bash(curl:*)",
-      "Bash(python3:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm create:*)",
-      "Bash(npm init:*)",
-      "Bash(npm install:*)",
-      "Bash(npm run build:*)",
-      "Bash(openssl rand:*)",
-      "Bash(xargs ls:*)",
-      "Bash(find:*)",
-      "Bash(wc:*)",
-      "Bash(npm test:*)",
-      "Bash(npm run test:coverage:*)"
+      "Bash(npm install:*)"
     ],
-    "deny": [],
-    "ask": []
+    "deny": []
   }
 }

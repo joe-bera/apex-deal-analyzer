@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from './ui';
-import type { Property } from '../types';
+import type { Property, Comp } from '../types';
+import { generateDealAnalysisPDF } from '../utils/pdfExport';
 import {
   calculateVacancyAmount,
   calculateEffectiveGrossIncome,
@@ -78,6 +79,7 @@ export interface DealAnalysisData {
 
 interface DealAnalysisWorksheetProps {
   property: Property;
+  comps?: Comp[];
   onSave?: (data: DealAnalysisData) => void;
   initialData?: DealAnalysisInput | null;
   saving?: boolean;
@@ -87,6 +89,7 @@ type TabType = 'proforma' | 'financing' | 'summary';
 
 export default function DealAnalysisWorksheet({
   property,
+  comps,
   onSave,
   initialData,
   saving = false,
@@ -205,6 +208,18 @@ export default function DealAnalysisWorksheet({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateDealAnalysisPDF({ property, analysis: data, comps })}
+              leftIcon={
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            >
+              Export PDF
+            </Button>
             {onSave && (
               <Button
                 size="sm"
