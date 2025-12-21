@@ -24,7 +24,6 @@ interface ExportOptions {
   property: Property;
   analysis?: DealAnalysisData;
   comps?: Comp[];
-  includeLogo?: boolean;
 }
 
 const COLORS = {
@@ -38,17 +37,17 @@ const COLORS = {
 };
 
 const formatCurrency = (value?: number | null): string => {
-  if (value === null || value === undefined) return 'N/A';
+  if (value === null || value === undefined || !isFinite(value)) return 'N/A';
   return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 };
 
 const formatPercent = (value?: number | null): string => {
-  if (value === null || value === undefined) return 'N/A';
+  if (value === null || value === undefined || !isFinite(value)) return 'N/A';
   return `${value.toFixed(2)}%`;
 };
 
 const formatNumber = (value?: number | null): string => {
-  if (value === null || value === undefined) return 'N/A';
+  if (value === null || value === undefined || !isFinite(value)) return 'N/A';
   return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
@@ -56,77 +55,77 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
   const { property, analysis, comps } = options;
 
   const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const contentWidth = pageWidth - (margin * 2);
   let yPos = 20;
 
-  // Header with branding
+  // ========== HEADER ==========
   doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, 220, 40, 'F');
+  doc.rect(0, 0, pageWidth, 35, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
+  doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('APEX REAL ESTATE', 14, 18);
+  doc.text('APEX REAL ESTATE', margin, 15);
 
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text('Commercial Real Estate Analysis', 14, 28);
+  doc.text('Commercial Real Estate Deal Analysis', margin, 24);
 
-  doc.setFontSize(10);
-  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 14, 36);
+  doc.setFontSize(9);
+  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), margin, 31);
 
-  yPos = 50;
+  yPos = 45;
 
-  // Property Information Section
+  // ========== PROPERTY SUMMARY ==========
   doc.setTextColor(...COLORS.dark);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PROPERTY SUMMARY', 14, yPos);
-  yPos += 8;
-
-  doc.setDrawColor(...COLORS.primary);
-  doc.setLineWidth(0.5);
-  doc.line(14, yPos, 196, yPos);
-  yPos += 8;
-
-  // Property details
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.dark);
-  doc.text(property.address || 'Address Not Available', 14, yPos);
-  yPos += 6;
+  doc.text('PROPERTY SUMMARY', margin, yPos);
+  yPos += 3;
+
+  doc.setDrawColor(...COLORS.primary);
+  doc.setLineWidth(0.8);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 8;
+
+  // Property Address
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(property.address || 'Address Not Available', margin, yPos);
+  yPos += 5;
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray);
-  doc.text(`${property.city || ''}, ${property.state || ''} ${property.zip_code || ''}`, 14, yPos);
-  yPos += 10;
+  doc.text(`${property.city || ''}, ${property.state || ''} ${property.zip_code || ''}`, margin, yPos);
+  yPos += 8;
 
-  // Key metrics in a grid
-  const metricsData = [
-    ['List Price', formatCurrency(property.price)],
-    ['Building Size', property.building_size ? `${formatNumber(property.building_size)} SF` : 'N/A'],
-    ['Property Type', property.property_type?.replace(/_/g, ' ').toUpperCase() || 'N/A'],
-    ['Year Built', property.year_built?.toString() || 'N/A'],
-    ['Price/SF', property.price_per_sqft ? `$${property.price_per_sqft.toFixed(2)}` : 'N/A'],
-    ['CAP Rate', property.cap_rate ? `${property.cap_rate}%` : 'N/A'],
+  // Property Metrics Table
+  const propertyMetrics = [
+    ['List Price', formatCurrency(property.price), 'Property Type', (property.property_type?.replace(/_/g, ' ') || 'N/A').toUpperCase()],
+    ['Building Size', property.building_size ? `${formatNumber(property.building_size)} SF` : 'N/A', 'Year Built', property.year_built?.toString() || 'N/A'],
+    ['Price/SF', property.price_per_sqft ? `$${property.price_per_sqft.toFixed(2)}` : 'N/A', 'CAP Rate', property.cap_rate ? `${property.cap_rate}%` : 'N/A'],
   ];
 
   autoTable(doc, {
     startY: yPos,
-    head: [],
-    body: metricsData,
+    body: propertyMetrics,
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: 3 },
+    styles: { fontSize: 9, cellPadding: 2 },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: COLORS.gray, cellWidth: 40 },
-      1: { textColor: COLORS.dark, cellWidth: 50 },
+      0: { fontStyle: 'bold', textColor: COLORS.gray, cellWidth: 35 },
+      1: { textColor: COLORS.dark, cellWidth: 55 },
+      2: { fontStyle: 'bold', textColor: COLORS.gray, cellWidth: 35 },
+      3: { textColor: COLORS.dark, cellWidth: 55 },
     },
-    margin: { left: 14 },
+    margin: { left: margin, right: margin },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 15;
+  yPos = (doc as any).lastAutoTable.finalY + 12;
 
-  // Financial Analysis Section (if analysis data exists)
+  // ========== FINANCIAL ANALYSIS ==========
   if (analysis) {
     // Calculate all values
     const vacancyAmount = calculateVacancyAmount(analysis.potential_gross_income, analysis.vacancy_rate);
@@ -153,241 +152,201 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
     const btcf = calculateBeforeTaxCashFlow(noi, annualDebtService);
     const coc = calculateCashOnCash(btcf, totalCashRequired);
 
-    // Check if we need a new page
+    // Section Header
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INCOME & EXPENSE ANALYSIS', margin, yPos);
+    yPos += 3;
+
+    doc.setDrawColor(...COLORS.primary);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 5;
+
+    // Combined Income & Expense Table
+    const proformaData = [
+      // Income Section
+      [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      ['Potential Gross Income (PGI)', formatCurrency(analysis.potential_gross_income)],
+      [`Less: Vacancy & Credit Loss (${analysis.vacancy_rate}%)`, `(${formatCurrency(vacancyAmount)})`],
+      ['Plus: Other Income', formatCurrency(analysis.other_income)],
+      [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: 'bold' } }, { content: formatCurrency(egi), styles: { fontStyle: 'bold' } }],
+      // Expense Section
+      [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      ['Property Taxes', formatCurrency(analysis.property_taxes)],
+      ['Insurance', formatCurrency(analysis.insurance)],
+      ['Utilities', formatCurrency(analysis.utilities)],
+      [`Management Fee (${analysis.management_fee_percent}%)`, formatCurrency(managementFee)],
+      ['Repairs & Maintenance', formatCurrency(analysis.repairs_maintenance)],
+      ['Reserves / CapEx', formatCurrency(analysis.reserves_capex)],
+      ['Other Expenses', formatCurrency(analysis.other_expenses)],
+      [{ content: 'Total Operating Expenses', styles: { fontStyle: 'bold' } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: 'bold' } }],
+      // NOI
+      [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: 'bold', fillColor: COLORS.primary, textColor: [255, 255, 255] } }, { content: formatCurrency(noi), styles: { fontStyle: 'bold', fillColor: COLORS.primary, textColor: [255, 255, 255] } }],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      body: proformaData,
+      theme: 'striped',
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: contentWidth * 0.65 },
+        1: { cellWidth: contentWidth * 0.35, halign: 'right' },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 12;
+
+    // Check for new page
     if (yPos > 200) {
       doc.addPage();
       yPos = 20;
     }
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    // ========== FINANCING SECTION ==========
     doc.setTextColor(...COLORS.dark);
-    doc.text('INCOME & EXPENSE ANALYSIS', 14, yPos);
-    yPos += 8;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FINANCING & RETURNS', margin, yPos);
+    yPos += 3;
 
     doc.setDrawColor(...COLORS.primary);
-    doc.line(14, yPos, 196, yPos);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 5;
 
-    // Income Analysis Table
-    const incomeData = [
-      ['Potential Gross Income (PGI)', formatCurrency(analysis.potential_gross_income)],
-      [`Less: Vacancy (${analysis.vacancy_rate}%)`, `(${formatCurrency(vacancyAmount)})`],
-      ['Plus: Other Income', formatCurrency(analysis.other_income)],
-      ['Effective Gross Income (EGI)', formatCurrency(egi)],
+    const financingData = [
+      [{ content: 'INVESTMENT SUMMARY', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      ['Purchase Price', formatCurrency(analysis.purchase_price)],
+      [`Loan Amount (${analysis.ltv_percent}% LTV)`, formatCurrency(loanAmount)],
+      ['Down Payment', formatCurrency(downPayment)],
+      [`Closing Costs (${analysis.closing_costs_percent}%)`, formatCurrency(closingCosts)],
+      [{ content: 'Total Cash Required', styles: { fontStyle: 'bold' } }, { content: formatCurrency(totalCashRequired), styles: { fontStyle: 'bold' } }],
+      [{ content: 'DEBT SERVICE', colSpan: 2, styles: { fontStyle: 'bold', fillColor: COLORS.lightGray } }],
+      ['Interest Rate', `${analysis.interest_rate}%`],
+      ['Amortization Period', `${analysis.amortization_years} years`],
+      ['Monthly Payment', formatCurrency(monthlyPayment)],
+      [{ content: 'Annual Debt Service', styles: { fontStyle: 'bold' } }, { content: formatCurrency(annualDebtService), styles: { fontStyle: 'bold' } }],
     ];
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Income Analysis', 'Amount']],
-      body: incomeData,
+      body: financingData,
       theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] },
       styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: {
-        0: { cellWidth: 100 },
-        1: { cellWidth: 50, halign: 'right' },
+        0: { cellWidth: contentWidth * 0.65 },
+        1: { cellWidth: contentWidth * 0.35, halign: 'right' },
       },
-      margin: { left: 14, right: 100 },
+      margin: { left: margin, right: margin },
     });
 
-    // Expense Analysis Table (on the right)
-    const expenseData = [
-      ['Property Taxes', formatCurrency(analysis.property_taxes)],
-      ['Insurance', formatCurrency(analysis.insurance)],
-      ['Utilities', formatCurrency(analysis.utilities)],
-      [`Management (${analysis.management_fee_percent}%)`, formatCurrency(managementFee)],
-      ['Repairs & Maintenance', formatCurrency(analysis.repairs_maintenance)],
-      ['Reserves/CapEx', formatCurrency(analysis.reserves_capex)],
-      ['Other Expenses', formatCurrency(analysis.other_expenses)],
-      ['Total Operating Expenses', formatCurrency(totalExpenses)],
+    yPos = (doc as any).lastAutoTable.finalY + 8;
+
+    // Returns Summary Box
+    const dscrColor = dscr >= 1.5 ? COLORS.success : dscr >= 1.25 ? COLORS.warning : COLORS.danger;
+    const cocColor = coc >= 8 ? COLORS.success : coc >= 5 ? COLORS.warning : COLORS.danger;
+
+    const returnsData = [
+      [
+        { content: 'Before-Tax Cash Flow', styles: { fontStyle: 'bold' } },
+        { content: formatCurrency(btcf), styles: { fontStyle: 'bold' } },
+      ],
+      [
+        { content: 'Cash-on-Cash Return', styles: { fontStyle: 'bold' } },
+        { content: formatPercent(coc), styles: { fontStyle: 'bold', textColor: cocColor } },
+      ],
+      [
+        { content: 'Debt Service Coverage Ratio (DSCR)', styles: { fontStyle: 'bold' } },
+        { content: `${dscr.toFixed(2)}x`, styles: { fontStyle: 'bold', textColor: dscrColor } },
+      ],
+      [
+        { content: 'CAP Rate (Based on Analysis)', styles: { fontStyle: 'bold' } },
+        { content: formatPercent(capRate), styles: { fontStyle: 'bold' } },
+      ],
     ];
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Operating Expenses', 'Amount']],
-      body: expenseData,
-      theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] },
-      styles: { fontSize: 9, cellPadding: 3 },
+      head: [[{ content: 'KEY RETURNS', colSpan: 2, styles: { fillColor: COLORS.dark, textColor: [255, 255, 255] } }]],
+      body: returnsData,
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 4 },
       columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 40, halign: 'right' },
+        0: { cellWidth: contentWidth * 0.65 },
+        1: { cellWidth: contentWidth * 0.35, halign: 'right' },
       },
-      margin: { left: 110 },
+      margin: { left: margin, right: margin },
     });
 
-    yPos = (doc as any).lastAutoTable.finalY + 15;
+    yPos = (doc as any).lastAutoTable.finalY + 12;
+  }
 
-    // NOI Highlight Box
-    doc.setFillColor(...COLORS.lightGray);
-    doc.roundedRect(14, yPos, 182, 25, 3, 3, 'F');
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.dark);
-    doc.text('NET OPERATING INCOME (NOI)', 20, yPos + 10);
-
-    doc.setFontSize(18);
-    doc.setTextColor(...COLORS.primary);
-    doc.text(formatCurrency(noi), 20, yPos + 20);
-
-    doc.setFontSize(10);
-    doc.setTextColor(...COLORS.gray);
-    doc.text(`CAP Rate: ${formatPercent(capRate)}`, 100, yPos + 15);
-
-    yPos += 35;
-
-    // Financing Analysis
+  // ========== COMPARABLE SALES ==========
+  if (comps && comps.length > 0) {
+    // Check for new page
     if (yPos > 220) {
       doc.addPage();
       yPos = 20;
     }
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.dark);
-    doc.text('FINANCING & RETURNS', 14, yPos);
-    yPos += 8;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('COMPARABLE SALES', margin, yPos);
+    yPos += 3;
 
     doc.setDrawColor(...COLORS.primary);
-    doc.line(14, yPos, 196, yPos);
-    yPos += 5;
-
-    const financingData = [
-      ['Purchase Price', formatCurrency(analysis.purchase_price)],
-      [`Loan Amount (${analysis.ltv_percent}% LTV)`, formatCurrency(loanAmount)],
-      ['Down Payment', formatCurrency(downPayment)],
-      [`Closing Costs (${analysis.closing_costs_percent}%)`, formatCurrency(closingCosts)],
-      ['Total Cash Required', formatCurrency(totalCashRequired)],
-    ];
-
-    const debtData = [
-      ['Interest Rate', `${analysis.interest_rate}%`],
-      ['Amortization', `${analysis.amortization_years} years`],
-      ['Monthly Payment', formatCurrency(monthlyPayment)],
-      ['Annual Debt Service', formatCurrency(annualDebtService)],
-      ['DSCR', dscr.toFixed(2) + 'x'],
-    ];
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Investment', 'Amount']],
-      body: financingData,
-      theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] },
-      styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 40, halign: 'right' },
-      },
-      margin: { left: 14, right: 100 },
-    });
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Debt Service', 'Value']],
-      body: debtData,
-      theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] },
-      styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 40, halign: 'right' },
-      },
-      margin: { left: 110 },
-    });
-
-    yPos = (doc as any).lastAutoTable.finalY + 10;
-
-    // Returns Summary Box
-    doc.setFillColor(...(coc >= 8 ? COLORS.success : coc >= 5 ? COLORS.warning : COLORS.danger));
-    doc.roundedRect(14, yPos, 88, 30, 3, 3, 'F');
-
-    doc.setFillColor(...(dscr >= 1.5 ? COLORS.success : dscr >= 1.25 ? COLORS.warning : COLORS.danger));
-    doc.roundedRect(108, yPos, 88, 30, 3, 3, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Cash-on-Cash Return', 20, yPos + 10);
-    doc.text('DSCR', 114, yPos + 10);
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatPercent(coc), 20, yPos + 23);
-    doc.text(dscr.toFixed(2) + 'x', 114, yPos + 23);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Before-Tax Cash Flow', 55, yPos + 10);
-    doc.text(formatCurrency(btcf), 55, yPos + 23);
-
-    yPos += 40;
-  }
-
-  // Comparable Sales Section
-  if (comps && comps.length > 0) {
-    if (yPos > 200) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.dark);
-    doc.text('COMPARABLE SALES', 14, yPos);
-    yPos += 8;
-
-    doc.setDrawColor(...COLORS.primary);
-    doc.line(14, yPos, 196, yPos);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 5;
 
     const compTableData = comps.map((comp) => [
-      comp.comp_address,
-      `${comp.comp_city}, ${comp.comp_state}`,
+      comp.comp_address || 'N/A',
+      comp.comp_city || 'N/A',
       formatCurrency(comp.comp_sale_price),
-      comp.comp_square_footage ? `${formatNumber(comp.comp_square_footage)} SF` : 'N/A',
-      comp.comp_price_per_sqft ? `$${comp.comp_price_per_sqft.toFixed(2)}` : 'N/A',
-      new Date(comp.comp_sale_date).toLocaleDateString(),
+      comp.comp_square_footage ? `${formatNumber(comp.comp_square_footage)}` : 'N/A',
+      comp.comp_price_per_sqft ? `$${comp.comp_price_per_sqft.toFixed(0)}` : 'N/A',
+      comp.comp_sale_date ? new Date(comp.comp_sale_date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : 'N/A',
     ]);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Address', 'City', 'Sale Price', 'Size', '$/SF', 'Date']],
+      head: [['Address', 'City', 'Price', 'SF', '$/SF', 'Date']],
       body: compTableData,
       theme: 'striped',
-      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'ellipsize' },
       columnStyles: {
-        0: { cellWidth: 50 },
-        1: { cellWidth: 35 },
+        0: { cellWidth: 55 },
+        1: { cellWidth: 30 },
         2: { cellWidth: 28, halign: 'right' },
-        3: { cellWidth: 25, halign: 'right' },
+        3: { cellWidth: 22, halign: 'right' },
         4: { cellWidth: 22, halign: 'right' },
-        5: { cellWidth: 22 },
+        5: { cellWidth: 25, halign: 'center' },
       },
-      margin: { left: 14 },
+      margin: { left: margin, right: margin },
     });
-
-    yPos = (doc as any).lastAutoTable.finalY + 10;
   }
 
-  // Footer
+  // ========== FOOTER ON ALL PAGES ==========
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    // Footer line
+    doc.setDrawColor(...COLORS.lightGray);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 285, pageWidth - margin, 285);
+
+    // Footer text
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.gray);
-    doc.text(
-      `Apex Real Estate Services | Confidential | Page ${i} of ${pageCount}`,
-      105,
-      290,
-      { align: 'center' }
-    );
+    doc.text('Apex Real Estate Services | Confidential', margin, 291);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, 291, { align: 'right' });
   }
 
   // Save the PDF
-  const fileName = `Deal_Analysis_${property.address?.replace(/[^a-zA-Z0-9]/g, '_') || 'Property'}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const fileName = `Deal_Analysis_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 }
