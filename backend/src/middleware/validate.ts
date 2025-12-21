@@ -440,3 +440,62 @@ export const extractionHintsSchema = z
     hints: z.string().max(5000).optional(),
   })
   .strict();
+
+// ============================================================================
+// Deal Analysis Validation Schemas
+// ============================================================================
+
+/**
+ * Schema for deal analysis data
+ * All fields optional for flexible saving
+ */
+export const dealAnalysisSchema = z
+  .object({
+    // Income Analysis
+    potential_gross_income: z.number().nonnegative().optional().nullable(),
+    vacancy_rate: z.number().min(0).max(100).optional().nullable(),
+    vacancy_amount: z.number().nonnegative().optional().nullable(),
+    other_income: z.number().nonnegative().optional().nullable(),
+    effective_gross_income: z.number().optional().nullable(),
+
+    // Expense Analysis
+    property_taxes: z.number().nonnegative().optional().nullable(),
+    insurance: z.number().nonnegative().optional().nullable(),
+    utilities: z.number().nonnegative().optional().nullable(),
+    management_fee_percent: z.number().min(0).max(100).optional().nullable(),
+    management_fee_amount: z.number().nonnegative().optional().nullable(),
+    repairs_maintenance: z.number().nonnegative().optional().nullable(),
+    reserves_capex: z.number().nonnegative().optional().nullable(),
+    other_expenses: z.number().nonnegative().optional().nullable(),
+    total_operating_expenses: z.number().nonnegative().optional().nullable(),
+    operating_expense_ratio: z.number().min(0).max(100).optional().nullable(),
+
+    // Calculated Values
+    net_operating_income: z.number().optional().nullable(),
+    cap_rate: z.number().min(0).max(100).optional().nullable(),
+    price_per_sqft: z.number().nonnegative().optional().nullable(),
+    grm: z.number().nonnegative().optional().nullable(),
+
+    // Financing
+    purchase_price: z.number().nonnegative().optional().nullable(),
+    loan_amount: z.number().nonnegative().optional().nullable(),
+    ltv_percent: z.number().min(0).max(100).optional().nullable(),
+    interest_rate: z.number().min(0).max(50).optional().nullable(),
+    amortization_years: z.number().int().min(1).max(40).optional().nullable(),
+    loan_term_years: z.number().int().min(1).max(40).optional().nullable(),
+    monthly_payment: z.number().nonnegative().optional().nullable(),
+    annual_debt_service: z.number().nonnegative().optional().nullable(),
+    dscr: z.number().optional().nullable(),
+
+    // Cash Flow
+    down_payment: z.number().nonnegative().optional().nullable(),
+    closing_costs_percent: z.number().min(0).max(20).optional().nullable(),
+    closing_costs: z.number().nonnegative().optional().nullable(),
+    total_cash_required: z.number().nonnegative().optional().nullable(),
+    before_tax_cash_flow: z.number().optional().nullable(),
+    cash_on_cash_return: z.number().optional().nullable(),
+
+    // Notes
+    notes: z.string().max(5000).optional().nullable(),
+  })
+  .strict();

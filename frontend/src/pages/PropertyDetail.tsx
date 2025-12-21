@@ -16,7 +16,11 @@ import type {
   LOIResponse,
   BuyerInfo,
   LOIParams,
+  DealAnalysis,
+  DealAnalysisResponse,
 } from '../types';
+import CompDetailModal from '../components/CompDetailModal';
+import DealAnalysisWorksheet from '../components/DealAnalysisWorksheet';
 import {
   Button,
   Card,
@@ -71,6 +75,13 @@ export default function PropertyDetail() {
     results: { file: string; success: boolean; error?: string }[];
   } | null>(null);
 
+  // Comp detail modal state
+  const [selectedComp, setSelectedComp] = useState<Comp | null>(null);
+
+  // Deal analysis state
+  const [dealAnalysis, setDealAnalysis] = useState<DealAnalysis | null>(null);
+  const [savingAnalysis, setSavingAnalysis] = useState(false);
+
   useEffect(() => {
     if (id) {
       loadPropertyData();
@@ -80,14 +91,16 @@ export default function PropertyDetail() {
   const loadPropertyData = async () => {
     try {
       setLoading(true);
-      const [propData, compsData, photosData] = await Promise.all([
+      const [propData, compsData, photosData, analysisData] = await Promise.all([
         api.getProperty(id!),
         api.getComps(id!),
         api.getPhotos(id!).catch(() => ({ photos: [] })),
+        api.getDealAnalysis(id!).catch(() => ({ analysis: null })),
       ]);
       setProperty((propData as PropertyResponse).property);
       setComps((compsData as CompsResponse).comps || []);
       setPhotos((photosData as { photos: Photo[] }).photos || []);
+      setDealAnalysis((analysisData as DealAnalysisResponse).analysis || null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load property';
       setError(message);
@@ -238,6 +251,23 @@ export default function PropertyDetail() {
     } finally {
       setGeneratingLOI(false);
     }
+  };
+
+  const handleSaveDealAnalysis = async (analysisData: Partial<DealAnalysis>) => {
+    try {
+      setSavingAnalysis(true);
+      const result = await api.saveDealAnalysis(id!, analysisData);
+      setDealAnalysis((result as DealAnalysisResponse).analysis);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save analysis';
+      setError(message);
+    } finally {
+      setSavingAnalysis(false);
+    }
+  };
+
+  const handleCompUpdate = (updatedComp: Comp) => {
+    setComps(prev => prev.map(c => c.id === updatedComp.id ? updatedComp : c));
   };
 
   const handlePrintLOI = () => {
@@ -524,6 +554,16 @@ export default function PropertyDetail() {
             />
           </CardContent>
         </Card>
+
+        {/* Deal Analysis Worksheet */}
+        {property && (
+          <DealAnalysisWorksheet
+            property={property}
+            initialData={dealAnalysis || undefined}
+            onSave={handleSaveDealAnalysis}
+            saving={savingAnalysis}
+          />
+        )}
 
         {/* AI Valuation Results */}
         {valuation && (
@@ -996,12 +1036,13 @@ export default function PropertyDetail() {
                     {comps.map((comp) => (
                       <div
                         key={comp.id}
-                        className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 hover:shadow-sm transition-all"
+                        className="border border-gray-200 rounded-xl p-4 hover:border-primary-300 hover:shadow-md transition-all cursor-pointer group"
+                        onClick={() => setSelectedComp(comp)}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold text-gray-900 truncate">{comp.comp_address}</h4>
+                              <h4 className="font-semibold text-gray-900 truncate group-hover:text-primary-700 transition-colors">{comp.comp_address}</h4>
                               {comp.comp_property_type && (
                                 <PropertyTypeBadge type={comp.comp_property_type} />
                               )}
@@ -1022,16 +1063,37 @@ export default function PropertyDetail() {
                             </div>
                           </div>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteComp(comp.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedComp(comp);
+                              }}
+                              className="text-gray-500 hover:text-primary-600 hover:bg-primary-50"
+                              title="View details"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteComp(comp.id);
+                              }}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete comp"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1099,6 +1161,16 @@ export default function PropertyDetail() {
           </div>
         </div>
       </div>
+
+      {/* Comp Detail Modal */}
+      {selectedComp && (
+        <CompDetailModal
+          comp={selectedComp}
+          isOpen={!!selectedComp}
+          onClose={() => setSelectedComp(null)}
+          onUpdate={handleCompUpdate}
+        />
+      )}
     </Layout>
   );
 }

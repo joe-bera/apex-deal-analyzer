@@ -418,4 +418,17 @@ export const api = {
 
   setPrimaryPhoto: (photoId: string) =>
     request(`/photos/${photoId}/set-primary`, { method: 'POST' }),
+
+  // Deal Analysis
+  getDealAnalysis: (propertyId: string) =>
+    request(`/properties/${propertyId}/analysis`),
+
+  saveDealAnalysis: (propertyId: string, analysisData: any) =>
+    request(`/properties/${propertyId}/analysis`, {
+      method: 'PUT',
+      body: JSON.stringify(analysisData),
+    }),
+
+  deleteDealAnalysis: (propertyId: string) =>
+    request(`/properties/${propertyId}/analysis`, { method: 'DELETE' }),
 };

@@ -333,3 +333,72 @@ export interface LoginCredentials {
 export interface SignupCredentials extends LoginCredentials {
   full_name?: string;
 }
+
+// ============================================================================
+// Deal Analysis Types
+// ============================================================================
+
+export interface DealAnalysis {
+  id: string;
+  property_id: string;
+  created_by: string;
+
+  // Income Analysis
+  potential_gross_income?: number | null;
+  vacancy_rate?: number | null;
+  vacancy_amount?: number | null;
+  other_income?: number | null;
+  effective_gross_income?: number | null;
+
+  // Expense Analysis
+  property_taxes?: number | null;
+  insurance?: number | null;
+  utilities?: number | null;
+  management_fee_percent?: number | null;
+  management_fee_amount?: number | null;
+  repairs_maintenance?: number | null;
+  reserves_capex?: number | null;
+  other_expenses?: number | null;
+  total_operating_expenses?: number | null;
+  operating_expense_ratio?: number | null;
+
+  // Calculated Values
+  net_operating_income?: number | null;
+  cap_rate?: number | null;
+  price_per_sqft?: number | null;
+  grm?: number | null;
+
+  // Financing
+  purchase_price?: number | null;
+  loan_amount?: number | null;
+  ltv_percent?: number | null;
+  interest_rate?: number | null;
+  amortization_years?: number | null;
+  loan_term_years?: number | null;
+  monthly_payment?: number | null;
+  annual_debt_service?: number | null;
+  dscr?: number | null;
+
+  // Cash Flow
+  down_payment?: number | null;
+  closing_costs_percent?: number | null;
+  closing_costs?: number | null;
+  total_cash_required?: number | null;
+  before_tax_cash_flow?: number | null;
+  cash_on_cash_return?: number | null;
+
+  // Notes
+  notes?: string | null;
+
+  // Metadata
+  created_at: string;
+  updated_at: string;
+}
+
+export type DealAnalysisInput = Omit<DealAnalysis, 'id' | 'property_id' | 'created_by' | 'created_at' | 'updated_at'>;
+
+export interface DealAnalysisResponse {
+  success: boolean;
+  analysis: DealAnalysis | null;
+  message?: string;
+}
