@@ -14,6 +14,19 @@ export type DocumentType =
   | 'other';
 
 /**
+ * Historical transaction data
+ */
+export interface HistoricalTransaction {
+  transaction_date?: string;
+  sale_price?: number;
+  price_per_sf?: number;
+  buyer?: string;
+  seller?: string;
+  transaction_type?: 'sale' | 'lease' | 'refinance' | 'transfer';
+  notes?: string;
+}
+
+/**
  * Extracted property data structure
  */
 export interface ExtractedPropertyData {
@@ -58,6 +71,13 @@ export interface ExtractedPropertyData {
   parking_spaces?: number;
   amenities?: string[];
   notes?: string;
+
+  // Historical transaction data (for AI analysis and property history)
+  transaction_history?: HistoricalTransaction[];
+
+  // Owner information
+  owner_name?: string;
+  owner_address?: string;
 
   // Confidence scores (0-100)
   confidence_scores?: {
@@ -104,17 +124,29 @@ ${text.slice(0, 50000)}
 - Financial performance (asking price, NOI, CAP rate, rental income)
 - Tenant information (names, lease terms, occupancy)
 - Property features and amenities
-- Market positioning and comparable sales data`;
+- Market positioning and comparable sales data
+- Current owner information (owner_name)
+
+IMPORTANT: Look for "Property History" or "Transaction History" sections:
+- Extract any previous sales with dates and prices
+- Note any significant improvements or renovations with dates
+- Put historical sales in the transaction_history array`;
       break;
 
     case 'title_report':
       specificInstructions = `This is a Title Report. Focus on:
 - Property legal description and APN
 - Property address
-- Current owner information
+- Current owner information (owner_name, owner_address)
 - Lot size and property dimensions
 - Zoning designation
-- Any encumbrances or liens (note in notes field)`;
+- Any encumbrances or liens (note in notes field)
+
+IMPORTANT: Extract ALL historical sales/transfers from the Chain of Title or Vesting Deed sections:
+- Look for "Grant Deed", "Warranty Deed", "Quitclaim Deed" entries
+- Extract each sale with: date, sale price (if shown), buyer, seller
+- Include refinances and transfers as they show property history
+- Put all historical transactions in the transaction_history array`;
       break;
 
     case 'comp':
@@ -196,6 +228,19 @@ Return a JSON object with this exact structure (use null for missing fields):
   "parking_spaces": number or null,
   "amenities": ["array", "of", "strings"] or null,
   "notes": "string with important details or null",
+  "owner_name": "string or null",
+  "owner_address": "string or null",
+  "transaction_history": [
+    {
+      "transaction_date": "YYYY-MM-DD or null",
+      "sale_price": number or null,
+      "price_per_sf": number or null,
+      "buyer": "string or null",
+      "seller": "string or null",
+      "transaction_type": "sale|lease|refinance|transfer or null",
+      "notes": "string or null"
+    }
+  ] or null,
   "confidence_scores": {
     "field_name": 0-100
   }

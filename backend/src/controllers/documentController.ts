@@ -3,7 +3,118 @@ import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 import { uploadToStorage, createSignedUploadUrl, getPublicUrl, getSignedDownloadUrl } from '../services/storageService';
 import { parsePDF, parsePDFFromURL, cleanPDFText } from '../services/pdfService';
-import { extractPropertyData, DocumentType } from '../services/extractionService';
+import { extractPropertyData, DocumentType, HistoricalTransaction } from '../services/extractionService';
+
+/**
+ * Store extracted historical transactions in the transactions table
+ * Links to master_properties table for property history tracking
+ */
+const storeTransactionHistory = async (
+  transactions: HistoricalTransaction[],
+  propertyAddress: string,
+  propertyCity: string | undefined,
+  propertyState: string | undefined,
+  userId: string,
+  documentId: string
+): Promise<{ stored: number; errors: string[] }> => {
+  const errors: string[] = [];
+  let stored = 0;
+
+  if (!transactions || transactions.length === 0) {
+    return { stored: 0, errors: [] };
+  }
+
+  // First, try to find or create a master_property for this address
+  let masterPropertyId: string | null = null;
+
+  // Normalize address for matching
+  const normalizeAddr = (addr: string) =>
+    addr.toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/\./g, '')
+      .replace(/ street| st| avenue| ave| boulevard| blvd| drive| dr| road| rd| lane| ln| court| ct| place| pl| way/gi, '')
+      .replace(/ north| south| east| west| n| s| e| w/gi, '')
+      .replace(/[^a-z0-9]/g, '');
+
+  try {
+    // Check if property exists in master_properties
+    const { data: existingProperty } = await supabaseAdmin
+      .from('master_properties')
+      .select('id')
+      .eq('address_normalized', normalizeAddr(propertyAddress))
+      .eq('city', propertyCity?.toLowerCase() || '')
+      .maybeSingle();
+
+    if (existingProperty) {
+      masterPropertyId = existingProperty.id;
+    } else {
+      // Create new master_property
+      const { data: newProperty, error: createError } = await supabaseAdmin
+        .from('master_properties')
+        .insert({
+          address: propertyAddress,
+          city: propertyCity,
+          state: propertyState || 'CA',
+          source: 'pdf_extract',
+          created_by: userId,
+          notes: `Created from document extraction (doc: ${documentId})`,
+        })
+        .select('id')
+        .single();
+
+      if (createError) {
+        console.error('[storeTransactionHistory] Failed to create master property:', createError);
+        errors.push(`Failed to create property record: ${createError.message}`);
+      } else {
+        masterPropertyId = newProperty.id;
+      }
+    }
+
+    if (!masterPropertyId) {
+      return { stored: 0, errors };
+    }
+
+    // Now store each transaction
+    for (const tx of transactions) {
+      // Map transaction_type to our enum
+      let txType: 'sale' | 'lease' | 'listing' | 'off_market' = 'sale';
+      if (tx.transaction_type === 'lease') {
+        txType = 'lease';
+      } else if (tx.transaction_type === 'refinance' || tx.transaction_type === 'transfer') {
+        txType = 'off_market';
+      }
+
+      const txRecord = {
+        property_id: masterPropertyId,
+        transaction_type: txType,
+        transaction_date: tx.transaction_date || null,
+        sale_price: tx.sale_price || null,
+        price_per_sf: tx.price_per_sf || null,
+        buyer_name: tx.buyer || null,
+        seller_name: tx.seller || null,
+        source: 'pdf_extract' as const,
+        notes: tx.notes || `Extracted from document (doc: ${documentId})`,
+        created_by: userId,
+      };
+
+      const { error: insertError } = await supabaseAdmin
+        .from('transactions')
+        .insert(txRecord);
+
+      if (insertError) {
+        console.error('[storeTransactionHistory] Failed to insert transaction:', insertError);
+        errors.push(`Failed to store transaction from ${tx.transaction_date || 'unknown date'}: ${insertError.message}`);
+      } else {
+        stored++;
+      }
+    }
+  } catch (error) {
+    console.error('[storeTransactionHistory] Unexpected error:', error);
+    errors.push(`Unexpected error storing transactions: ${String(error)}`);
+  }
+
+  return { stored, errors };
+};
 
 /**
  * Upload a document (PDF)
@@ -419,12 +530,48 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       }
     }
 
+    // Store historical transaction data from title reports and OMs
+    let transactionHistoryResult = { stored: 0, errors: [] as string[] };
+    if (
+      extractedData.transaction_history &&
+      extractedData.transaction_history.length > 0 &&
+      extractedData.address
+    ) {
+      console.log(
+        `[DocumentController] Found ${extractedData.transaction_history.length} historical transactions to store`
+      );
+
+      transactionHistoryResult = await storeTransactionHistory(
+        extractedData.transaction_history,
+        extractedData.address,
+        extractedData.city,
+        extractedData.state,
+        req.user.id,
+        id
+      );
+
+      console.log(
+        `[DocumentController] Stored ${transactionHistoryResult.stored} transactions, ${transactionHistoryResult.errors.length} errors`
+      );
+    }
+
+    // Build response message
+    let message = 'Property data extracted successfully';
+    if (document.document_type === 'comp' && document.property_id) {
+      message = 'Comp data extracted and added to property successfully';
+    }
+    if (transactionHistoryResult.stored > 0) {
+      message += `. Found and stored ${transactionHistoryResult.stored} historical transactions.`;
+    }
+
     res.status(200).json({
       success: true,
-      message: document.document_type === 'comp' && document.property_id
-        ? 'Comp data extracted and added to property successfully'
-        : 'Property data extracted successfully',
+      message,
       extracted_data: extractedData,
+      transaction_history: {
+        stored: transactionHistoryResult.stored,
+        errors: transactionHistoryResult.errors,
+      },
     });
   } catch (error) {
     // Update extraction status to failed
