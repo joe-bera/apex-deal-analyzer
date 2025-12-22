@@ -131,34 +131,32 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse CSV file
-  const parseCSV = useCallback((text: string): ParsedCSV => {
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
-    if (lines.length === 0) {
-      throw new Error('Empty file');
-    }
+  // Detect the delimiter used in the CSV
+  const detectDelimiter = useCallback((text: string): string => {
+    const firstLine = text.split(/\r?\n/)[0] || '';
 
-    // Parse header row
-    const headers = parseCSVLine(lines[0]);
+    // Count occurrences of common delimiters (outside of quotes)
+    const delimiters = [',', '\t', ';', '|'];
+    const counts: Record<string, number> = {};
 
-    // Parse data rows
-    const rows: Record<string, string>[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i]);
-      if (values.length === headers.length) {
-        const row: Record<string, string> = {};
-        headers.forEach((header, idx) => {
-          row[header] = values[idx];
-        });
-        rows.push(row);
+    for (const delim of delimiters) {
+      let count = 0;
+      let inQuotes = false;
+      for (const char of firstLine) {
+        if (char === '"') inQuotes = !inQuotes;
+        if (char === delim && !inQuotes) count++;
       }
+      counts[delim] = count;
     }
 
-    return { headers, rows };
+    // Return delimiter with highest count
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    console.log('[BulkUpload] Delimiter detection:', counts, 'Selected:', best?.[0] || ',');
+    return best && best[1] > 0 ? best[0] : ',';
   }, []);
 
   // Parse a single CSV line (handles quoted values)
-  const parseCSVLine = (line: string): string[] => {
+  const parseCSVLine = useCallback((line: string, delimiter: string): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -176,7 +174,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
         } else {
           inQuotes = false;
         }
-      } else if ((char === ',' || char === '\t') && !inQuotes) {
+      } else if (char === delimiter && !inQuotes) {
         result.push(current.trim());
         current = '';
       } else {
@@ -186,7 +184,47 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     result.push(current.trim());
 
     return result;
-  };
+  }, []);
+
+  // Parse CSV file
+  const parseCSV = useCallback((text: string): ParsedCSV => {
+    // Remove BOM if present
+    const cleanText = text.replace(/^\uFEFF/, '');
+
+    const lines = cleanText.split(/\r?\n/).filter(line => line.trim());
+    if (lines.length === 0) {
+      throw new Error('Empty file');
+    }
+
+    // Auto-detect delimiter
+    const delimiter = detectDelimiter(cleanText);
+    console.log('[BulkUpload] Using delimiter:', JSON.stringify(delimiter), 'Lines:', lines.length);
+
+    // Parse header row
+    const headers = parseCSVLine(lines[0], delimiter);
+    console.log('[BulkUpload] Headers found:', headers.length, headers.slice(0, 5));
+
+    if (headers.length <= 1) {
+      throw new Error(`Could not parse columns. Found only ${headers.length} column(s). The file may use an unsupported format.`);
+    }
+
+    // Parse data rows
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i], delimiter);
+      // Be more lenient - accept rows that are close to header count
+      if (values.length >= headers.length - 2 && values.length <= headers.length + 2) {
+        const row: Record<string, string> = {};
+        headers.forEach((header, idx) => {
+          row[header] = values[idx] || '';
+        });
+        rows.push(row);
+      }
+    }
+
+    console.log('[BulkUpload] Rows parsed:', rows.length);
+    return { headers, rows };
+  }, [detectDelimiter, parseCSVLine]);
 
   // Auto-map columns based on header names
   const autoMapColumns = useCallback((headers: string[]): ColumnMapping[] => {
