@@ -389,10 +389,18 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
         }
       });
 
-      const response = await fetch('/api/master-properties/import', {
+      // Get auth token
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      const response = await fetch(`${apiBase}/master-properties/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           source,
