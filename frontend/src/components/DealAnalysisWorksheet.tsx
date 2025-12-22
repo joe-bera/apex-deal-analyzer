@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input } from './ui';
 import type { Property, Comp } from '../types';
 import { generateDealAnalysisPDF } from '../utils/pdfExport';
 import ProjectionTable from './ProjectionTable';
+import SensitivityTable from './SensitivityTable';
 import {
   calculateVacancyAmount,
   calculateEffectiveGrossIncome,
@@ -86,7 +87,7 @@ interface DealAnalysisWorksheetProps {
   saving?: boolean;
 }
 
-type TabType = 'proforma' | 'financing' | 'projections' | 'summary';
+type TabType = 'proforma' | 'financing' | 'projections' | 'sensitivity' | 'summary';
 
 export default function DealAnalysisWorksheet({
   property,
@@ -191,6 +192,7 @@ export default function DealAnalysisWorksheet({
     { id: 'proforma', label: 'Income & Expenses' },
     { id: 'financing', label: 'Financing' },
     { id: 'projections', label: 'Projections' },
+    { id: 'sensitivity', label: 'Sensitivity' },
     { id: 'summary', label: 'Summary' },
   ];
 
@@ -534,6 +536,21 @@ export default function DealAnalysisWorksheet({
               initialIncome={egi}
               initialExpenses={totalExpenses}
               purchasePrice={data.purchase_price}
+              loanAmount={loanAmount}
+              interestRate={data.interest_rate}
+              amortizationYears={data.amortization_years}
+              totalCashInvested={totalCashRequired}
+            />
+          )}
+
+          {/* Sensitivity Tab */}
+          {activeTab === 'sensitivity' && (
+            <SensitivityTable
+              noi={noi}
+              purchasePrice={data.purchase_price}
+              askingCapRate={capRate}
+              initialIncome={egi}
+              initialExpenses={totalExpenses}
               loanAmount={loanAmount}
               interestRate={data.interest_rate}
               amortizationYears={data.amortization_years}
