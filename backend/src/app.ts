@@ -10,6 +10,7 @@ import propertyRoutes from './routes/propertyRoutes';
 import compsRoutes from './routes/compsRoutes';
 import photoRoutes from './routes/photoRoutes';
 import dealAnalysisRoutes from './routes/dealAnalysisRoutes';
+import masterPropertyRoutes from './routes/masterPropertyRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -89,6 +90,7 @@ export const createApp = (): Application => {
   app.use('/api/photos', photoRoutes);
   app.use('/api', compsRoutes);
   app.use('/api', dealAnalysisRoutes);
+  app.use('/api/master-properties', masterPropertyRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

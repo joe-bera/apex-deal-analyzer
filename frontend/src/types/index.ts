@@ -402,3 +402,308 @@ export interface DealAnalysisResponse {
   analysis: DealAnalysis | null;
   message?: string;
 }
+
+// ============================================================================
+// Master Properties & Transactions Types (New Database Model)
+// ============================================================================
+
+export type MasterPropertyType =
+  | 'industrial'
+  | 'retail'
+  | 'office'
+  | 'multifamily'
+  | 'land'
+  | 'residential'
+  | 'special_purpose';
+
+export type PropertySubtype =
+  // Industrial
+  | 'warehouse'
+  | 'distribution'
+  | 'manufacturing'
+  | 'flex'
+  | 'cold_storage'
+  | 'truck_terminal'
+  // Retail
+  | 'strip_center'
+  | 'standalone_retail'
+  | 'restaurant'
+  | 'auto_service'
+  | 'shopping_mall'
+  // Office
+  | 'office_class_a'
+  | 'office_class_b'
+  | 'office_class_c'
+  | 'medical_office'
+  | 'creative_office'
+  // Multifamily
+  | 'apartments'
+  | 'condos'
+  | 'townhomes'
+  | 'senior_living'
+  // Land
+  | 'land_industrial'
+  | 'land_commercial'
+  | 'land_residential'
+  | 'land_agricultural'
+  | 'land_mixed_use'
+  // Residential
+  | 'single_family'
+  | 'townhouse'
+  | 'mobile_home'
+  // Special Purpose
+  | 'self_storage'
+  | 'hospitality'
+  | 'religious'
+  | 'school'
+  | 'other';
+
+export type TransactionType = 'sale' | 'lease' | 'listing' | 'off_market';
+
+export type DataSource =
+  | 'costar'
+  | 'crexi'
+  | 'loopnet'
+  | 'manual'
+  | 'pdf_extract'
+  | 'mls'
+  | 'public_records'
+  | 'other';
+
+export interface MasterProperty {
+  id: string;
+
+  // Basic Info
+  address: string;
+  address_normalized?: string;
+  property_name?: string;
+  building_park?: string;
+
+  // Location
+  city?: string;
+  state?: string;
+  zip?: string;
+  county?: string;
+  latitude?: number;
+  longitude?: number;
+  submarket?: string;
+
+  // Classification
+  property_type?: MasterPropertyType;
+  property_subtype?: PropertySubtype;
+  building_status?: string;
+  building_class?: string;
+  zoning?: string;
+
+  // Size
+  building_size?: number;
+  land_area_sf?: number;
+  lot_size_acres?: number;
+
+  // Building Details
+  year_built?: number;
+  year_renovated?: number;
+  number_of_floors?: number;
+  number_of_units?: number;
+
+  // Industrial Specific
+  clear_height_ft?: number;
+  dock_doors?: number;
+  grade_doors?: number;
+  rail_served?: boolean;
+  sprinkler_type?: string;
+  power_amps?: number;
+  office_percentage?: number;
+
+  // Retail Specific
+  frontage_ft?: number;
+  parking_spaces?: number;
+  parking_ratio?: number;
+  anchor_tenant?: string;
+
+  // Current Status
+  percent_leased?: number;
+
+  // Contacts
+  owner_name?: string;
+  owner_contact?: string;
+  owner_address?: string;
+  property_manager_name?: string;
+  property_manager_phone?: string;
+  leasing_company_name?: string;
+  leasing_company_phone?: string;
+  leasing_company_contact?: string;
+  developer_name?: string;
+  architect_name?: string;
+
+  // External IDs
+  costar_id?: string;
+  crexi_id?: string;
+  external_ids?: Record<string, string>;
+
+  // Data Quality
+  source?: DataSource;
+  raw_import_data?: Record<string, unknown>;
+  verified_at?: string;
+  verification_reminder_at?: string;
+  notes?: string;
+
+  // Ownership
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  is_deleted: boolean;
+
+  // Joined data (from views)
+  latest_transaction_type?: TransactionType;
+  latest_transaction_date?: string;
+  latest_sale_price?: number;
+  latest_price_per_sf?: number;
+  latest_cap_rate?: number;
+
+  // Related data
+  transactions?: Transaction[];
+}
+
+export interface Transaction {
+  id: string;
+  property_id: string;
+
+  // Transaction Details
+  transaction_type: TransactionType;
+  transaction_date?: string;
+  recording_date?: string;
+
+  // Sale Info
+  sale_price?: number;
+  price_per_sf?: number;
+  cap_rate?: number;
+  noi?: number;
+
+  // Lease Info
+  tenant_name?: string;
+  lease_term_months?: number;
+  rent_per_sf_year?: number;
+  lease_type?: string;
+  lease_start_date?: string;
+  lease_end_date?: string;
+
+  // Parties
+  buyer_name?: string;
+  seller_name?: string;
+  broker_name?: string;
+  broker_company?: string;
+
+  // Listing Info
+  asking_price?: number;
+  asking_price_per_sf?: number;
+  days_on_market?: number;
+  listing_status?: string;
+
+  // Data Quality
+  source?: DataSource;
+  source_document_url?: string;
+  raw_import_data?: Record<string, unknown>;
+  notes?: string;
+
+  // Ownership
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// Bulk Import Types
+// ============================================================================
+
+export interface ColumnMapping {
+  csvColumn: string;
+  dbField: string | null;
+  sampleValues: string[];
+}
+
+export interface ImportPreview {
+  totalRows: number;
+  newProperties: number;
+  existingProperties: number;
+  newTransactions: number;
+  duplicates: DuplicateMatch[];
+  errors: ImportError[];
+  previewRows: Record<string, unknown>[];
+}
+
+export interface DuplicateMatch {
+  csvRow: number;
+  csvAddress: string;
+  existingProperty: MasterProperty;
+  matchType: 'exact' | 'fuzzy';
+  action: 'skip' | 'merge' | 'create_new';
+}
+
+export interface ImportError {
+  row: number;
+  field: string;
+  value: string;
+  error: string;
+}
+
+export interface ImportBatch {
+  id: string;
+  filename: string;
+  source: DataSource;
+  total_rows: number;
+  imported_rows: number;
+  skipped_rows: number;
+  error_rows: number;
+  column_mapping: ColumnMapping[];
+  errors?: ImportError[];
+  created_by: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface ImportResult {
+  success: boolean;
+  batch_id: string;
+  imported: number;
+  skipped: number;
+  errors: number;
+  properties_created: string[];
+  transactions_created: string[];
+  error_details?: ImportError[];
+}
+
+// ============================================================================
+// API Response Types for New Model
+// ============================================================================
+
+export interface MasterPropertiesResponse {
+  success: boolean;
+  properties: MasterProperty[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface MasterPropertyResponse {
+  success: boolean;
+  property: MasterProperty;
+  transactions?: Transaction[];
+}
+
+export interface TransactionsResponse {
+  success: boolean;
+  transactions: Transaction[];
+}
+
+export interface ImportPreviewResponse {
+  success: boolean;
+  preview: ImportPreview;
+}
+
+export interface ImportResultResponse {
+  success: boolean;
+  result: ImportResult;
+}
