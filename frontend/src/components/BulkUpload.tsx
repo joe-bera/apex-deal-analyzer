@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, CardHeader, CardTitle, CardContent, Button } from './ui';
 import type { ColumnMapping, DataSource } from '../types';
 
@@ -226,6 +227,59 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     return { headers, rows };
   }, [detectDelimiter, parseCSVLine]);
 
+  // Parse Excel file (XLSX/XLS)
+  const parseExcel = useCallback((buffer: ArrayBuffer): ParsedCSV => {
+    const workbook = XLSX.read(buffer, { type: 'array' });
+
+    // Get first sheet
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new Error('No sheets found in Excel file');
+    }
+
+    const worksheet = workbook.Sheets[firstSheetName];
+    console.log('[BulkUpload] Parsing Excel sheet:', firstSheetName);
+
+    // Convert to JSON with header row
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1, // Use first row as headers
+      defval: '', // Default value for empty cells
+    }) as unknown[][];
+
+    if (jsonData.length === 0) {
+      throw new Error('Empty spreadsheet');
+    }
+
+    // First row is headers
+    const headers = (jsonData[0] as unknown[]).map(h => String(h || '').trim()).filter(h => h);
+    console.log('[BulkUpload] Excel headers found:', headers.length, headers.slice(0, 5));
+
+    if (headers.length === 0) {
+      throw new Error('No column headers found in first row');
+    }
+
+    // Remaining rows are data
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < jsonData.length; i++) {
+      const rowData = jsonData[i] as unknown[];
+      if (!rowData || rowData.length === 0) continue;
+
+      // Check if row has any data
+      const hasData = rowData.some(cell => cell !== null && cell !== undefined && cell !== '');
+      if (!hasData) continue;
+
+      const row: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        const value = rowData[idx];
+        row[header] = value !== null && value !== undefined ? String(value) : '';
+      });
+      rows.push(row);
+    }
+
+    console.log('[BulkUpload] Excel rows parsed:', rows.length);
+    return { headers, rows };
+  }, []);
+
   // Auto-map columns based on header names
   const autoMapColumns = useCallback((headers: string[]): ColumnMapping[] => {
     return headers.map(header => {
@@ -257,8 +311,22 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     setError(null);
 
     try {
-      const text = await selectedFile.text();
-      const parsed = parseCSV(text);
+      const fileName = selectedFile.name.toLowerCase();
+      const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.xlsb');
+
+      console.log('[BulkUpload] File type:', isExcel ? 'Excel' : 'CSV/Text', 'Name:', selectedFile.name);
+
+      let parsed: ParsedCSV;
+
+      if (isExcel) {
+        // Parse Excel file
+        const buffer = await selectedFile.arrayBuffer();
+        parsed = parseExcel(buffer);
+      } else {
+        // Parse CSV/Text file
+        const text = await selectedFile.text();
+        parsed = parseCSV(text);
+      }
 
       if (parsed.rows.length === 0) {
         throw new Error('No data rows found in file');
@@ -275,9 +343,10 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
       setColumnMappings(mappings);
       setStep('mapping');
     } catch (err) {
+      console.error('[BulkUpload] Parse error:', err);
       setError(err instanceof Error ? err.message : 'Failed to parse file');
     }
-  }, [parseCSV, autoMapColumns]);
+  }, [parseCSV, parseExcel, autoMapColumns]);
 
   // Update column mapping
   const updateMapping = useCallback((csvColumn: string, dbField: string | null) => {
@@ -421,7 +490,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
               <input
                 type="file"
-                accept=".csv,.tsv,.txt"
+                accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsb"
                 onChange={handleFileUpload}
                 className="hidden"
                 id="csv-upload"
@@ -439,7 +508,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
                   <span className="text-primary-600 font-medium">Click to upload</span>
                   <span className="text-gray-500"> or drag and drop</span>
                 </div>
-                <p className="text-xs text-gray-400">CSV, TSV, or TXT (tab-separated)</p>
+                <p className="text-xs text-gray-400">Excel (.xlsx, .xls) or CSV files</p>
               </label>
             </div>
 
