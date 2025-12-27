@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { supabaseAdmin as supabase } from '../config/supabase';
 
 // Helper to normalize addresses for matching
 function normalizeAddress(address: string): string {
