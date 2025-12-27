@@ -51,8 +51,8 @@ export default function DataHub() {
                 Your centralized CRE property database
               </p>
             </div>
-            <Button variant="outline" onClick={() => navigate('/properties')}>
-              Back to Properties
+            <Button variant="outline" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
             </Button>
           </div>
         </div>

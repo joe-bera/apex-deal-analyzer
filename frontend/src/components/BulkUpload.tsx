@@ -7,8 +7,10 @@ import type { ColumnMapping, DataSource } from '../types';
 const DB_FIELDS: { field: string; label: string; category: string }[] = [
   // Basic Info
   { field: 'address', label: 'Property Address', category: 'Basic' },
+  { field: 'unit_suite', label: 'Unit/Suite', category: 'Basic' },
   { field: 'property_name', label: 'Property Name', category: 'Basic' },
   { field: 'building_park', label: 'Building Park', category: 'Basic' },
+  { field: 'apn', label: 'APN (Parcel Number)', category: 'Basic' },
 
   // Location
   { field: 'city', label: 'City', category: 'Location' },
@@ -16,6 +18,9 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'zip', label: 'Zip Code', category: 'Location' },
   { field: 'county', label: 'County', category: 'Location' },
   { field: 'submarket', label: 'Submarket', category: 'Location' },
+  { field: 'latitude', label: 'Latitude', category: 'Location' },
+  { field: 'longitude', label: 'Longitude', category: 'Location' },
+  { field: 'opportunity_zone', label: 'Opportunity Zone', category: 'Location' },
 
   // Classification
   { field: 'property_type', label: 'Property Type', category: 'Classification' },
@@ -23,11 +28,13 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'building_status', label: 'Building Status', category: 'Classification' },
   { field: 'building_class', label: 'Building Class', category: 'Classification' },
   { field: 'zoning', label: 'Zoning', category: 'Classification' },
+  { field: 'zoning_code', label: 'Zoning Code', category: 'Classification' },
 
   // Size
   { field: 'building_size', label: 'Building Size (SF)', category: 'Size' },
   { field: 'land_area_sf', label: 'Land Area (SF)', category: 'Size' },
   { field: 'lot_size_acres', label: 'Lot Size (Acres)', category: 'Size' },
+  { field: 'building_count', label: 'Building Count', category: 'Size' },
 
   // Building Details
   { field: 'year_built', label: 'Year Built', category: 'Details' },
@@ -42,18 +49,26 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'rail_served', label: 'Rail Served', category: 'Industrial' },
   { field: 'office_percentage', label: 'Office %', category: 'Industrial' },
 
-  // Retail
+  // Retail/Parking
   { field: 'parking_spaces', label: 'Parking Spaces', category: 'Retail' },
   { field: 'parking_ratio', label: 'Parking Ratio', category: 'Retail' },
   { field: 'anchor_tenant', label: 'Anchor Tenant', category: 'Retail' },
 
   // Status
   { field: 'percent_leased', label: 'Percent Leased', category: 'Status' },
+  { field: 'usps_vacancy', label: 'USPS Vacancy', category: 'Status' },
+  { field: 'usps_vacancy_date', label: 'USPS Vacancy Date', category: 'Status' },
+  { field: 'days_on_market', label: 'Days on Market', category: 'Status' },
 
-  // Contacts
+  // Contacts/Owner
   { field: 'owner_name', label: 'Owner Name', category: 'Contacts' },
   { field: 'owner_contact', label: 'Owner Contact', category: 'Contacts' },
-  { field: 'owner_address', label: 'Owner Address', category: 'Contacts' },
+  { field: 'owner_address', label: 'Owner/Mailing Address', category: 'Contacts' },
+  { field: 'mailing_address_unit', label: 'Mailing Address Unit', category: 'Contacts' },
+  { field: 'mailing_city', label: 'Mailing City', category: 'Contacts' },
+  { field: 'mailing_state', label: 'Mailing State', category: 'Contacts' },
+  { field: 'mailing_zip', label: 'Mailing Zip', category: 'Contacts' },
+  { field: 'mailing_care_of', label: 'Mailing Care Of', category: 'Contacts' },
   { field: 'property_manager_name', label: 'Property Manager', category: 'Contacts' },
   { field: 'property_manager_phone', label: 'Property Manager Phone', category: 'Contacts' },
   { field: 'leasing_company_name', label: 'Leasing Company', category: 'Contacts' },
@@ -66,44 +81,125 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'costar_id', label: 'CoStar ID', category: 'External IDs' },
   { field: 'crexi_id', label: 'Crexi ID', category: 'External IDs' },
 
-  // Transaction Fields
-  { field: 'sale_price', label: 'Sale Price', category: 'Transaction' },
+  // Transaction/Sale Fields
+  { field: 'sale_price', label: 'Sale/Sold Price', category: 'Transaction' },
   { field: 'price_per_sf', label: 'Price per SF', category: 'Transaction' },
+  { field: 'price_per_acre', label: 'Price per Acre', category: 'Transaction' },
+  { field: 'asking_price', label: 'Asking Price', category: 'Transaction' },
+  { field: 'asking_cap_rate', label: 'Asking Cap Rate', category: 'Transaction' },
   { field: 'cap_rate', label: 'Cap Rate', category: 'Transaction' },
+  { field: 'closing_cap_rate', label: 'Closing Cap Rate', category: 'Transaction' },
   { field: 'noi', label: 'NOI', category: 'Transaction' },
+  { field: 'closing_noi', label: 'Closing NOI', category: 'Transaction' },
   { field: 'transaction_date', label: 'Sale/Transaction Date', category: 'Transaction' },
   { field: 'buyer_name', label: 'Buyer', category: 'Transaction' },
   { field: 'seller_name', label: 'Seller', category: 'Transaction' },
+  { field: 'transaction_type', label: 'Transaction Event Type', category: 'Transaction' },
+  { field: 'reo_sale_flag', label: 'REO Sale Flag', category: 'Transaction' },
+
+  // Lease Fields
+  { field: 'lease_signed_date', label: 'Lease Signed Date', category: 'Lease' },
+  { field: 'lease_rate', label: 'Lease Rate', category: 'Lease' },
+  { field: 'lease_commencement', label: 'Lease Commencement', category: 'Lease' },
+  { field: 'lease_term_months', label: 'Lease Term (Months)', category: 'Lease' },
+  { field: 'lease_term_remaining', label: 'Lease Term Remaining', category: 'Lease' },
+  { field: 'lease_expiration', label: 'Lease Expiration Date', category: 'Lease' },
+  { field: 'rent_bumps', label: 'Rent Bumps', category: 'Lease' },
+  { field: 'lease_options', label: 'Lease Options', category: 'Lease' },
+  { field: 'tenant_name', label: 'Tenant(s)', category: 'Lease' },
+
+  // Financing
+  { field: 'lender', label: 'Lender', category: 'Financing' },
+  { field: 'loan_amount', label: 'Loan Amount', category: 'Financing' },
+  { field: 'financing_maturity', label: 'Financing Maturity Date', category: 'Financing' },
+  { field: 'pfc_recording_date', label: 'PFC Recording Date', category: 'Financing' },
+  { field: 'pfc_indicator', label: 'PFC Indicator', category: 'Financing' },
+  { field: 'pfc_document_type', label: 'PFC Document Type', category: 'Financing' },
+
+  // Tax/Value Info
+  { field: 'improvement_value', label: 'Improvement Value', category: 'Tax' },
+  { field: 'land_value', label: 'Land Value', category: 'Tax' },
+  { field: 'total_parcel_value', label: 'Total Parcel Value', category: 'Tax' },
+  { field: 'parcel_value_type', label: 'Parcel Value Type', category: 'Tax' },
+  { field: 'tax_year', label: 'Tax Year', category: 'Tax' },
+  { field: 'annual_tax_bill', label: 'Annual Tax Bill', category: 'Tax' },
+
+  // Utilities
+  { field: 'water_code', label: 'Water Code', category: 'Utilities' },
+  { field: 'sewer_code', label: 'Sewer Code', category: 'Utilities' },
 ];
 
 // Auto-mapping suggestions based on common column names
 const AUTO_MAP_HINTS: Record<string, string[]> = {
-  address: ['property address', 'address', 'street address', 'location'],
+  address: ['property address', 'address', 'street address', 'location', 'property street address'],
+  unit_suite: ['unit', 'suite', 'unit/suite', 'apt'],
   property_name: ['property name', 'name', 'building name'],
   building_park: ['building park', 'park name', 'park'],
+  apn: ['apn', 'parcel number', 'assessor parcel', 'parcel id'],
   city: ['city', 'property city'],
   state: ['state', 'property state', 'st'],
   zip: ['zip', 'zip code', 'zipcode', 'postal code'],
   county: ['county', 'county name'],
+  latitude: ['latitude', 'lat'],
+  longitude: ['longitude', 'long', 'lng'],
+  opportunity_zone: ['opportunity zone', 'oz'],
   property_type: ['property type', 'type', 'asset type'],
   building_status: ['building status', 'status'],
   building_class: ['building class', 'class'],
-  building_size: ['rba', 'building size', 'sf', 'square feet', 'sqft', 'size'],
-  land_area_sf: ['land area', 'land area (sf)', 'land sf', 'lot sf'],
+  zoning: ['zoning', 'zone'],
+  zoning_code: ['zoning code'],
+  building_size: ['rba', 'building size', 'sf', 'square feet', 'sqft', 'size', 'building sf'],
+  land_area_sf: ['land area', 'land area (sf)', 'land sf', 'lot sf', 'land area sf'],
+  lot_size_acres: ['lot size', 'acres', 'lot acres'],
+  building_count: ['building count', 'buildings', 'number of buildings'],
   year_built: ['year built', 'built', 'year'],
+  year_renovated: ['year renovated', 'renovated'],
+  number_of_floors: ['floors', 'stories', 'number of floors'],
+  number_of_units: ['units', 'number of units', 'unit count'],
+  clear_height_ft: ['clear height', 'ceiling height'],
+  dock_doors: ['dock doors', 'docks'],
+  grade_doors: ['grade doors', 'grade level doors'],
+  parking_spaces: ['parking spaces', 'parking'],
   percent_leased: ['percent leased', 'leased', 'occupancy', 'leased %'],
-  owner_name: ['owner name', 'owner'],
-  owner_contact: ['owner contact'],
-  property_manager_name: ['property manager name', 'property manager', 'manager'],
-  property_manager_phone: ['property manager phone', 'manager phone'],
-  leasing_company_name: ['leasing company name', 'leasing company'],
-  leasing_company_phone: ['leasing company phone'],
-  leasing_company_contact: ['leasing company contact', 'leasing contact'],
-  developer_name: ['developer name', 'developer'],
-  architect_name: ['architect name', 'architect'],
+  usps_vacancy: ['usps vacancy'],
+  days_on_market: ['days on market', 'dom'],
+  owner_name: ['owner name', 'owner', 'property owner'],
+  owner_address: ['mailing address', 'owner address'],
+  mailing_city: ['mailing address city', 'mailing city'],
+  mailing_state: ['mailing address state', 'mailing state'],
+  mailing_zip: ['mailing address zip', 'mailing zip'],
   costar_id: ['propertyid', 'property id', 'costar id'],
-  sale_price: ['sale price', 'price', 'sold price'],
+  crexi_id: ['crexi id'],
+  sale_price: ['sale price', 'sold price', 'closing price'],
+  price_per_sf: ['price per sf', 'sold price/sqft', 'price/sf', '$/sf'],
+  price_per_acre: ['price per acre', 'sold price/acre', '$/acre'],
+  asking_price: ['asking price', 'list price'],
+  asking_cap_rate: ['asking cap rate'],
   cap_rate: ['cap rate', 'cap'],
+  closing_cap_rate: ['closing cap rate'],
+  noi: ['noi', 'net operating income'],
+  closing_noi: ['closing noi'],
+  transaction_date: ['sale date', 'transaction date', 'closing date', 'sold date'],
+  buyer_name: ['buyer', 'buyer name'],
+  seller_name: ['seller', 'seller name'],
+  transaction_type: ['transaction event type', 'event type'],
+  lease_signed_date: ['lease signed', 'lease date'],
+  lease_rate: ['lease rate', 'rent'],
+  lease_commencement: ['lease commencement', 'commencement'],
+  lease_term_months: ['lease term', 'term months'],
+  lease_term_remaining: ['lease term remaining', 'remaining term'],
+  lease_expiration: ['lease expiration', 'expiration date'],
+  rent_bumps: ['rent bumps', 'escalations'],
+  lease_options: ['lease options', 'options'],
+  tenant_name: ['tenant', 'tenants', 'tenant name'],
+  lender: ['lender', 'lender name'],
+  loan_amount: ['loan amount', 'loan'],
+  financing_maturity: ['financing maturity', 'maturity date'],
+  improvement_value: ['improvement value'],
+  land_value: ['land value'],
+  total_parcel_value: ['total parcel value', 'parcel value'],
+  tax_year: ['tax year'],
+  annual_tax_bill: ['annual tax', 'tax bill'],
 };
 
 interface BulkUploadProps {
