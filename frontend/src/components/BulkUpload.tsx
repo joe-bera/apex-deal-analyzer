@@ -35,6 +35,7 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'land_area_sf', label: 'Land Area (SF)', category: 'Size' },
   { field: 'lot_size_acres', label: 'Lot Size (Acres)', category: 'Size' },
   { field: 'building_count', label: 'Building Count', category: 'Size' },
+  { field: 'number_of_addresses', label: 'Number of Addresses', category: 'Size' },
 
   // Building Details
   { field: 'year_built', label: 'Year Built', category: 'Details' },
@@ -77,14 +78,15 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'developer_name', label: 'Developer', category: 'Contacts' },
   { field: 'architect_name', label: 'Architect', category: 'Contacts' },
 
-  // IDs
+  // IDs & Links
   { field: 'costar_id', label: 'CoStar ID', category: 'External IDs' },
   { field: 'crexi_id', label: 'Crexi ID', category: 'External IDs' },
+  { field: 'property_link', label: 'Property Link/URL', category: 'External IDs' },
 
   // Transaction/Sale Fields
   { field: 'sale_price', label: 'Sale/Sold Price', category: 'Transaction' },
-  { field: 'price_per_sf', label: 'Price per SF', category: 'Transaction' },
-  { field: 'price_per_acre', label: 'Price per Acre', category: 'Transaction' },
+  { field: 'price_per_sf', label: 'Sold Price/Sq Ft', category: 'Transaction' },
+  { field: 'price_per_acre', label: 'Sold Price/Acre', category: 'Transaction' },
   { field: 'asking_price', label: 'Asking Price', category: 'Transaction' },
   { field: 'asking_cap_rate', label: 'Asking Cap Rate', category: 'Transaction' },
   { field: 'cap_rate', label: 'Cap Rate', category: 'Transaction' },
@@ -111,6 +113,8 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   // Financing
   { field: 'lender', label: 'Lender', category: 'Financing' },
   { field: 'loan_amount', label: 'Loan Amount', category: 'Financing' },
+  { field: 'loan_type', label: 'Loan Type', category: 'Financing' },
+  { field: 'interest_rate', label: 'Interest Rate', category: 'Financing' },
   { field: 'financing_maturity', label: 'Financing Maturity Date', category: 'Financing' },
   { field: 'pfc_recording_date', label: 'PFC Recording Date', category: 'Financing' },
   { field: 'pfc_indicator', label: 'PFC Indicator', category: 'Financing' },
@@ -170,6 +174,10 @@ const AUTO_MAP_HINTS: Record<string, string[]> = {
   mailing_zip: ['mailing address zip', 'mailing zip'],
   costar_id: ['propertyid', 'property id', 'costar id'],
   crexi_id: ['crexi id'],
+  property_link: ['property link', 'link', 'url', 'listing url'],
+  number_of_addresses: ['number of addresses', 'address count'],
+  loan_type: ['loan type'],
+  interest_rate: ['interest rate', 'rate'],
   sale_price: ['sale price', 'sold price', 'closing price'],
   price_per_sf: ['price per sf', 'sold price/sqft', 'price/sf', '$/sf'],
   price_per_acre: ['price per acre', 'sold price/acre', '$/acre'],
