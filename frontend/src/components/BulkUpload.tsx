@@ -32,7 +32,7 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
 
   // Size
   { field: 'building_size', label: 'Building Size (SF)', category: 'Size' },
-  { field: 'land_area_sf', label: 'Land Area (SF)', category: 'Size' },
+  { field: 'land_area_sf', label: 'Lot Size (SF)', category: 'Size' },
   { field: 'lot_size_acres', label: 'Lot Size (Acres)', category: 'Size' },
   { field: 'building_count', label: 'Building Count', category: 'Size' },
   { field: 'number_of_addresses', label: 'Number of Addresses', category: 'Size' },
@@ -40,7 +40,7 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   // Building Details
   { field: 'year_built', label: 'Year Built', category: 'Details' },
   { field: 'year_renovated', label: 'Year Renovated', category: 'Details' },
-  { field: 'number_of_floors', label: 'Number of Floors', category: 'Details' },
+  { field: 'number_of_floors', label: 'Number of Stories/Floors', category: 'Details' },
   { field: 'number_of_units', label: 'Number of Units', category: 'Details' },
 
   // Industrial
@@ -158,7 +158,7 @@ const AUTO_MAP_HINTS: Record<string, string[]> = {
   building_count: ['building count', 'buildings', 'number of buildings'],
   year_built: ['year built', 'built', 'year'],
   year_renovated: ['year renovated', 'renovated'],
-  number_of_floors: ['floors', 'stories', 'number of floors'],
+  number_of_floors: ['floors', 'stories', 'number of floors', 'number of stories', 'story count'],
   number_of_units: ['units', 'number of units', 'unit count'],
   clear_height_ft: ['clear height', 'ceiling height'],
   dock_doors: ['dock doors', 'docks'],
