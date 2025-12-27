@@ -56,7 +56,7 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'anchor_tenant', label: 'Anchor Tenant', category: 'Retail' },
 
   // Status
-  { field: 'percent_leased', label: 'Percent Leased', category: 'Status' },
+  { field: 'percent_leased', label: 'Occupancy/Percent Leased', category: 'Status' },
   { field: 'usps_vacancy', label: 'USPS Vacancy', category: 'Status' },
   { field: 'usps_vacancy_date', label: 'USPS Vacancy Date', category: 'Status' },
   { field: 'days_on_market', label: 'Days on Market', category: 'Status' },
@@ -164,7 +164,7 @@ const AUTO_MAP_HINTS: Record<string, string[]> = {
   dock_doors: ['dock doors', 'docks'],
   grade_doors: ['grade doors', 'grade level doors'],
   parking_spaces: ['parking spaces', 'parking'],
-  percent_leased: ['percent leased', 'leased', 'occupancy', 'leased %'],
+  percent_leased: ['percent leased', 'leased', 'occupancy', 'leased %', 'occupancy rate', 'occupied'],
   usps_vacancy: ['usps vacancy'],
   days_on_market: ['days on market', 'dom'],
   owner_name: ['owner name', 'owner', 'property owner'],
