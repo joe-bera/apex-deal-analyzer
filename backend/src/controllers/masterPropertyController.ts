@@ -153,7 +153,9 @@ export const importProperties = async (req: Request, res: Response) => {
       });
     }
 
-    if (!columnMapping || !columnMapping.address) {
+    // Check if address field is mapped (value is 'address', not key)
+    const hasAddressMapping = columnMapping && Object.values(columnMapping).includes('address');
+    if (!hasAddressMapping) {
       return res.status(400).json({
         success: false,
         error: 'Address field mapping is required',
