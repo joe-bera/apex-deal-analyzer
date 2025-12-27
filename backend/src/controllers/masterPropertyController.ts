@@ -188,7 +188,9 @@ export const importProperties = async (req: Request, res: Response) => {
       .single();
 
     if (batchError) {
-      console.error('Error creating batch:', batchError);
+      console.error('[Import] Error creating batch:', batchError);
+    } else {
+      console.log('[Import] Batch created successfully');
     }
 
     let imported = 0;
@@ -199,8 +201,14 @@ export const importProperties = async (req: Request, res: Response) => {
     const transactionsCreated: string[] = [];
 
     // Process each row
+    console.log('[Import] Starting to process rows...');
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
+
+      // Log progress every 50 rows
+      if (i % 50 === 0) {
+        console.log(`[Import] Processing row ${i + 1}/${rows.length}`);
+      }
 
       try {
         // Build property object from mapping
@@ -242,9 +250,12 @@ export const importProperties = async (req: Request, res: Response) => {
 
         // Skip if no address
         if (!propertyData.address) {
+          if (i < 5) console.log(`[Import] Row ${i + 1}: Skipped - no address`);
           skipped++;
           continue;
         }
+
+        if (i < 5) console.log(`[Import] Row ${i + 1}: Address = "${propertyData.address}"`);
 
         // Normalize address for duplicate detection
         const normalizedAddr = normalizeAddress(propertyData.address);
@@ -278,12 +289,14 @@ export const importProperties = async (req: Request, res: Response) => {
             .single();
 
           if (insertError) {
+            if (i < 5) console.log(`[Import] Row ${i + 1}: Insert error - ${insertError.message}`);
             throw new Error(insertError.message);
           }
 
           propertyId = newProperty.id;
           propertiesCreated.push(propertyId);
           imported++;
+          if (i < 5) console.log(`[Import] Row ${i + 1}: Created property ${propertyId}`);
         }
 
         // If there's transaction data, create a transaction
@@ -322,6 +335,8 @@ export const importProperties = async (req: Request, res: Response) => {
       }
     }
 
+    console.log(`[Import] Processing complete: imported=${imported}, skipped=${skipped}, errors=${errors}`);
+
     // Update batch record
     if (batch) {
       await supabase
@@ -336,6 +351,7 @@ export const importProperties = async (req: Request, res: Response) => {
         .eq('id', batch.id);
     }
 
+    console.log('[Import] Sending response...');
     return res.json({
       success: true,
       batch_id: batch?.id,
