@@ -146,7 +146,14 @@ export const importProperties = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const { source, columnMapping, rows } = req.body;
 
+    console.log('[Import] Starting import...');
+    console.log('[Import] User ID:', userId);
+    console.log('[Import] Source:', source);
+    console.log('[Import] Column mapping:', JSON.stringify(columnMapping));
+    console.log('[Import] Rows count:', rows?.length);
+
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      console.log('[Import] ERROR: No data rows provided');
       return res.status(400).json({
         success: false,
         error: 'No data rows provided',
@@ -155,7 +162,9 @@ export const importProperties = async (req: Request, res: Response) => {
 
     // Check if address field is mapped (value is 'address', not key)
     const hasAddressMapping = columnMapping && Object.values(columnMapping).includes('address');
+    console.log('[Import] Has address mapping:', hasAddressMapping);
     if (!hasAddressMapping) {
+      console.log('[Import] ERROR: Address field mapping is required');
       return res.status(400).json({
         success: false,
         error: 'Address field mapping is required',

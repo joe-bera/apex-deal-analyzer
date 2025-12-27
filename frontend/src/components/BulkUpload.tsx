@@ -497,11 +497,15 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
         }
       });
 
+      console.log('[BulkUpload] Mapping object:', mappingObj);
+      console.log('[BulkUpload] Has address mapping:', Object.values(mappingObj).includes('address'));
+
       // Get auth token
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Not authenticated. Please log in again.');
       }
+      console.log('[BulkUpload] Token exists:', !!token);
 
       const apiBase = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiBase}/master-properties/import`, {
