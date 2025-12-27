@@ -101,6 +101,7 @@ const DB_FIELDS: { field: string; label: string; category: string }[] = [
   { field: 'reo_sale_flag', label: 'REO Sale Flag', category: 'Transaction' },
 
   // Lease Fields
+  { field: 'lease_type', label: 'Lease Type (NNN/Gross/etc)', category: 'Lease' },
   { field: 'lease_signed_date', label: 'Lease Signed Date', category: 'Lease' },
   { field: 'lease_rate', label: 'Lease Rate', category: 'Lease' },
   { field: 'lease_commencement', label: 'Lease Commencement', category: 'Lease' },
@@ -193,6 +194,7 @@ const AUTO_MAP_HINTS: Record<string, string[]> = {
   buyer_name: ['buyer', 'buyer name'],
   seller_name: ['seller', 'seller name'],
   transaction_type: ['transaction event type', 'event type'],
+  lease_type: ['lease type', 'lease structure', 'nnn', 'triple net', 'gross lease'],
   lease_signed_date: ['lease signed', 'lease date'],
   lease_rate: ['lease rate', 'rent'],
   lease_commencement: ['lease commencement', 'commencement'],
