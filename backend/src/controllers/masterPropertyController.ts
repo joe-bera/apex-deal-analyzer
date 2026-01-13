@@ -140,6 +140,17 @@ export const getMasterProperty = async (req: Request, res: Response) => {
   }
 };
 
+// Valid columns in master_properties table
+const VALID_PROPERTY_COLUMNS = new Set([
+  'address', 'city', 'state', 'zip', 'county', 'property_name', 'property_type',
+  'building_size', 'land_area_sf', 'lot_size_acres', 'year_built', 'year_renovated',
+  'number_of_floors', 'number_of_units', 'clear_height_ft', 'dock_doors', 'grade_doors',
+  'parking_spaces', 'parking_ratio', 'percent_leased', 'office_percentage',
+  'building_class', 'zoning', 'rail_served', 'source', 'created_by', 'raw_import_data',
+  // Transaction fields (handled separately)
+  'sale_price', 'price_per_sf', 'cap_rate', 'noi', 'transaction_date', 'buyer_name', 'seller_name',
+]);
+
 // Bulk import properties
 export const importProperties = async (req: Request, res: Response) => {
   try {
@@ -152,6 +163,21 @@ export const importProperties = async (req: Request, res: Response) => {
     console.log('[Import] Column mapping:', JSON.stringify(columnMapping));
     console.log('[Import] Rows count:', rows?.length);
 
+    // Filter out invalid column mappings
+    const validMapping: Record<string, string> = {};
+    const skippedColumns: string[] = [];
+    for (const [csvCol, dbField] of Object.entries(columnMapping)) {
+      if (dbField && VALID_PROPERTY_COLUMNS.has(dbField as string)) {
+        validMapping[csvCol] = dbField as string;
+      } else if (dbField) {
+        skippedColumns.push(`${csvCol} -> ${dbField}`);
+      }
+    }
+    if (skippedColumns.length > 0) {
+      console.log('[Import] Skipped invalid column mappings:', skippedColumns.join(', '));
+    }
+    console.log('[Import] Valid mappings:', Object.keys(validMapping).length);
+
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       console.log('[Import] ERROR: No data rows provided');
       return res.status(400).json({
@@ -161,7 +187,7 @@ export const importProperties = async (req: Request, res: Response) => {
     }
 
     // Check if address field is mapped (value is 'address', not key)
-    const hasAddressMapping = columnMapping && Object.values(columnMapping).includes('address');
+    const hasAddressMapping = Object.values(validMapping).includes('address');
     console.log('[Import] Has address mapping:', hasAddressMapping);
     if (!hasAddressMapping) {
       console.log('[Import] ERROR: Address field mapping is required');
@@ -218,8 +244,8 @@ export const importProperties = async (req: Request, res: Response) => {
           raw_import_data: row,
         };
 
-        // Map fields from CSV to database
-        for (const [csvCol, dbField] of Object.entries(columnMapping)) {
+        // Map fields from CSV to database (using validated mapping)
+        for (const [csvCol, dbField] of Object.entries(validMapping)) {
           if (dbField && row[csvCol] !== undefined && row[csvCol] !== '') {
             let value = row[csvCol];
 
