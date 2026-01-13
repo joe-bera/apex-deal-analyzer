@@ -65,9 +65,9 @@ export const createApp = (): Application => {
     next();
   });
 
-  // Body parsing middleware
-  app.use(express.json({ limit: '1mb' })); // Parse JSON bodies
-  app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Parse URL-encoded bodies
+  // Body parsing middleware - increased limit for large CoStar imports
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Request logging middleware (simple console logging in development)
   if (config.server.isDevelopment) {
