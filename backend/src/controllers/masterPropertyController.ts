@@ -249,12 +249,20 @@ export const importProperties = async (req: Request, res: Response) => {
           if (dbField && row[csvCol] !== undefined && row[csvCol] !== '') {
             let value = row[csvCol];
 
-            // Handle numeric fields
-            if (['building_size', 'land_area_sf', 'lot_size_acres', 'year_built', 'year_renovated',
-                 'number_of_floors', 'number_of_units', 'clear_height_ft', 'dock_doors', 'grade_doors',
-                 'parking_spaces', 'parking_ratio', 'percent_leased', 'office_percentage',
-                 'sale_price', 'price_per_sf', 'cap_rate', 'noi'].includes(dbField as string)) {
-              value = parseFloat(String(value).replace(/[$,%]/g, ''));
+            // Handle INTEGER fields (must be whole numbers)
+            const integerFields = ['building_size', 'land_area_sf', 'year_built', 'year_renovated',
+                 'number_of_floors', 'number_of_units', 'dock_doors', 'grade_doors',
+                 'parking_spaces'];
+            // Handle DECIMAL/FLOAT fields (can have decimals)
+            const decimalFields = ['lot_size_acres', 'clear_height_ft', 'parking_ratio',
+                 'percent_leased', 'office_percentage', 'sale_price', 'price_per_sf',
+                 'cap_rate', 'noi'];
+
+            if (integerFields.includes(dbField)) {
+              const parsed = parseFloat(String(value).replace(/[$,%,]/g, ''));
+              value = isNaN(parsed) ? null : Math.round(parsed);
+            } else if (decimalFields.includes(dbField)) {
+              value = parseFloat(String(value).replace(/[$,%,]/g, ''));
               if (isNaN(value)) value = null;
             }
 
