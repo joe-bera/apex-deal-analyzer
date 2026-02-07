@@ -8,6 +8,12 @@ import UploadDocument from './pages/UploadDocument';
 import DataHub from './pages/DataHub';
 import MasterPropertyDetail from './pages/MasterPropertyDetail';
 import Settings from './pages/Settings';
+import Contacts from './pages/Contacts';
+import ContactDetail from './pages/ContactDetail';
+import Companies from './pages/Companies';
+import CompanyDetail from './pages/CompanyDetail';
+import Deals from './pages/Deals';
+import DealDetail from './pages/DealDetail';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -65,6 +71,54 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Settings />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/contacts"
+        element={
+          <PrivateRoute>
+            <Contacts />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/contacts/:id"
+        element={
+          <PrivateRoute>
+            <ContactDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/companies"
+        element={
+          <PrivateRoute>
+            <Companies />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/companies/:id"
+        element={
+          <PrivateRoute>
+            <CompanyDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/deals"
+        element={
+          <PrivateRoute>
+            <Deals />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crm/deals/:id"
+        element={
+          <PrivateRoute>
+            <DealDetail />
           </PrivateRoute>
         }
       />

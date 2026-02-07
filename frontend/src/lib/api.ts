@@ -453,4 +453,78 @@ export const api = {
 
   deleteDealAnalysis: (propertyId: string) =>
     request(`/properties/${propertyId}/analysis`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // CRM: Companies
+  // =========================================================================
+  listCompanies: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/companies${query}`);
+  },
+  getCompany: (id: string) => request<any>(`/companies/${id}`),
+  createCompany: (data: any) =>
+    request<any>('/companies', { method: 'POST', body: JSON.stringify(data) }),
+  updateCompany: (id: string, data: any) =>
+    request<any>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCompany: (id: string) =>
+    request<any>(`/companies/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // CRM: Contacts
+  // =========================================================================
+  listContacts: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/contacts${query}`);
+  },
+  getContact: (id: string) => request<any>(`/contacts/${id}`),
+  createContact: (data: any) =>
+    request<any>('/contacts', { method: 'POST', body: JSON.stringify(data) }),
+  updateContact: (id: string, data: any) =>
+    request<any>(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteContact: (id: string) =>
+    request<any>(`/contacts/${id}`, { method: 'DELETE' }),
+  linkContactProperty: (contactId: string, data: any) =>
+    request<any>(`/contacts/${contactId}/properties`, { method: 'POST', body: JSON.stringify(data) }),
+  unlinkContactProperty: (contactId: string, linkId: string) =>
+    request<any>(`/contacts/${contactId}/properties/${linkId}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // CRM: Deals
+  // =========================================================================
+  listCrmDeals: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/crm-deals${query}`);
+  },
+  getCrmDeal: (id: string) => request<any>(`/crm-deals/${id}`),
+  getCrmDealPipeline: () => request<any>('/crm-deals/pipeline'),
+  getCrmDealAnalytics: () => request<any>('/crm-deals/analytics'),
+  createCrmDeal: (data: any) =>
+    request<any>('/crm-deals', { method: 'POST', body: JSON.stringify(data) }),
+  updateCrmDeal: (id: string, data: any) =>
+    request<any>(`/crm-deals/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateCrmDealStage: (id: string, stage: string, notes?: string) =>
+    request<any>(`/crm-deals/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ stage, notes }) }),
+  deleteCrmDeal: (id: string) =>
+    request<any>(`/crm-deals/${id}`, { method: 'DELETE' }),
+  addDealContact: (dealId: string, contactId: string, role: string) =>
+    request<any>(`/crm-deals/${dealId}/contacts`, { method: 'POST', body: JSON.stringify({ contact_id: contactId, role }) }),
+  removeDealContact: (dealId: string, dcId: string) =>
+    request<any>(`/crm-deals/${dealId}/contacts/${dcId}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // CRM: Activities
+  // =========================================================================
+  listActivities: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/activities${query}`);
+  },
+  getUpcomingTasks: () => request<any>('/activities/upcoming-tasks'),
+  createActivity: (data: any) =>
+    request<any>('/activities', { method: 'POST', body: JSON.stringify(data) }),
+  updateActivity: (id: string, data: any) =>
+    request<any>(`/activities/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  completeActivity: (id: string) =>
+    request<any>(`/activities/${id}/complete`, { method: 'PATCH' }),
+  deleteActivity: (id: string) =>
+    request<any>(`/activities/${id}`, { method: 'DELETE' }),
 };

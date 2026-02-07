@@ -86,3 +86,5 @@ out/
 *.seed
 *.pid
 *.pid.lock
+.vercel
+.env*.local
