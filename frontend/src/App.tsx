@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import PropertyDetail from './pages/PropertyDetail';
 import UploadDocument from './pages/UploadDocument';
 import DataHub from './pages/DataHub';
+import MasterPropertyDetail from './pages/MasterPropertyDetail';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -47,6 +48,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <DataHub />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/data-hub/:id"
+        element={
+          <PrivateRoute>
+            <MasterPropertyDetail />
           </PrivateRoute>
         }
       />

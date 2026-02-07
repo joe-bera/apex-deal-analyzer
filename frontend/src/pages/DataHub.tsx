@@ -276,7 +276,7 @@ export default function DataHub() {
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {properties.map((property) => (
-                          <tr key={property.id} className="hover:bg-gray-50">
+                          <tr key={property.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/data-hub/${property.id}`)}>
                             <td className="px-4 py-3">
                               <div className="font-medium text-gray-900 truncate max-w-[200px]">
                                 {property.address}

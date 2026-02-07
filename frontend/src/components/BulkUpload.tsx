@@ -364,6 +364,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     updated: number;
     skipped: number;
     errors: number;
+    error_details?: { row: number; error: string }[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detectedSource, setDetectedSource] = useState<ImportSource | null>(null);
@@ -733,6 +734,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
         updated: result.updated || 0,
         skipped: result.skipped || 0,
         errors: result.errors || 0,
+        error_details: result.error_details || undefined,
       });
       setStep('complete');
     } catch (err) {
@@ -1108,6 +1110,23 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
                 </div>
               )}
             </div>
+            {importResult.error_details && importResult.error_details.length > 0 && (
+              <div className="max-w-lg mx-auto mb-6 text-left">
+                <p className="text-sm font-medium text-red-700 mb-2">Error Details (first {Math.min(importResult.error_details.length, 5)}):</p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+                  {importResult.error_details.slice(0, 5).map((e, idx) => (
+                    <p key={idx} className="text-xs text-red-600">
+                      <span className="font-medium">Row {e.row}:</span> {e.error}
+                    </p>
+                  ))}
+                  {importResult.error_details.length > 5 && (
+                    <p className="text-xs text-red-500 italic">
+                      ...and {importResult.error_details.length - 5} more errors
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex justify-center gap-3">
               <Button variant="outline" onClick={handleReset}>
                 Import More
