@@ -358,7 +358,7 @@ export const getLogoUploadUrl = async (req: Request, res: Response): Promise<voi
 
     if (uploadError || !uploadData) {
       console.error('Failed to create logo upload URL:', uploadError);
-      throw new AppError(500, 'Failed to create upload URL');
+      throw new AppError(500, `Failed to create upload URL: ${uploadError?.message || 'no data returned'}`);
     }
 
     res.status(200).json({
@@ -371,7 +371,8 @@ export const getLogoUploadUrl = async (req: Request, res: Response): Promise<voi
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {
       console.error('Get logo upload URL error:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
+      const msg = error instanceof Error ? error.message : 'Internal server error';
+      res.status(500).json({ success: false, error: msg });
     }
   }
 };
