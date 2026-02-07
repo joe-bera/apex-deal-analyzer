@@ -1,0 +1,5 @@
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_logo_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_email TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS company_address TEXT;
