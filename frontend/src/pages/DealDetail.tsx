@@ -7,6 +7,7 @@ import {
   DealRoomActivityEntry, DealTask, TaskPlaybook, DealRoomDocumentCategory,
 } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
+import Layout from '../components/Layout';
 
 type DealTab = 'overview' | 'deal-room' | 'tasks';
 
@@ -332,20 +333,24 @@ export default function DealDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        </div>
+      </Layout>
     );
   }
 
   if (!deal) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500">{error || 'Deal not found'}</p>
-          <Button className="mt-4" onClick={() => navigate('/crm/deals')}>Back to Deals</Button>
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-gray-500">{error || 'Deal not found'}</p>
+            <Button className="mt-4" onClick={() => navigate('/crm/deals')}>Back to Deals</Button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
@@ -366,7 +371,7 @@ export default function DealDetail() {
   }, {});
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -1174,6 +1179,6 @@ export default function DealDetail() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }

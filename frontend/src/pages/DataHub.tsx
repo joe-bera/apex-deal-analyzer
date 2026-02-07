@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BulkUpload from '../components/BulkUpload';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '../components/ui';
+import Layout from '../components/Layout';
 
 type TabType = 'upload' | 'properties' | 'verification';
 
@@ -123,7 +124,7 @@ export default function DataHub() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -374,6 +375,6 @@ export default function DataHub() {
           </div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

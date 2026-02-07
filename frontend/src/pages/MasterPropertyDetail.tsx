@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
+import Layout from '../components/Layout';
 import { api } from '../lib/api';
 import type { OwnerResearch, OwnerEntityType, ResearchSource } from '../types';
 
@@ -526,30 +527,32 @@ export default function MasterPropertyDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-          <p className="text-gray-500 mt-2">Loading property...</p>
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+            <p className="text-gray-500 mt-2">Loading property...</p>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   if (error || !property) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <Layout>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Button variant="outline" onClick={() => navigate('/data-hub')}>Back to Data Hub</Button>
           <div className="mt-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
             {error || 'Property not found'}
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -728,6 +731,6 @@ export default function MasterPropertyDetail() {
           Created {formatDate(property.created_at)} | Updated {formatDate(property.updated_at)}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }

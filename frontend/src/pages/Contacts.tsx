@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Contact, ContactType } from '../types';
 import { Card, CardContent, Button, Badge, EmptyState } from '../components/ui';
+import Layout from '../components/Layout';
 
 const CONTACT_TYPES: { value: ContactType; label: string }[] = [
   { value: 'owner', label: 'Owner' },
@@ -87,7 +88,7 @@ export default function Contacts() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -280,6 +281,6 @@ export default function Contacts() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }

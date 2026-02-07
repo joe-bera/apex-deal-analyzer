@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Company, CompanyType } from '../types';
 import { Card, CardContent, Button, Badge, EmptyState } from '../components/ui';
+import Layout from '../components/Layout';
 
 const COMPANY_TYPES: { value: CompanyType; label: string }[] = [
   { value: 'brokerage', label: 'Brokerage' },
@@ -83,7 +84,7 @@ export default function Companies() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -260,6 +261,6 @@ export default function Companies() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }

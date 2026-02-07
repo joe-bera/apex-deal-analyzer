@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { CrmDeal, CrmDealType, DealStage, DealPriority, PipelineColumn, DealAnalyticsData } from '../types';
 import { Card, CardContent, Button, Badge, EmptyState } from '../components/ui';
+import Layout from '../components/Layout';
 
 const DEAL_TYPES: { value: CrmDealType; label: string }[] = [
   { value: 'sale', label: 'Sale' }, { value: 'lease', label: 'Lease' },
@@ -114,7 +115,7 @@ export default function Deals() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -356,6 +357,6 @@ export default function Deals() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }

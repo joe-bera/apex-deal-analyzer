@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { TaskPlaybook, PlaybookTask } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
+import Layout from '../components/Layout';
 
 const DEAL_TYPES = [
   { value: '', label: 'Universal' },
@@ -141,7 +142,7 @@ export default function Playbooks() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -377,6 +378,6 @@ export default function Playbooks() {
           ))
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

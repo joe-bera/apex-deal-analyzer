@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Contact, ContactType, Activity, ActivityType } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
+import Layout from '../components/Layout';
 
 const CONTACT_TYPES: { value: ContactType; label: string }[] = [
   { value: 'owner', label: 'Owner' }, { value: 'tenant', label: 'Tenant' },
@@ -110,26 +111,29 @@ export default function ContactDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        </div>
+      </Layout>
     );
   }
 
   if (!contact) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500">{error || 'Contact not found'}</p>
-          <Button className="mt-4" onClick={() => navigate('/crm/contacts')}>Back to Contacts</Button>
+      <Layout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-gray-500">{error || 'Contact not found'}</p>
+            <Button className="mt-4" onClick={() => navigate('/crm/contacts')}>Back to Contacts</Button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+    <Layout>
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -376,6 +380,6 @@ export default function ContactDetail() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }
