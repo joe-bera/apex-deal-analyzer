@@ -712,3 +712,185 @@ export interface ImportResultResponse {
   success: boolean;
   result: ImportResult;
 }
+
+// ============================================================================
+// CRM Types
+// ============================================================================
+
+export type ContactType =
+  | 'owner' | 'tenant' | 'buyer' | 'seller' | 'broker' | 'lender'
+  | 'attorney' | 'property_manager' | 'investor' | 'developer'
+  | 'appraiser' | 'contractor' | 'other';
+
+export type CompanyType =
+  | 'brokerage' | 'investment_firm' | 'developer' | 'tenant_company'
+  | 'lender' | 'law_firm' | 'management_company' | 'construction'
+  | 'appraisal_firm' | 'title_company' | 'other';
+
+export type CrmDealType = 'sale' | 'lease' | 'listing' | 'acquisition' | 'disposition';
+
+export type DealStage =
+  | 'prospecting' | 'qualification' | 'proposal' | 'negotiation'
+  | 'under_contract' | 'due_diligence' | 'closing' | 'closed_won' | 'closed_lost';
+
+export type ActivityType =
+  | 'call' | 'email' | 'meeting' | 'note' | 'task' | 'site_visit'
+  | 'document_sent' | 'offer_made' | 'other';
+
+export type DealRole =
+  | 'buyer' | 'seller' | 'listing_broker' | 'buyers_broker' | 'co_broker'
+  | 'lender' | 'attorney_buyer' | 'attorney_seller' | 'escrow_officer'
+  | 'title_officer' | 'appraiser' | 'inspector' | 'property_manager'
+  | 'tenant' | 'other';
+
+export type DealPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface Company {
+  id: string;
+  name: string;
+  company_type: CompanyType;
+  industry?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  tags: string[];
+  notes?: string;
+  is_deleted: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  contacts?: Contact[];
+}
+
+export interface Contact {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  mobile_phone?: string;
+  company_id?: string;
+  title?: string;
+  contact_type: ContactType;
+  license_number?: string;
+  source?: string;
+  last_contacted_at?: string;
+  next_follow_up_at?: string;
+  tags: string[];
+  notes?: string;
+  is_deleted: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  company?: { id: string; name: string; company_type?: CompanyType };
+  deals?: DealContactLink[];
+  activities?: Activity[];
+  linked_properties?: ContactPropertyLink[];
+}
+
+export interface CrmDeal {
+  id: string;
+  deal_name: string;
+  deal_type: CrmDealType;
+  stage: DealStage;
+  description?: string;
+  property_id?: string;
+  master_property_id?: string;
+  deal_value?: number;
+  asking_price?: number;
+  offer_price?: number;
+  final_price?: number;
+  commission_total?: number;
+  commission_percent?: number;
+  commission_split_percent?: number;
+  commission_notes?: string;
+  expected_close_date?: string;
+  actual_close_date?: string;
+  listing_date?: string;
+  expiration_date?: string;
+  probability_percent: number;
+  priority: DealPriority;
+  assigned_to?: string;
+  stage_entered_at: string;
+  is_deleted: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  assigned_user?: { id: string; full_name: string; email?: string };
+  contacts?: DealContactLink[];
+  activities?: Activity[];
+  stage_history?: DealStageHistoryEntry[];
+}
+
+export interface DealContactLink {
+  id: string;
+  role: DealRole;
+  contact?: { id: string; first_name: string; last_name: string; email?: string; phone?: string; company_id?: string };
+  deal?: { id: string; deal_name: string; deal_type: CrmDealType; stage: DealStage; deal_value?: number };
+}
+
+export interface ContactPropertyLink {
+  id: string;
+  contact_id: string;
+  master_property_id?: string;
+  property_id?: string;
+  relationship: string;
+  notes?: string;
+}
+
+export interface Activity {
+  id: string;
+  activity_type: ActivityType;
+  subject: string;
+  description?: string;
+  contact_id?: string;
+  deal_id?: string;
+  company_id?: string;
+  property_id?: string;
+  due_date?: string;
+  is_completed: boolean;
+  activity_date: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  contact?: { id: string; first_name: string; last_name: string };
+  deal?: { id: string; deal_name: string };
+}
+
+export interface DealStageHistoryEntry {
+  id: string;
+  deal_id: string;
+  from_stage?: DealStage;
+  to_stage: DealStage;
+  changed_by: string;
+  changed_at: string;
+  notes?: string;
+  changed_by_user?: { id: string; full_name: string };
+}
+
+export interface PipelineColumn {
+  stage: DealStage;
+  count: number;
+  total_value: number;
+  deals: CrmDeal[];
+}
+
+export interface DealAnalyticsData {
+  total_deals: number;
+  active_deals: number;
+  closed_won: number;
+  closed_lost: number;
+  win_rate: number;
+  avg_deal_size: number;
+  total_commission_earned: number;
+  total_pipeline_value: number;
+  weighted_pipeline_value: number;
+}
