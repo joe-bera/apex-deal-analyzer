@@ -903,6 +903,50 @@ export const api = {
       body: JSON.stringify({ playbook_id: playbookId }),
     }),
 
+  // =========================================================================
+  // Syndication (Phase 10)
+  // =========================================================================
+  listSyndicationPlatforms: () =>
+    request<any>('/syndication/platforms'),
+
+  listSyndications: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/syndication${query}`);
+  },
+
+  getSyndication: (id: string) =>
+    request<any>(`/syndication/${id}`),
+
+  createSyndication: (data: { listing_site_id: string; platform_id: string }) =>
+    request<any>('/syndication', { method: 'POST', body: JSON.stringify(data) }),
+
+  publishSyndication: (id: string) =>
+    request<any>(`/syndication/${id}/publish`, { method: 'POST' }),
+
+  syncSyndication: (id: string) =>
+    request<any>(`/syndication/${id}/sync`, { method: 'POST' }),
+
+  delistSyndication: (id: string) =>
+    request<any>(`/syndication/${id}/delist`, { method: 'POST' }),
+
+  deleteSyndication: (id: string) =>
+    request<any>(`/syndication/${id}`, { method: 'DELETE' }),
+
+  generateSyndicationExport: (id: string, format: 'csv' | 'json' = 'csv') =>
+    request<any>(`/syndication/${id}/export`, {
+      method: 'POST',
+      body: JSON.stringify({ format }),
+    }),
+
+  getSyndicationActivity: (id: string) =>
+    request<any>(`/syndication/${id}/activity`),
+
+  bulkPublishSyndication: (data: { listing_site_id: string; platform_ids: string[] }) =>
+    request<any>('/syndication/bulk-publish', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   exportReportCSV: async (type: string, params?: { start?: string; end?: string }) => {
     const token = localStorage.getItem('token');
     const base = import.meta.env.VITE_API_URL || '/api';

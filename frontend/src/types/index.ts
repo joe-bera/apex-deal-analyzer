@@ -1404,6 +1404,51 @@ export interface DealTask {
   assigned_user?: { id: string; full_name: string };
 }
 
+// ============================================================================
+// Syndication Types (Phase 10)
+// ============================================================================
+
+export interface SyndicationPlatform {
+  id: string;
+  name: string;
+  display_name: string;
+  logo_url: string | null;
+  website_url: string | null;
+  integration_type: 'api' | 'csv_export' | 'manual';
+  is_active: boolean;
+}
+
+export interface SyndicationListing {
+  id: string;
+  listing_site_id: string;
+  platform_id: string;
+  platform?: SyndicationPlatform;
+  listing_site?: ListingSite & { master_properties?: MasterProperty };
+  external_listing_id: string | null;
+  external_listing_url: string | null;
+  status: 'draft' | 'pending' | 'published' | 'synced' | 'error' | 'delisted';
+  published_at: string | null;
+  last_synced_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyndicationActivityEntry {
+  id: string;
+  syndication_listing_id: string;
+  action: string;
+  details: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface SyndicationExport {
+  format: 'csv' | 'json';
+  data: string;
+  file_name: string;
+  platform_name: string;
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];

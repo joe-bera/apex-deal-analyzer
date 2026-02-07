@@ -24,6 +24,7 @@ import campaignRoutes from './routes/campaignRoutes';
 import reportsRoutes from './routes/reportsRoutes';
 import dealRoomRoutes, { publicDealRoomRouter } from './routes/dealRoomRoutes';
 import playbooksRoutes, { dealTasksRouter } from './routes/playbooksRoutes';
+import syndicationRoutes from './routes/syndicationRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -119,6 +120,7 @@ export const createApp = (): Application => {
   app.use('/api/crm-deals', dealTasksRouter);
   app.use('/api/playbooks', playbooksRoutes);
   app.use('/api/deal-room', publicDealRoomRouter);
+  app.use('/api/syndication', syndicationRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

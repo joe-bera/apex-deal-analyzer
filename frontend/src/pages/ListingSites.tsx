@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
 import { Card, CardContent, Button, Badge, EmptyState, Input } from '../components/ui';
 import { ListingSite, ListingLead, MasterProperty } from '../types';
 
 export default function ListingSites() {
+  const navigate = useNavigate();
   const [sites, setSites] = useState<ListingSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -238,6 +240,12 @@ export default function ListingSites() {
                           className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                         >
                           Leads ({site.lead_count})
+                        </button>
+                        <button
+                          onClick={() => navigate(`/syndication?listing=${site.id}`)}
+                          className="px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                        >
+                          Syndicate
                         </button>
                         <button
                           onClick={() => deleteSite(site.id)}

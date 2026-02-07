@@ -22,6 +22,7 @@ import Campaigns from './pages/Campaigns';
 import Reports from './pages/Reports';
 import PublicDealRoom from './pages/PublicDealRoom';
 import Playbooks from './pages/Playbooks';
+import Syndication from './pages/Syndication';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -175,6 +176,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Playbooks />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/syndication"
+        element={
+          <PrivateRoute>
+            <Syndication />
           </PrivateRoute>
         }
       />
