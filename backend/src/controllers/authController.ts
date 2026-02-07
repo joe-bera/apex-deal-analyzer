@@ -279,16 +279,8 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
  */
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError(401, 'No authorization token provided');
-    }
-
-    const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      throw new AppError(401, 'Invalid or expired token');
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
     }
 
     const { company_name, company_phone, company_email, company_address } = req.body;
@@ -302,11 +294,12 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
         company_address: company_address ?? null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', user.id)
+      .eq('id', req.user.id)
       .select()
       .single();
 
     if (updateError || !profile) {
+      console.error('Profile update error:', updateError);
       throw new AppError(500, 'Failed to update profile');
     }
 
@@ -329,6 +322,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     if (error instanceof AppError) {
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {
+      console.error('Update profile error:', error);
       res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
@@ -340,16 +334,8 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
  */
 export const getLogoUploadUrl = async (req: Request, res: Response): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError(401, 'No authorization token provided');
-    }
-
-    const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      throw new AppError(401, 'Invalid or expired token');
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
     }
 
     const { file_name, file_size } = req.body;
@@ -363,13 +349,15 @@ export const getLogoUploadUrl = async (req: Request, res: Response): Promise<voi
       throw new AppError(400, 'Logo file must be under 5MB');
     }
 
-    const storagePath = `logos/${user.id}/${Date.now()}-${file_name}`;
+    const sanitizedFileName = file_name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `logos/${req.user.id}/${Date.now()}-${sanitizedFileName}`;
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('property-photos')
       .createSignedUploadUrl(storagePath);
 
     if (uploadError || !uploadData) {
+      console.error('Failed to create logo upload URL:', uploadError);
       throw new AppError(500, 'Failed to create upload URL');
     }
 
@@ -382,6 +370,7 @@ export const getLogoUploadUrl = async (req: Request, res: Response): Promise<voi
     if (error instanceof AppError) {
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {
+      console.error('Get logo upload URL error:', error);
       res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
@@ -393,16 +382,8 @@ export const getLogoUploadUrl = async (req: Request, res: Response): Promise<voi
  */
 export const updateProfileLogo = async (req: Request, res: Response): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError(401, 'No authorization token provided');
-    }
-
-    const token = authHeader.substring(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      throw new AppError(401, 'Invalid or expired token');
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
     }
 
     const { storage_path } = req.body;
@@ -424,11 +405,12 @@ export const updateProfileLogo = async (req: Request, res: Response): Promise<vo
         company_logo_url,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', user.id)
+      .eq('id', req.user.id)
       .select()
       .single();
 
     if (updateError || !profile) {
+      console.error('Profile logo update error:', updateError);
       throw new AppError(500, 'Failed to update profile logo');
     }
 
@@ -441,6 +423,7 @@ export const updateProfileLogo = async (req: Request, res: Response): Promise<vo
     if (error instanceof AppError) {
       res.status(error.statusCode).json({ success: false, error: error.message });
     } else {
+      console.error('Update profile logo error:', error);
       res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
