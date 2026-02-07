@@ -1085,6 +1085,41 @@ export interface ProspectListItem {
   property?: MasterProperty;
 }
 
+// ============================================================================
+// Owner Research Types (Phase 6)
+// ============================================================================
+
+export type OwnerEntityType =
+  | 'individual' | 'llc' | 'trust' | 'corporation' | 'reit'
+  | 'partnership' | 'government' | 'nonprofit' | 'unknown';
+
+export type ResearchSource = 'ai' | 'manual' | 'county_records' | 'other';
+
+export interface OwnerResearch {
+  id: string;
+  master_property_id: string;
+  owner_name?: string;
+  owner_entity_type: OwnerEntityType;
+  registered_agent?: string;
+  mailing_address?: string;
+  phone?: string;
+  email?: string;
+  other_properties?: Array<Record<string, unknown>>;
+  portfolio_estimate?: number;
+  research_source: ResearchSource;
+  research_notes?: string;
+  ai_summary?: string;
+  raw_data?: {
+    outreach_recommendations?: string[];
+    red_flags?: string[];
+    opportunities?: string[];
+    token_usage?: { inputTokens: number; outputTokens: number };
+  };
+  researched_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];

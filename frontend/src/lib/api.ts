@@ -661,4 +661,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // =========================================================================
+  // Owner Research (Phase 6)
+  // =========================================================================
+  getOwnerResearch: (propertyId: string) =>
+    request<any>(`/owner-research/${propertyId}`),
+
+  runAIOwnerResearch: (propertyId: string) =>
+    request<any>(`/owner-research/${propertyId}/ai`, { method: 'POST' }),
+
+  createOwnerResearch: (propertyId: string, data: Record<string, any>) =>
+    request<any>(`/owner-research/${propertyId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateOwnerResearch: (id: string, data: Record<string, any>) =>
+    request<any>(`/owner-research/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteOwnerResearch: (id: string) =>
+    request<any>(`/owner-research/${id}`, { method: 'DELETE' }),
 };

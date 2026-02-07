@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
+import { api } from '../lib/api';
+import type { OwnerResearch, OwnerEntityType, ResearchSource } from '../types';
 
 interface PropertyData {
   id: string;
@@ -89,6 +91,396 @@ function Field({ label, value }: { label: string; value: string | number | boole
     <div>
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="text-sm font-medium text-gray-900">{display}</dd>
+    </div>
+  );
+}
+
+const ENTITY_TYPE_LABELS: Record<OwnerEntityType, string> = {
+  individual: 'Individual',
+  llc: 'LLC',
+  trust: 'Trust',
+  corporation: 'Corporation',
+  reit: 'REIT',
+  partnership: 'Partnership',
+  government: 'Government',
+  nonprofit: 'Nonprofit',
+  unknown: 'Unknown',
+};
+
+const ENTITY_TYPE_COLORS: Record<OwnerEntityType, string> = {
+  individual: 'bg-gray-100 text-gray-700',
+  llc: 'bg-blue-100 text-blue-700',
+  trust: 'bg-purple-100 text-purple-700',
+  corporation: 'bg-indigo-100 text-indigo-700',
+  reit: 'bg-green-100 text-green-700',
+  partnership: 'bg-yellow-100 text-yellow-800',
+  government: 'bg-red-100 text-red-700',
+  nonprofit: 'bg-teal-100 text-teal-700',
+  unknown: 'bg-gray-100 text-gray-500',
+};
+
+const SOURCE_COLORS: Record<ResearchSource, string> = {
+  ai: 'bg-blue-100 text-blue-700',
+  manual: 'bg-gray-100 text-gray-700',
+  county_records: 'bg-amber-100 text-amber-700',
+  other: 'bg-gray-100 text-gray-500',
+};
+
+const SOURCE_LABELS: Record<ResearchSource, string> = {
+  ai: 'AI Research',
+  manual: 'Manual',
+  county_records: 'County Records',
+  other: 'Other',
+};
+
+function OwnerResearchPanel({ propertyId }: { propertyId: string }) {
+  const [research, setResearch] = useState<OwnerResearch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    owner_name: '',
+    owner_entity_type: 'unknown' as OwnerEntityType,
+    registered_agent: '',
+    mailing_address: '',
+    phone: '',
+    email: '',
+    portfolio_estimate: '',
+    research_notes: '',
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchResearch = useCallback(async () => {
+    try {
+      const data = await api.getOwnerResearch(propertyId);
+      setResearch(data.research || []);
+    } catch {
+      // Silently fail — panel just shows empty
+    } finally {
+      setLoading(false);
+    }
+  }, [propertyId]);
+
+  useEffect(() => {
+    fetchResearch();
+  }, [fetchResearch]);
+
+  const handleAIResearch = async () => {
+    setAiLoading(true);
+    setError(null);
+    try {
+      await api.runAIOwnerResearch(propertyId);
+      await fetchResearch();
+    } catch (err: any) {
+      setError(err.message || 'AI research failed');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    setError(null);
+    try {
+      await api.createOwnerResearch(propertyId, {
+        ...manualForm,
+        portfolio_estimate: manualForm.portfolio_estimate ? parseInt(manualForm.portfolio_estimate, 10) : null,
+      });
+      setShowManualForm(false);
+      setManualForm({
+        owner_name: '',
+        owner_entity_type: 'unknown',
+        registered_agent: '',
+        mailing_address: '',
+        phone: '',
+        email: '',
+        portfolio_estimate: '',
+        research_notes: '',
+      });
+      await fetchResearch();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save research');
+    }
+  };
+
+  const handleDelete = async (researchId: string) => {
+    try {
+      await api.deleteOwnerResearch(researchId);
+      setResearch((prev) => prev.filter((r) => r.id !== researchId));
+    } catch {
+      // Silently fail
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Owner Research</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Owner Research ({research.length})</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={handleAIResearch}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <>
+                  <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  Researching...
+                </>
+              ) : (
+                'Research Owner (AI)'
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowManualForm(!showManualForm)}
+            >
+              {showManualForm ? 'Cancel' : 'Add Manual'}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Manual Entry Form */}
+        {showManualForm && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border space-y-3">
+            <h4 className="text-sm font-semibold text-gray-700">New Manual Research Entry</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Owner Name</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.owner_name}
+                  onChange={(e) => setManualForm((f) => ({ ...f, owner_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Entity Type</label>
+                <select
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.owner_entity_type}
+                  onChange={(e) => setManualForm((f) => ({ ...f, owner_entity_type: e.target.value as OwnerEntityType }))}
+                >
+                  {Object.entries(ENTITY_TYPE_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Registered Agent</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.registered_agent}
+                  onChange={(e) => setManualForm((f) => ({ ...f, registered_agent: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Mailing Address</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.mailing_address}
+                  onChange={(e) => setManualForm((f) => ({ ...f, mailing_address: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.phone}
+                  onChange={(e) => setManualForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Email</label>
+                <input
+                  type="email"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.email}
+                  onChange={(e) => setManualForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Est. Portfolio Size</label>
+                <input
+                  type="number"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm"
+                  value={manualForm.portfolio_estimate}
+                  onChange={(e) => setManualForm((f) => ({ ...f, portfolio_estimate: e.target.value }))}
+                  placeholder="# properties"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Research Notes</label>
+              <textarea
+                className="w-full border rounded-md px-3 py-1.5 text-sm"
+                rows={3}
+                value={manualForm.research_notes}
+                onChange={(e) => setManualForm((f) => ({ ...f, research_notes: e.target.value }))}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleManualSubmit}>Save Entry</Button>
+            </div>
+          </div>
+        )}
+
+        {/* Research Timeline */}
+        {research.length === 0 ? (
+          <p className="text-gray-500 text-sm text-center py-6">
+            No owner research yet. Click "Research Owner (AI)" to analyze the owner or add a manual entry.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {research.map((entry) => (
+              <ResearchEntry key={entry.id} entry={entry} onDelete={handleDelete} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ResearchEntry({ entry, onDelete }: { entry: OwnerResearch; onDelete: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const rawData = entry.raw_data || {};
+  const recommendations = rawData.outreach_recommendations || [];
+  const redFlags = rawData.red_flags || [];
+  const opportunities = rawData.opportunities || [];
+
+  return (
+    <div className="border rounded-lg p-4">
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SOURCE_COLORS[entry.research_source]}`}>
+            {SOURCE_LABELS[entry.research_source]}
+          </span>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ENTITY_TYPE_COLORS[entry.owner_entity_type]}`}>
+            {ENTITY_TYPE_LABELS[entry.owner_entity_type]}
+          </span>
+          {entry.portfolio_estimate != null && (
+            <span className="text-xs text-gray-500">
+              ~{entry.portfolio_estimate} properties
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{formatDate(entry.created_at)}</span>
+          <button
+            onClick={() => onDelete(entry.id)}
+            className="text-gray-400 hover:text-red-500 text-xs"
+            title="Delete"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {/* Owner name */}
+      {entry.owner_name && (
+        <p className="text-sm font-semibold text-gray-900 mb-1">{entry.owner_name}</p>
+      )}
+
+      {/* AI Summary */}
+      {entry.ai_summary && (
+        <p className="text-sm text-gray-700 mb-2">{entry.ai_summary}</p>
+      )}
+
+      {/* Contact info for manual entries */}
+      {(entry.mailing_address || entry.phone || entry.email || entry.registered_agent) && (
+        <div className="flex gap-4 text-xs text-gray-500 mb-2 flex-wrap">
+          {entry.registered_agent && <span>Agent: {entry.registered_agent}</span>}
+          {entry.mailing_address && <span>Mailing: {entry.mailing_address}</span>}
+          {entry.phone && <span>Phone: {entry.phone}</span>}
+          {entry.email && <span>Email: {entry.email}</span>}
+        </div>
+      )}
+
+      {/* Expandable analysis */}
+      {(entry.research_notes || recommendations.length > 0 || redFlags.length > 0 || opportunities.length > 0) && (
+        <>
+          <button
+            className="text-xs text-primary-600 hover:text-primary-800 font-medium"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? 'Show less' : 'Show details'}
+          </button>
+
+          {expanded && (
+            <div className="mt-3 space-y-3">
+              {/* Analysis text */}
+              {entry.research_notes && (
+                <div>
+                  <h5 className="text-xs font-semibold text-gray-600 mb-1">Analysis</h5>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{entry.research_notes}</p>
+                </div>
+              )}
+
+              {/* Outreach recommendations */}
+              {recommendations.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold text-gray-600 mb-1">Outreach Recommendations</h5>
+                  <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                    {recommendations.map((rec: string, i: number) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Red flags */}
+              {redFlags.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold text-red-600 mb-1">Red Flags</h5>
+                  <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+                    {redFlags.map((flag: string, i: number) => (
+                      <li key={i}>{flag}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Opportunities */}
+              {opportunities.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold text-green-600 mb-1">Opportunities</h5>
+                  <ul className="list-disc list-inside text-sm text-green-700 space-y-1">
+                    {opportunities.map((opp: string, i: number) => (
+                      <li key={i}>{opp}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -259,6 +651,9 @@ export default function MasterPropertyDetail() {
             </CardContent>
           </Card>
         )}
+
+        {/* Owner Research Panel */}
+        <OwnerResearchPanel propertyId={property.id} />
 
         {/* Tax / Valuation */}
         {(property.improvement_value || property.land_value || property.total_parcel_value || property.annual_tax_bill) && (
