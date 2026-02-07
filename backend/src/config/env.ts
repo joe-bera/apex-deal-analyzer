@@ -27,6 +27,12 @@ if (!process.env.ANTHROPIC_API_KEY) {
   );
 }
 
+if (!process.env.RESEND_API_KEY) {
+  console.warn(
+    '⚠️  WARNING: RESEND_API_KEY is not set. Email campaign sending will fail.'
+  );
+}
+
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default-secret-change-in-production') {
     throw new Error('JWT_SECRET must be set to a secure value in production');
@@ -64,6 +70,11 @@ export const config = {
   },
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || '',
+    fromEmail: process.env.RESEND_FROM_EMAIL || 'noreply@apex-res.com',
+    fromName: process.env.RESEND_FROM_NAME || 'Apex Real Estate Services',
   },
   logging: {
     level: process.env.LOG_LEVEL || 'info',

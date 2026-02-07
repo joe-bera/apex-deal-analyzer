@@ -685,4 +685,52 @@ export const api = {
 
   deleteOwnerResearch: (id: string) =>
     request<any>(`/owner-research/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Email Campaigns (Phase 7)
+  // =========================================================================
+  listCampaigns: () => request<any>('/campaigns'),
+
+  getCampaign: (id: string) => request<any>(`/campaigns/${id}`),
+
+  createCampaign: (data: {
+    name: string;
+    campaign_type?: string;
+    subject?: string;
+    html_body?: string;
+    master_property_id?: string;
+  }) =>
+    request<any>('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateCampaign: (id: string, data: Record<string, any>) =>
+    request<any>(`/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteCampaign: (id: string) =>
+    request<any>(`/campaigns/${id}`, { method: 'DELETE' }),
+
+  generateCampaignContent: (data: {
+    campaign_type: string;
+    master_property_id?: string;
+    custom_instructions?: string;
+  }) =>
+    request<any>('/campaigns/generate-content', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  addCampaignRecipients: (campaignId: string, data: {
+    contact_ids?: string[];
+    contact_type?: string;
+    tag?: string;
+  }) =>
+    request<any>(`/campaigns/${campaignId}/recipients`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  removeCampaignRecipient: (campaignId: string, recipientId: string) =>
+    request<any>(`/campaigns/${campaignId}/recipients/${recipientId}`, { method: 'DELETE' }),
+
+  sendCampaign: (id: string) =>
+    request<any>(`/campaigns/${id}/send`, { method: 'POST' }),
 };

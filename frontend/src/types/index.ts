@@ -1120,6 +1120,43 @@ export interface OwnerResearch {
   updated_at: string;
 }
 
+// ============================================================================
+// Email Campaign Types (Phase 7)
+// ============================================================================
+
+export type CampaignType = 'new_listing' | 'price_reduction' | 'just_closed' | 'market_update' | 'custom';
+export type CampaignStatus = 'draft' | 'sending' | 'sent';
+export type RecipientStatus = 'pending' | 'sent' | 'failed';
+
+export interface EmailCampaign {
+  id: string;
+  name: string;
+  campaign_type: CampaignType;
+  subject?: string;
+  html_body?: string;
+  master_property_id?: string;
+  status: CampaignStatus;
+  sent_at?: string;
+  total_recipients: number;
+  total_sent: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailRecipient {
+  id: string;
+  campaign_id: string;
+  contact_id?: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  status: RecipientStatus;
+  sent_at?: string;
+  error_message?: string;
+  created_at: string;
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];
