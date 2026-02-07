@@ -1031,6 +1031,60 @@ export interface PublicListingData {
   } | null;
 }
 
+// ============================================================================
+// Prospecting Types (Phase 5)
+// ============================================================================
+
+export type ProspectListItemStatus = 'pending' | 'contacted' | 'qualified' | 'not_interested';
+
+export interface ProspectListFilters {
+  // Multi-select
+  property_type?: string[];
+  city?: string[];
+  state?: string[];
+  zip?: string[];
+  submarket?: string[];
+  property_subtype?: string[];
+  // Ranges
+  building_size_min?: number;
+  building_size_max?: number;
+  lot_size_acres_min?: number;
+  lot_size_acres_max?: number;
+  year_built_min?: number;
+  year_built_max?: number;
+  sale_price_min?: number;
+  sale_price_max?: number;
+  price_per_sf_min?: number;
+  price_per_sf_max?: number;
+  cap_rate_min?: number;
+  cap_rate_max?: number;
+  // Text search
+  owner_name?: string;
+  search?: string;
+}
+
+export interface ProspectList {
+  id: string;
+  name: string;
+  description?: string;
+  filters: ProspectListFilters;
+  result_count: number;
+  last_refreshed_at?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProspectListItem {
+  id: string;
+  list_id: string;
+  master_property_id: string;
+  status: ProspectListItemStatus;
+  notes?: string;
+  added_at: string;
+  property?: MasterProperty;
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];

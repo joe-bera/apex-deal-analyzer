@@ -18,6 +18,7 @@ import activitiesRoutes from './routes/activitiesRoutes';
 import documentGeneratorRoutes from './routes/documentGeneratorRoutes';
 import listingSitesRoutes from './routes/listingSitesRoutes';
 import publicListingRoutes from './routes/publicListingRoutes';
+import prospectListRoutes from './routes/prospectListRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -105,6 +106,7 @@ export const createApp = (): Application => {
   app.use('/api/generate', documentGeneratorRoutes);
   app.use('/api/listing-sites', listingSitesRoutes);
   app.use('/api/public', publicListingRoutes);
+  app.use('/api/prospect-lists', prospectListRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

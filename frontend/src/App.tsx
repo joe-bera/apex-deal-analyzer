@@ -17,6 +17,7 @@ import DealDetail from './pages/DealDetail';
 import DocumentGenerator from './pages/DocumentGenerator';
 import ListingSites from './pages/ListingSites';
 import PublicListing from './pages/PublicListing';
+import Prospecting from './pages/Prospecting';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -138,6 +139,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ListingSites />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/prospecting"
+        element={
+          <PrivateRoute>
+            <Prospecting />
           </PrivateRoute>
         }
       />

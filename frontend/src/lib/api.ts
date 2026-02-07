@@ -600,4 +600,65 @@ export const api = {
       body: JSON.stringify(data),
     }).then(r => r.json());
   },
+
+  // =========================================================================
+  // Prospecting Lists (Phase 5)
+  // =========================================================================
+  previewProspectFilter: (filters: Record<string, any>) =>
+    request<any>('/prospect-lists/preview', {
+      method: 'POST',
+      body: JSON.stringify({ filters }),
+    }),
+
+  listProspectLists: () => request<any>('/prospect-lists'),
+
+  getProspectList: (id: string) => request<any>(`/prospect-lists/${id}`),
+
+  createProspectList: (data: { name: string; description?: string; filters: Record<string, any> }) =>
+    request<any>('/prospect-lists', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateProspectList: (id: string, data: Record<string, any>) =>
+    request<any>(`/prospect-lists/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteProspectList: (id: string) =>
+    request<any>(`/prospect-lists/${id}`, { method: 'DELETE' }),
+
+  refreshProspectList: (id: string) =>
+    request<any>(`/prospect-lists/${id}/refresh`, { method: 'POST' }),
+
+  exportProspectListCSV: async (id: string) => {
+    const token = localStorage.getItem('token');
+    const base = import.meta.env.VITE_API_URL || '/api';
+    const response = await fetch(`${base}/prospect-lists/${id}/export`, {
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    });
+    if (!response.ok) throw new Error('Export failed');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || 'prospect_list.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  updateProspectListItem: (listId: string, itemId: string, data: { status?: string; notes?: string }) =>
+    request<any>(`/prospect-lists/${listId}/items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  bulkUpdateProspectListItems: (listId: string, data: { item_ids: string[]; status?: string; notes?: string }) =>
+    request<any>(`/prospect-lists/${listId}/bulk-update`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
