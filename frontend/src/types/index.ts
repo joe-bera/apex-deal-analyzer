@@ -894,3 +894,60 @@ export interface DealAnalyticsData {
   total_pipeline_value: number;
   weighted_pipeline_value: number;
 }
+
+// ============================================================================
+// Document Generator Types (Phase 2)
+// ============================================================================
+
+export type TemplateType = 'brochure' | 'om' | 'proposal';
+
+export type ContentType =
+  | 'property_description'
+  | 'executive_summary'
+  | 'location_analysis'
+  | 'property_highlights'
+  | 'market_analysis'
+  | 'team_intro';
+
+export interface GeneratedContentSection {
+  content: string;
+  cached: boolean;
+  tokens_used?: number;
+}
+
+export interface GenerateContentResponse {
+  success: boolean;
+  property: Partial<MasterProperty>;
+  transaction: {
+    sale_price?: number;
+    asking_price?: number;
+    price_per_sf?: number;
+    cap_rate?: number;
+    noi?: number;
+    transaction_type?: string;
+    transaction_date?: string;
+  } | null;
+  content: Record<string, GeneratedContentSection>;
+}
+
+export interface GeneratedDocument {
+  id: string;
+  master_property_id?: string;
+  template_type: TemplateType;
+  title: string;
+  file_url?: string;
+  content_snapshot?: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GeneratedDocumentsResponse {
+  success: boolean;
+  documents: GeneratedDocument[];
+}
+
+export interface GeneratedDocumentResponse {
+  success: boolean;
+  document: GeneratedDocument;
+}

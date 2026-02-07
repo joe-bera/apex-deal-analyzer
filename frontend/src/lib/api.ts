@@ -527,4 +527,35 @@ export const api = {
     request<any>(`/activities/${id}/complete`, { method: 'PATCH' }),
   deleteActivity: (id: string) =>
     request<any>(`/activities/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Document Generator (Phase 2)
+  // =========================================================================
+  generateDocContent: (masterPropertyId: string, contentTypes: string[]) =>
+    request<any>('/generate/content', {
+      method: 'POST',
+      body: JSON.stringify({ master_property_id: masterPropertyId, content_types: contentTypes }),
+    }),
+
+  saveGeneratedDoc: (data: {
+    master_property_id?: string;
+    template_type: string;
+    title: string;
+    file_url?: string;
+    content_snapshot?: Record<string, unknown>;
+  }) =>
+    request<any>('/generate/save', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listGeneratedDocs: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/generate/documents${query}`);
+  },
+
+  getGeneratedDoc: (id: string) => request<any>(`/generate/documents/${id}`),
+
+  deleteGeneratedDoc: (id: string) =>
+    request<any>(`/generate/documents/${id}`, { method: 'DELETE' }),
 };

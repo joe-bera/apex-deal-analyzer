@@ -15,6 +15,7 @@ import companiesRoutes from './routes/companiesRoutes';
 import contactsRoutes from './routes/contactsRoutes';
 import crmDealsRoutes from './routes/crmDealsRoutes';
 import activitiesRoutes from './routes/activitiesRoutes';
+import documentGeneratorRoutes from './routes/documentGeneratorRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -99,6 +100,7 @@ export const createApp = (): Application => {
   app.use('/api/contacts', contactsRoutes);
   app.use('/api/crm-deals', crmDealsRoutes);
   app.use('/api/activities', activitiesRoutes);
+  app.use('/api/generate', documentGeneratorRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

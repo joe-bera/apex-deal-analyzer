@@ -14,6 +14,7 @@ import Companies from './pages/Companies';
 import CompanyDetail from './pages/CompanyDetail';
 import Deals from './pages/Deals';
 import DealDetail from './pages/DealDetail';
+import DocumentGenerator from './pages/DocumentGenerator';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -119,6 +120,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <DealDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/documents/generate"
+        element={
+          <PrivateRoute>
+            <DocumentGenerator />
           </PrivateRoute>
         }
       />
