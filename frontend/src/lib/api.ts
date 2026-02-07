@@ -314,7 +314,29 @@ export const api = {
   deleteComp: (compId: string) =>
     request(`/comps/${compId}`, { method: 'DELETE' }),
 
+  // Profile / Branding
+  updateProfile: (data: { company_name?: string; company_phone?: string; company_email?: string; company_address?: string }) =>
+    request('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  getLogoUploadUrl: (fileName: string, fileSize: number) =>
+    request<{ upload_url: string; storage_path: string }>('/auth/profile/logo-upload-url', {
+      method: 'POST',
+      body: JSON.stringify({ file_name: fileName, file_size: fileSize }),
+    }),
+
+  updateProfileLogo: (storagePath: string) =>
+    request<{ company_logo_url: string }>('/auth/profile/logo', {
+      method: 'PATCH',
+      body: JSON.stringify({ storage_path: storagePath }),
+    }),
+
   // Valuation Analysis
+  getValuation: (propertyId: string) =>
+    request(`/properties/${propertyId}/valuation`),
+
   analyzeProperty: (propertyId: string) =>
     request(`/properties/${propertyId}/analyze`, { method: 'POST' }),
 

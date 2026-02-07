@@ -7,6 +7,7 @@ import PropertyDetail from './pages/PropertyDetail';
 import UploadDocument from './pages/UploadDocument';
 import DataHub from './pages/DataHub';
 import MasterPropertyDetail from './pages/MasterPropertyDetail';
+import Settings from './pages/Settings';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <MasterPropertyDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <PrivateRoute>
+            <Settings />
           </PrivateRoute>
         }
       />

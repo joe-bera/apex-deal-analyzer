@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from './ui';
 import type { Property, Comp } from '../types';
 import { generateDealAnalysisPDF } from '../utils/pdfExport';
+import { loadLogoImage } from '../utils/pdfBranding';
+import { useAuth } from '../contexts/AuthContext';
 import ProjectionTable from './ProjectionTable';
 import SensitivityTable from './SensitivityTable';
 import {
@@ -96,8 +98,17 @@ export default function DealAnalysisWorksheet({
   initialData,
   saving = false,
 }: DealAnalysisWorksheetProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('proforma');
   const [expanded, setExpanded] = useState(true);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
+  // Pre-load logo for PDF export
+  useEffect(() => {
+    if (user?.company_logo_url) {
+      loadLogoImage(user.company_logo_url).then(setLogoBase64);
+    }
+  }, [user?.company_logo_url]);
 
   // Form state
   const [data, setData] = useState<DealAnalysisData>(() => ({
@@ -215,7 +226,19 @@ export default function DealAnalysisWorksheet({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => generateDealAnalysisPDF({ property, analysis: data, comps })}
+              onClick={() => generateDealAnalysisPDF({
+                property,
+                analysis: data,
+                comps,
+                branding: user ? {
+                  company_name: user.company_name,
+                  company_logo_url: user.company_logo_url,
+                  company_phone: user.company_phone,
+                  company_email: user.company_email,
+                  company_address: user.company_address,
+                } : undefined,
+                logoBase64,
+              })}
               leftIcon={
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

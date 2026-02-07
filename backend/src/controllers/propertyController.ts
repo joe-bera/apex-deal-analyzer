@@ -449,6 +449,64 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
 };
 
 /**
+ * Get latest valuation result for a property
+ * GET /api/properties/:id/valuation
+ */
+export const getPropertyValuation = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { id } = req.params;
+
+    // Get property to check access
+    const { data: property, error: propError } = await supabaseAdmin
+      .from('properties')
+      .select('created_by')
+      .eq('id', id)
+      .single();
+
+    if (propError || !property) {
+      throw new AppError(404, 'Property not found');
+    }
+
+    if (property.created_by !== req.user.id) {
+      throw new AppError(403, 'You do not have access to this property');
+    }
+
+    // Get latest deal with valuation result
+    const { data: deal, error: dealError } = await supabaseAdmin
+      .from('deals')
+      .select('*')
+      .eq('property_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (dealError) {
+      throw new AppError(500, 'Failed to fetch valuation');
+    }
+
+    res.status(200).json({
+      success: true,
+      valuation: deal?.valuation_result || null,
+      deal_id: deal?.id || null,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Get valuation error:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch valuation' });
+    }
+  }
+};
+
+/**
  * Analyze property value using AI and comps
  * POST /api/properties/:id/analyze
  */

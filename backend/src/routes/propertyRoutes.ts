@@ -6,6 +6,7 @@ import {
   updateProperty,
   deleteProperty,
   analyzePropertyValuation,
+  getPropertyValuation,
 } from '../controllers/propertyController';
 import {
   generatePropertyLOI,
@@ -75,6 +76,14 @@ router.delete(
   authenticate,
   validate(uuidParamSchema, 'params'),
   deleteProperty
+);
+
+// Get latest valuation result
+router.get(
+  '/:id/valuation',
+  authenticate,
+  validate(uuidParamSchema, 'params'),
+  getPropertyValuation
 );
 
 // Analyze property valuation with AI (rate limited)

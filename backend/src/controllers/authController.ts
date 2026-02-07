@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { supabase, supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 
 /**
@@ -143,6 +143,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         phone_number: profile.phone_number,
         avatar_url: profile.avatar_url,
         is_active: profile.is_active,
+        company_name: profile.company_name,
+        company_logo_url: profile.company_logo_url,
+        company_phone: profile.company_phone,
+        company_email: profile.company_email,
+        company_address: profile.company_address,
       },
       session: {
         access_token: data.session.access_token,
@@ -252,7 +257,185 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
         avatar_url: profile.avatar_url,
         is_active: profile.is_active,
         created_at: profile.created_at,
+        company_name: profile.company_name,
+        company_logo_url: profile.company_logo_url,
+        company_phone: profile.company_phone,
+        company_email: profile.company_email,
+        company_address: profile.company_address,
       },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+};
+
+/**
+ * Update user profile (company branding fields)
+ * PATCH /api/auth/profile
+ */
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError(401, 'No authorization token provided');
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new AppError(401, 'Invalid or expired token');
+    }
+
+    const { company_name, company_phone, company_email, company_address } = req.body;
+
+    const { data: profile, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        company_name: company_name ?? null,
+        company_phone: company_phone ?? null,
+        company_email: company_email ?? null,
+        company_address: company_address ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (updateError || !profile) {
+      throw new AppError(500, 'Failed to update profile');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: profile.id,
+        email: profile.email,
+        full_name: profile.full_name,
+        role: profile.role,
+        company_name: profile.company_name,
+        company_logo_url: profile.company_logo_url,
+        company_phone: profile.company_phone,
+        company_email: profile.company_email,
+        company_address: profile.company_address,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+};
+
+/**
+ * Get a signed upload URL for company logo
+ * POST /api/auth/profile/logo-upload-url
+ */
+export const getLogoUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError(401, 'No authorization token provided');
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new AppError(401, 'Invalid or expired token');
+    }
+
+    const { file_name, file_size } = req.body;
+
+    if (!file_name) {
+      throw new AppError(400, 'file_name is required');
+    }
+
+    // Max 5MB for logos
+    if (file_size && file_size > 5 * 1024 * 1024) {
+      throw new AppError(400, 'Logo file must be under 5MB');
+    }
+
+    const storagePath = `logos/${user.id}/${Date.now()}-${file_name}`;
+
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from('property-photos')
+      .createSignedUploadUrl(storagePath);
+
+    if (uploadError || !uploadData) {
+      throw new AppError(500, 'Failed to create upload URL');
+    }
+
+    res.status(200).json({
+      success: true,
+      upload_url: uploadData.signedUrl,
+      storage_path: storagePath,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+};
+
+/**
+ * Update profile logo after upload
+ * PATCH /api/auth/profile/logo
+ */
+export const updateProfileLogo = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError(401, 'No authorization token provided');
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new AppError(401, 'Invalid or expired token');
+    }
+
+    const { storage_path } = req.body;
+
+    if (!storage_path) {
+      throw new AppError(400, 'storage_path is required');
+    }
+
+    // Build public URL
+    const { data: urlData } = supabaseAdmin.storage
+      .from('property-photos')
+      .getPublicUrl(storage_path);
+
+    const company_logo_url = urlData.publicUrl;
+
+    const { data: profile, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        company_logo_url,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (updateError || !profile) {
+      throw new AppError(500, 'Failed to update profile logo');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logo updated successfully',
+      company_logo_url,
     });
   } catch (error) {
     if (error instanceof AppError) {

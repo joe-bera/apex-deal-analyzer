@@ -313,6 +313,11 @@ export interface User {
   role?: 'admin' | 'broker' | 'analyst' | 'investor';
   organization?: string;
   avatar_url?: string;
+  company_name?: string;
+  company_logo_url?: string;
+  company_phone?: string;
+  company_email?: string;
+  company_address?: string;
 }
 
 export interface AuthResponse {

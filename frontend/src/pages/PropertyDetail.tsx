@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import type {
   Property,
@@ -38,6 +39,8 @@ import {
 import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
+import { generateExecutiveSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
+import { loadLogoImage } from '../utils/pdfBranding';
 
 interface Photo {
   id: string;
@@ -52,6 +55,7 @@ interface Photo {
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [property, setProperty] = useState<Property | null>(null);
   const [comps, setComps] = useState<Comp[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -82,25 +86,40 @@ export default function PropertyDetail() {
   const [dealAnalysis, setDealAnalysis] = useState<DealAnalysis | null>(null);
   const [savingAnalysis, setSavingAnalysis] = useState(false);
 
+  // Cached logo for PDF exports
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
   useEffect(() => {
     if (id) {
       loadPropertyData();
     }
   }, [id]);
 
+  // Pre-load logo when user has one
+  useEffect(() => {
+    if (user?.company_logo_url) {
+      loadLogoImage(user.company_logo_url).then(setLogoBase64);
+    }
+  }, [user?.company_logo_url]);
+
   const loadPropertyData = async () => {
     try {
       setLoading(true);
-      const [propData, compsData, photosData, analysisData] = await Promise.all([
+      const [propData, compsData, photosData, analysisData, valuationData] = await Promise.all([
         api.getProperty(id!),
         api.getComps(id!),
         api.getPhotos(id!).catch(() => ({ photos: [] })),
         api.getDealAnalysis(id!).catch(() => ({ analysis: null })),
+        api.getValuation(id!).catch(() => ({ valuation: null })),
       ]);
       setProperty((propData as PropertyResponse).property);
       setComps((compsData as CompsResponse).comps || []);
       setPhotos((photosData as { photos: Photo[] }).photos || []);
       setDealAnalysis((analysisData as DealAnalysisResponse).analysis || null);
+      const savedValuation = (valuationData as any)?.valuation;
+      if (savedValuation) {
+        setValuation(savedValuation);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load property';
       setError(message);
@@ -176,16 +195,12 @@ export default function PropertyDetail() {
       comp_price_per_sqft: formData.get('pricesf') ? parseFloat(formData.get('pricesf') as string) : null,
     };
 
-    console.log('[PropertyDetail] Adding comp:', compData);
-
     try {
-      const result = await api.addComp(id!, compData);
-      console.log('[PropertyDetail] Comp added successfully:', result);
+      await api.addComp(id!, compData);
       await loadPropertyData();
       setShowAddComp(false);
       e.currentTarget.reset();
     } catch (err: unknown) {
-      console.error('[PropertyDetail] Failed to add comp:', err);
       const message = err instanceof Error ? err.message : 'Failed to add comp';
       setError(message);
     } finally {
@@ -280,7 +295,7 @@ export default function PropertyDetail() {
     }
   };
 
-  const handleDownloadLOI = () => {
+  const handleDownloadLOIHTML = () => {
     if (!generatedLOI) return;
     const blob = new Blob([generatedLOI.loi_html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -291,6 +306,30 @@ export default function PropertyDetail() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadLOIPDF = () => {
+    if (!generatedLOI || !property) return;
+    const branding = user ? {
+      company_name: user.company_name,
+      company_logo_url: user.company_logo_url,
+      company_phone: user.company_phone,
+      company_email: user.company_email,
+      company_address: user.company_address,
+    } : undefined;
+    generateLOIPDF({ property, loi: generatedLOI, branding, logoBase64 });
+  };
+
+  const handleDownloadExecSummaryPDF = () => {
+    if (!valuation || !property) return;
+    const branding = user ? {
+      company_name: user.company_name,
+      company_logo_url: user.company_logo_url,
+      company_phone: user.company_phone,
+      company_email: user.company_email,
+      company_address: user.company_address,
+    } : undefined;
+    generateExecutiveSummaryPDF({ property, valuation, branding, logoBase64 });
   };
 
   // Handle multi-comp PDF upload
@@ -480,7 +519,7 @@ export default function PropertyDetail() {
                   </svg>
                 }
               >
-                {analyzing ? 'Analyzing...' : 'Run AI Valuation'}
+                {analyzing ? 'Analyzing...' : valuation ? 'Re-run AI Valuation' : 'Run AI Valuation'}
               </Button>
             </div>
           </div>
@@ -588,48 +627,63 @@ export default function PropertyDetail() {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Estimated Value Hero */}
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 mb-6 text-center">
-                <p className="text-sm font-medium text-primary-700 mb-1">Estimated Market Value</p>
-                <p className="text-4xl font-bold text-primary-900">{formatCurrency(valuation.estimated_value)}</p>
+              {/* Estimated Value Hero - Enhanced */}
+              <div className="bg-gradient-to-br from-primary-50 via-primary-100 to-blue-50 rounded-xl p-8 mb-8 text-center border border-primary-200 shadow-sm">
+                <p className="text-sm font-semibold text-primary-600 uppercase tracking-wide mb-2">Estimated Market Value</p>
+                <p className="text-5xl font-extrabold text-primary-900 mb-3">{formatCurrency(valuation.estimated_value)}</p>
                 {valuation.value_range && (
-                  <p className="text-sm text-primary-600 mt-2">
-                    Range: {formatCurrency(valuation.value_range.low)} - {formatCurrency(valuation.value_range.high)}
+                  <div className="flex items-center justify-center gap-3 mt-3">
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-white border border-primary-200 text-sm font-semibold text-primary-700 shadow-sm">
+                      {formatCurrency(valuation.value_range.low)}
+                    </span>
+                    <span className="text-primary-400 font-medium">to</span>
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-white border border-primary-200 text-sm font-semibold text-primary-700 shadow-sm">
+                      {formatCurrency(valuation.value_range.high)}
+                    </span>
+                  </div>
+                )}
+                {valuation.price_per_sqft_estimate && (
+                  <p className="text-sm text-primary-500 mt-3">
+                    Estimated ${valuation.price_per_sqft_estimate}/SF
                   </p>
                 )}
               </div>
 
-              {/* Analysis Text */}
-              <div className="space-y-6">
+              <div className="space-y-8">
+                {/* Analysis Text */}
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Analysis Summary</h3>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.analysis}</p>
                 </div>
 
+                {/* Key Findings - Enhanced cards */}
                 {valuation.key_findings && valuation.key_findings.length > 0 && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Key Findings</h3>
-                    <div className="space-y-2">
+                    <h3 className="font-semibold text-gray-900 mb-4">Key Findings</h3>
+                    <div className="space-y-3">
                       {valuation.key_findings.map((finding, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <div className="mt-1.5 w-1.5 h-1.5 bg-primary-500 rounded-full flex-shrink-0" />
-                          <span className="text-gray-700">{finding}</span>
+                        <div key={i} className="flex items-start gap-3 bg-gray-50 rounded-lg p-4 border border-gray-100">
+                          <div className="flex-shrink-0 w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-sm font-bold">
+                            {i + 1}
+                          </div>
+                          <span className="text-gray-700 leading-relaxed">{finding}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
+                {/* Recommendations - Enhanced cards */}
                 {valuation.recommendations && valuation.recommendations.length > 0 && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Recommendations</h3>
-                    <div className="space-y-2">
+                    <h3 className="font-semibold text-gray-900 mb-4">Recommendations</h3>
+                    <div className="space-y-3">
                       {valuation.recommendations.map((rec, i) => (
-                        <div key={i} className="flex items-start gap-2">
+                        <div key={i} className="flex items-start gap-3 bg-green-50 rounded-lg p-4 border border-green-100">
                           <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-gray-700">{rec}</span>
+                          <span className="text-gray-700 leading-relaxed">{rec}</span>
                         </div>
                       ))}
                     </div>
@@ -637,59 +691,66 @@ export default function PropertyDetail() {
                 )}
 
                 {valuation.market_insights && (
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
                     <h3 className="font-semibold text-gray-900 mb-2">Market Insights</h3>
-                    <p className="text-gray-700">{valuation.market_insights}</p>
+                    <p className="text-gray-700 leading-relaxed">{valuation.market_insights}</p>
                   </div>
                 )}
 
-                {/* Pricing Scenarios */}
+                {/* Pricing Scenarios - Enhanced */}
                 {valuation.pricing_scenarios && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4">Exit Strategy Pricing</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <h3 className="font-semibold text-gray-900 mb-5">Exit Strategy Pricing</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                       {/* Quick Sale */}
-                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 mb-3">
                           <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
                           <span className="font-semibold text-orange-900">Quick Sale</span>
                         </div>
-                        <p className="text-2xl font-bold text-orange-900">{formatCurrency(valuation.pricing_scenarios.quick_sale.price)}</p>
-                        <p className="text-sm text-orange-700">${valuation.pricing_scenarios.quick_sale.price_per_sqft}/SF</p>
-                        <p className="text-xs text-orange-600 mt-1">{valuation.pricing_scenarios.quick_sale.timeline}</p>
-                        <p className="text-xs text-orange-600">({valuation.pricing_scenarios.quick_sale.discount_percentage}% below market)</p>
-                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.quick_sale.rationale}</p>
+                        <p className="text-3xl font-bold text-orange-900 mb-1">{formatCurrency(valuation.pricing_scenarios.quick_sale.price)}</p>
+                        <p className="text-sm text-orange-700 font-medium">${valuation.pricing_scenarios.quick_sale.price_per_sqft}/SF</p>
+                        <div className="border-t border-orange-200 mt-3 pt-3">
+                          <p className="text-xs text-orange-600 font-medium">{valuation.pricing_scenarios.quick_sale.timeline}</p>
+                          <p className="text-xs text-orange-600">{valuation.pricing_scenarios.quick_sale.discount_percentage}% below market</p>
+                          <p className="text-xs text-gray-600 mt-2 leading-relaxed">{valuation.pricing_scenarios.quick_sale.rationale}</p>
+                        </div>
                       </div>
 
                       {/* Market Sale */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
+                      <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-5 shadow-md ring-1 ring-blue-100">
+                        <div className="flex items-center gap-2 mb-3">
                           <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                           </svg>
                           <span className="font-semibold text-blue-900">Market Sale</span>
+                          <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">Recommended</span>
                         </div>
-                        <p className="text-2xl font-bold text-blue-900">{formatCurrency(valuation.pricing_scenarios.market_sale.price)}</p>
-                        <p className="text-sm text-blue-700">${valuation.pricing_scenarios.market_sale.price_per_sqft}/SF</p>
-                        <p className="text-xs text-blue-600 mt-1">{valuation.pricing_scenarios.market_sale.timeline}</p>
-                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.market_sale.rationale}</p>
+                        <p className="text-3xl font-bold text-blue-900 mb-1">{formatCurrency(valuation.pricing_scenarios.market_sale.price)}</p>
+                        <p className="text-sm text-blue-700 font-medium">${valuation.pricing_scenarios.market_sale.price_per_sqft}/SF</p>
+                        <div className="border-t border-blue-200 mt-3 pt-3">
+                          <p className="text-xs text-blue-600 font-medium">{valuation.pricing_scenarios.market_sale.timeline}</p>
+                          <p className="text-xs text-gray-600 mt-2 leading-relaxed">{valuation.pricing_scenarios.market_sale.rationale}</p>
+                        </div>
                       </div>
 
                       {/* Premium Sale */}
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 mb-3">
                           <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                           </svg>
                           <span className="font-semibold text-green-900">Premium Sale</span>
                         </div>
-                        <p className="text-2xl font-bold text-green-900">{formatCurrency(valuation.pricing_scenarios.premium_sale.price)}</p>
-                        <p className="text-sm text-green-700">${valuation.pricing_scenarios.premium_sale.price_per_sqft}/SF</p>
-                        <p className="text-xs text-green-600 mt-1">{valuation.pricing_scenarios.premium_sale.timeline}</p>
-                        <p className="text-xs text-green-600">(+{valuation.pricing_scenarios.premium_sale.premium_percentage}% above market)</p>
-                        <p className="text-xs text-gray-600 mt-2">{valuation.pricing_scenarios.premium_sale.rationale}</p>
+                        <p className="text-3xl font-bold text-green-900 mb-1">{formatCurrency(valuation.pricing_scenarios.premium_sale.price)}</p>
+                        <p className="text-sm text-green-700 font-medium">${valuation.pricing_scenarios.premium_sale.price_per_sqft}/SF</p>
+                        <div className="border-t border-green-200 mt-3 pt-3">
+                          <p className="text-xs text-green-600 font-medium">{valuation.pricing_scenarios.premium_sale.timeline}</p>
+                          <p className="text-xs text-green-600">+{valuation.pricing_scenarios.premium_sale.premium_percentage}% above market</p>
+                          <p className="text-xs text-gray-600 mt-2 leading-relaxed">{valuation.pricing_scenarios.premium_sale.rationale}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -730,20 +791,43 @@ export default function PropertyDetail() {
                     <p className="text-sm text-gray-600 mt-3">{valuation.wholesale_offer.rationale}</p>
                   </div>
                 )}
-
-                {/* Executive Summary */}
-                {valuation.executive_summary && (
-                  <div className="bg-gray-900 text-white rounded-xl p-5">
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Executive Summary
-                    </h3>
-                    <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
-                  </div>
-                )}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Executive Summary - Separate Card */}
+        {valuation?.executive_summary && (
+          <Card variant="elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle>Executive Summary</CardTitle>
+                    <p className="text-sm text-gray-500">AI-generated investment brief</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadExecSummaryPDF}
+                  leftIcon={
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                >
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
             </CardContent>
           </Card>
         )}
@@ -847,17 +931,23 @@ export default function PropertyDetail() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleDownloadLOIPDF}>
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    PDF
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handlePrintLOI}>
                     <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
                     Print
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadLOI}>
+                  <Button variant="outline" size="sm" onClick={handleDownloadLOIHTML}>
                     <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Download
+                    HTML
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setGeneratedLOI(null)}>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

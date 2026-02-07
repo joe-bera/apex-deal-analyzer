@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable, { FontStyle } from 'jspdf-autotable';
-import type { Property, Comp } from '../types';
+import type { Property, Comp, ValuationResult, LOI } from '../types';
 import type { DealAnalysisData } from '../components/DealAnalysisWorksheet';
 import {
   calculateVacancyAmount,
@@ -19,11 +19,18 @@ import {
   calculateBeforeTaxCashFlow,
   calculateCashOnCash,
 } from './financialCalculations';
+import {
+  CompanyBranding,
+  renderBrandedHeader,
+  renderBrandedFooter,
+} from './pdfBranding';
 
 interface ExportOptions {
   property: Property;
   analysis?: DealAnalysisData;
   comps?: Comp[];
+  branding?: CompanyBranding;
+  logoBase64?: string | null;
 }
 
 const COLORS = {
@@ -52,31 +59,15 @@ const formatNumber = (value?: number | null): string => {
 };
 
 export function generateDealAnalysisPDF(options: ExportOptions): void {
-  const { property, analysis, comps } = options;
+  const { property, analysis, comps, branding, logoBase64 } = options;
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 14;
   const contentWidth = pageWidth - (margin * 2);
-  let yPos = 20;
 
-  // ========== HEADER ==========
-  doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, pageWidth, 35, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.text('APEX REAL ESTATE', margin, 15);
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Commercial Real Estate Deal Analysis', margin, 24);
-
-  doc.setFontSize(9);
-  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), margin, 31);
-
-  yPos = 45;
+  // ========== BRANDED HEADER ==========
+  let yPos = renderBrandedHeader(doc, branding, logoBase64);
 
   // ========== PROPERTY SUMMARY ==========
   doc.setTextColor(...COLORS.dark);
@@ -166,13 +157,11 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
     // Combined Income & Expense Table
     const boldStyle: FontStyle = 'bold';
     const proformaData = [
-      // Income Section
       [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Potential Gross Income (PGI)', formatCurrency(analysis.potential_gross_income)],
       [`Less: Vacancy & Credit Loss (${analysis.vacancy_rate}%)`, `(${formatCurrency(vacancyAmount)})`],
       ['Plus: Other Income', formatCurrency(analysis.other_income)],
       [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: boldStyle } }, { content: formatCurrency(egi), styles: { fontStyle: boldStyle } }],
-      // Expense Section
       [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
       ['Property Taxes', formatCurrency(analysis.property_taxes)],
       ['Insurance', formatCurrency(analysis.insurance)],
@@ -182,7 +171,6 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
       ['Reserves / CapEx', formatCurrency(analysis.reserves_capex)],
       ['Other Expenses', formatCurrency(analysis.other_expenses)],
       [{ content: 'Total Operating Expenses', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: boldStyle } }],
-      // NOI
       [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }, { content: formatCurrency(noi), styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }],
     ];
 
@@ -330,24 +318,240 @@ export function generateDealAnalysisPDF(options: ExportOptions): void {
     });
   }
 
-  // ========== FOOTER ON ALL PAGES ==========
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-
-    // Footer line
-    doc.setDrawColor(...COLORS.lightGray);
-    doc.setLineWidth(0.5);
-    doc.line(margin, 285, pageWidth - margin, 285);
-
-    // Footer text
-    doc.setFontSize(8);
-    doc.setTextColor(...COLORS.gray);
-    doc.text('Apex Real Estate Services | Confidential', margin, 291);
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, 291, { align: 'right' });
-  }
+  // ========== BRANDED FOOTER ==========
+  renderBrandedFooter(doc, branding);
 
   // Save the PDF
   const fileName = `Deal_Analysis_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
+}
+
+// ============================================================================
+// Executive Summary PDF
+// ============================================================================
+
+interface ExecSummaryOptions {
+  property: Property;
+  valuation: ValuationResult;
+  branding?: CompanyBranding;
+  logoBase64?: string | null;
+}
+
+export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
+  const { property, valuation, branding, logoBase64 } = options;
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const contentWidth = pageWidth - (margin * 2);
+
+  // Header
+  let yPos = renderBrandedHeader(doc, branding, logoBase64);
+
+  // Title
+  doc.setTextColor(...COLORS.dark);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EXECUTIVE SUMMARY', margin, yPos);
+  yPos += 3;
+  doc.setDrawColor(...COLORS.primary);
+  doc.setLineWidth(0.8);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 10;
+
+  // Property headline
+  doc.setFontSize(13);
+  doc.text(property.address || 'Property Address', margin, yPos);
+  yPos += 5;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...COLORS.gray);
+  doc.text(`${property.city || ''}, ${property.state || ''} ${property.zip_code || ''}`, margin, yPos);
+  yPos += 10;
+
+  // Key metrics table
+  const metricsData = [
+    ['Estimated Value', formatCurrency(valuation.estimated_value)],
+    ['Value Range', `${formatCurrency(valuation.value_range?.low)} - ${formatCurrency(valuation.value_range?.high)}`],
+    ['Confidence', valuation.confidence_level],
+    ['Building Size', property.building_size ? `${formatNumber(property.building_size)} SF` : 'N/A'],
+    ['List Price', formatCurrency(property.price)],
+    ['CAP Rate', property.cap_rate ? `${property.cap_rate}%` : 'N/A'],
+  ];
+
+  autoTable(doc, {
+    startY: yPos,
+    body: metricsData,
+    theme: 'grid',
+    styles: { fontSize: 10, cellPadding: 4 },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: COLORS.gray, cellWidth: contentWidth * 0.4 },
+      1: { textColor: COLORS.dark, cellWidth: contentWidth * 0.6 },
+    },
+    margin: { left: margin, right: margin },
+  });
+
+  yPos = (doc as any).lastAutoTable.finalY + 10;
+
+  // Executive summary narrative
+  if (valuation.executive_summary) {
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary', margin, yPos);
+    yPos += 6;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(valuation.executive_summary, contentWidth);
+    doc.text(lines, margin, yPos);
+    yPos += lines.length * 5 + 8;
+  }
+
+  // Pricing scenarios
+  if (valuation.pricing_scenarios) {
+    if (yPos > 200) { doc.addPage(); yPos = 20; }
+
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Pricing Scenarios', margin, yPos);
+    yPos += 6;
+
+    const scenarios = valuation.pricing_scenarios;
+    const scenarioData = [
+      ['Quick Sale', formatCurrency(scenarios.quick_sale.price), `$${scenarios.quick_sale.price_per_sqft}/SF`, scenarios.quick_sale.timeline],
+      ['Market Sale', formatCurrency(scenarios.market_sale.price), `$${scenarios.market_sale.price_per_sqft}/SF`, scenarios.market_sale.timeline],
+      ['Premium Sale', formatCurrency(scenarios.premium_sale.price), `$${scenarios.premium_sale.price_per_sqft}/SF`, scenarios.premium_sale.timeline],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Scenario', 'Price', 'Price/SF', 'Timeline']],
+      body: scenarioData,
+      theme: 'striped',
+      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number], fontSize: 9, fontStyle: 'bold' as FontStyle },
+      styles: { fontSize: 9, cellPadding: 3 },
+      margin: { left: margin, right: margin },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  // Key findings
+  if (valuation.key_findings && valuation.key_findings.length > 0) {
+    if (yPos > 230) { doc.addPage(); yPos = 20; }
+
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Key Findings', margin, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    valuation.key_findings.forEach((finding, i) => {
+      if (yPos > 270) { doc.addPage(); yPos = 20; }
+      const lines = doc.splitTextToSize(`${i + 1}. ${finding}`, contentWidth - 5);
+      doc.text(lines, margin + 2, yPos);
+      yPos += lines.length * 4.5 + 3;
+    });
+  }
+
+  // Footer
+  renderBrandedFooter(doc, branding);
+
+  const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
+}
+
+// ============================================================================
+// LOI PDF
+// ============================================================================
+
+interface LOIPDFOptions {
+  property: Property;
+  loi: LOI;
+  branding?: CompanyBranding;
+  logoBase64?: string | null;
+}
+
+export function generateLOIPDF(options: LOIPDFOptions): void {
+  const { property, loi, branding, logoBase64 } = options;
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const contentWidth = pageWidth - (margin * 2);
+
+  // Header
+  let yPos = renderBrandedHeader(doc, branding, logoBase64);
+
+  // Title
+  doc.setTextColor(...COLORS.dark);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  const title = 'LETTER OF INTENT';
+  const titleWidth = doc.getTextWidth(title);
+  doc.text(title, (pageWidth - titleWidth) / 2, yPos);
+  yPos += 4;
+
+  // Separator
+  doc.setDrawColor(...COLORS.primary);
+  doc.setLineWidth(1);
+  doc.line(margin + 40, yPos, pageWidth - margin - 40, yPos);
+  yPos += 10;
+
+  // Property reference
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...COLORS.gray);
+  doc.text(`Re: ${property.address || 'Property'}, ${property.city || ''}, ${property.state || ''} ${property.zip_code || ''}`, margin, yPos);
+  yPos += 8;
+
+  // LOI body text
+  doc.setTextColor(...COLORS.dark);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+
+  const loiText = loi.loi_text || '';
+  const lines = doc.splitTextToSize(loiText, contentWidth);
+
+  for (const line of lines) {
+    if (yPos > 270) {
+      doc.addPage();
+      yPos = 20;
+    }
+    doc.text(line, margin, yPos);
+    yPos += 5;
+  }
+
+  // Signature blocks
+  yPos += 10;
+  if (yPos > 240) { doc.addPage(); yPos = 20; }
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(...COLORS.dark);
+
+  // Buyer signature
+  doc.line(margin, yPos + 15, margin + 70, yPos + 15);
+  doc.setFontSize(9);
+  doc.text(loi.buyer_name || 'Buyer', margin, yPos + 20);
+  if (loi.buyer_company) {
+    doc.text(loi.buyer_company, margin, yPos + 25);
+  }
+
+  // Seller signature
+  doc.line(pageWidth - margin - 70, yPos + 15, pageWidth - margin, yPos + 15);
+  doc.text('Seller / Authorized Representative', pageWidth - margin - 70, yPos + 20);
+
+  // Date
+  yPos += 35;
+  doc.text(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin, yPos);
+
+  // Footer
+  renderBrandedFooter(doc, branding);
+
+  const fileName = `LOI_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 }
