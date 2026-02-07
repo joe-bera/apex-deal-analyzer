@@ -20,6 +20,8 @@ import PublicListing from './pages/PublicListing';
 import Prospecting from './pages/Prospecting';
 import Campaigns from './pages/Campaigns';
 import Reports from './pages/Reports';
+import PublicDealRoom from './pages/PublicDealRoom';
+import Playbooks from './pages/Playbooks';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -168,7 +170,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route
+        path="/playbooks"
+        element={
+          <PrivateRoute>
+            <Playbooks />
+          </PrivateRoute>
+        }
+      />
       <Route path="/listing/:slug" element={<PublicListing />} />
+      <Route path="/deal-room/:token" element={<PublicDealRoom />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

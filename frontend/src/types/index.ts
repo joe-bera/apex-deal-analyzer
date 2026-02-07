@@ -1298,6 +1298,112 @@ export interface ProspectingReportData {
   total_items: number;
 }
 
+// ============================================================================
+// Deal Room Types (Phase 9)
+// ============================================================================
+
+export type DealRoomDocumentCategory =
+  | 'loi' | 'psa' | 'title' | 'environmental' | 'appraisal'
+  | 'lease' | 'financial' | 'other';
+
+export interface DealRoomDocument {
+  id: string;
+  deal_id: string;
+  file_name: string;
+  file_path: string;
+  file_size?: number;
+  file_type?: string;
+  category: DealRoomDocumentCategory;
+  description?: string;
+  is_visible_to_external: boolean;
+  uploaded_by?: string;
+  created_at: string;
+}
+
+export interface DealRoomInvite {
+  id: string;
+  deal_id: string;
+  email: string;
+  name?: string;
+  access_token: string;
+  expires_at?: string;
+  created_by?: string;
+  created_at: string;
+  last_accessed_at?: string;
+}
+
+export interface DealRoomActivityEntry {
+  id: string;
+  deal_id: string;
+  document_id?: string;
+  invite_id?: string;
+  user_id?: string;
+  action: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PublicDealRoomData {
+  deal_name: string;
+  invite_name?: string;
+  invite_email?: string;
+  documents: Array<{
+    id: string;
+    file_name: string;
+    file_size?: number;
+    file_type?: string;
+    category: string;
+    description?: string;
+    created_at: string;
+  }>;
+}
+
+// ============================================================================
+// Playbooks & Deal Tasks Types (Phase 9)
+// ============================================================================
+
+export interface TaskPlaybook {
+  id: string;
+  name: string;
+  description?: string;
+  deal_type?: string;
+  is_default: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  tasks?: PlaybookTask[];
+  playbook_tasks?: Array<{ count: number }>;
+}
+
+export interface PlaybookTask {
+  id: string;
+  playbook_id: string;
+  title: string;
+  description?: string;
+  stage?: string;
+  due_offset_days?: number;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface DealTask {
+  id: string;
+  deal_id: string;
+  playbook_id?: string;
+  title: string;
+  description?: string;
+  stage?: string;
+  assigned_to?: string;
+  due_date?: string;
+  is_required: boolean;
+  is_completed: boolean;
+  completed_at?: string;
+  completed_by?: string;
+  sort_order: number;
+  created_at: string;
+  assigned_user?: { id: string; full_name: string };
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];

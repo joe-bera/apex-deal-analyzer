@@ -761,6 +761,148 @@ export const api = {
   getReportProspecting: () =>
     request<any>('/reports/prospecting'),
 
+  // =========================================================================
+  // Deal Room (Phase 9)
+  // =========================================================================
+  getDealRoom: (dealId: string) =>
+    request<any>(`/crm-deals/${dealId}/room`),
+
+  getDealRoomUploadUrl: (dealId: string, fileName: string) =>
+    request<any>(`/crm-deals/${dealId}/room/upload-url`, {
+      method: 'POST',
+      body: JSON.stringify({ file_name: fileName }),
+    }),
+
+  addDealRoomDocument: (dealId: string, data: {
+    storage_path: string;
+    file_name: string;
+    file_size?: number;
+    file_type?: string;
+    category?: string;
+    description?: string;
+    is_visible_to_external?: boolean;
+  }) =>
+    request<any>(`/crm-deals/${dealId}/room/documents`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteDealRoomDocument: (dealId: string, docId: string) =>
+    request<any>(`/crm-deals/${dealId}/room/documents/${docId}`, { method: 'DELETE' }),
+
+  createDealRoomInvite: (dealId: string, data: { email: string; name?: string; expires_in_days?: number }) =>
+    request<any>(`/crm-deals/${dealId}/room/invites`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  revokeDealRoomInvite: (dealId: string, inviteId: string) =>
+    request<any>(`/crm-deals/${dealId}/room/invites/${inviteId}`, { method: 'DELETE' }),
+
+  getDealRoomActivity: (dealId: string) =>
+    request<any>(`/crm-deals/${dealId}/room/activity`),
+
+  // Public deal room (no auth)
+  fetchPublicDealRoom: (token: string) => {
+    const base = import.meta.env.VITE_API_URL || '/api';
+    return fetch(`${base}/deal-room/${token}`).then(r => r.json());
+  },
+
+  downloadPublicDealRoomFile: (token: string, docId: string) => {
+    const base = import.meta.env.VITE_API_URL || '/api';
+    return fetch(`${base}/deal-room/${token}/download/${docId}`, { method: 'POST' }).then(r => r.json());
+  },
+
+  uploadDealRoomFile: async (dealId: string, file: File, category: string = 'other', description?: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Please log in');
+
+    // Step 1: Get signed upload URL
+    const base = import.meta.env.VITE_API_URL || '/api';
+    const urlRes = await fetch(`${base}/crm-deals/${dealId}/room/upload-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ file_name: file.name }),
+    });
+    const urlData = await urlRes.json();
+    if (!urlRes.ok) throw new Error(urlData.error || 'Failed to get upload URL');
+
+    // Step 2: Upload to storage
+    const fileBuffer = await file.arrayBuffer();
+    const storageRes = await fetch(urlData.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: fileBuffer,
+    });
+    if (!storageRes.ok) throw new Error('Failed to upload file');
+
+    // Step 3: Create document record
+    const createRes = await fetch(`${base}/crm-deals/${dealId}/room/documents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        storage_path: urlData.storage_path,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        category,
+        description,
+      }),
+    });
+    const createData = await createRes.json();
+    if (!createRes.ok) throw new Error(createData.error || 'Failed to create document');
+    return createData;
+  },
+
+  // =========================================================================
+  // Playbooks (Phase 9)
+  // =========================================================================
+  listPlaybooks: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/playbooks${query}`);
+  },
+
+  getPlaybook: (id: string) => request<any>(`/playbooks/${id}`),
+
+  createPlaybook: (data: { name: string; description?: string; deal_type?: string }) =>
+    request<any>('/playbooks', { method: 'POST', body: JSON.stringify(data) }),
+
+  updatePlaybook: (id: string, data: Record<string, any>) =>
+    request<any>(`/playbooks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deletePlaybook: (id: string) =>
+    request<any>(`/playbooks/${id}`, { method: 'DELETE' }),
+
+  addPlaybookTask: (playbookId: string, data: Record<string, any>) =>
+    request<any>(`/playbooks/${playbookId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
+
+  updatePlaybookTask: (playbookId: string, taskId: string, data: Record<string, any>) =>
+    request<any>(`/playbooks/${playbookId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deletePlaybookTask: (playbookId: string, taskId: string) =>
+    request<any>(`/playbooks/${playbookId}/tasks/${taskId}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Deal Tasks (Phase 9)
+  // =========================================================================
+  listDealTasks: (dealId: string) =>
+    request<any>(`/crm-deals/${dealId}/tasks`),
+
+  createDealTask: (dealId: string, data: Record<string, any>) =>
+    request<any>(`/crm-deals/${dealId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
+
+  updateDealTask: (dealId: string, taskId: string, data: Record<string, any>) =>
+    request<any>(`/crm-deals/${dealId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteDealTask: (dealId: string, taskId: string) =>
+    request<any>(`/crm-deals/${dealId}/tasks/${taskId}`, { method: 'DELETE' }),
+
+  applyPlaybook: (dealId: string, playbookId: string) =>
+    request<any>(`/crm-deals/${dealId}/apply-playbook`, {
+      method: 'POST',
+      body: JSON.stringify({ playbook_id: playbookId }),
+    }),
+
   exportReportCSV: async (type: string, params?: { start?: string; end?: string }) => {
     const token = localStorage.getItem('token');
     const base = import.meta.env.VITE_API_URL || '/api';
