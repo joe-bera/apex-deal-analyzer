@@ -733,4 +733,50 @@ export const api = {
 
   sendCampaign: (id: string) =>
     request<any>(`/campaigns/${id}/send`, { method: 'POST' }),
+
+  // =========================================================================
+  // Reports (Phase 8)
+  // =========================================================================
+  getReportPipelineForecast: () =>
+    request<any>('/reports/pipeline-forecast'),
+
+  getReportBrokerProduction: (params?: { start?: string; end?: string }) => {
+    const query = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString() : '';
+    return request<any>(`/reports/broker-production${query}`);
+  },
+
+  getReportRevenue: (params?: { start?: string; end?: string }) => {
+    const query = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString() : '';
+    return request<any>(`/reports/revenue${query}`);
+  },
+
+  getReportActivitySummary: (params?: { start?: string; end?: string }) => {
+    const query = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString() : '';
+    return request<any>(`/reports/activity-summary${query}`);
+  },
+
+  getReportPropertyAnalytics: () =>
+    request<any>('/reports/property-analytics'),
+
+  getReportProspecting: () =>
+    request<any>('/reports/prospecting'),
+
+  exportReportCSV: async (type: string, params?: { start?: string; end?: string }) => {
+    const token = localStorage.getItem('token');
+    const base = import.meta.env.VITE_API_URL || '/api';
+    const query = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString() : '';
+    const response = await fetch(`${base}/reports/${type}/export${query}`, {
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    });
+    if (!response.ok) throw new Error('Export failed');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] || `${type}_report.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };

@@ -21,6 +21,7 @@ import publicListingRoutes from './routes/publicListingRoutes';
 import prospectListRoutes from './routes/prospectListRoutes';
 import ownerResearchRoutes from './routes/ownerResearchRoutes';
 import campaignRoutes from './routes/campaignRoutes';
+import reportsRoutes from './routes/reportsRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -111,6 +112,7 @@ export const createApp = (): Application => {
   app.use('/api/prospect-lists', prospectListRoutes);
   app.use('/api/owner-research', ownerResearchRoutes);
   app.use('/api/campaigns', campaignRoutes);
+  app.use('/api/reports', reportsRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

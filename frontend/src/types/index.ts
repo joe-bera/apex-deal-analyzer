@@ -1157,6 +1157,147 @@ export interface EmailRecipient {
   created_at: string;
 }
 
+// ============================================================================
+// Report Types (Phase 8)
+// ============================================================================
+
+export type ReportType =
+  | 'pipeline-forecast'
+  | 'broker-production'
+  | 'revenue'
+  | 'activity-summary'
+  | 'property-analytics'
+  | 'prospecting';
+
+export interface PipelineForecastData {
+  success: boolean;
+  deals_by_stage: {
+    stage: string;
+    count: number;
+    total_value: number;
+    weighted_value: number;
+  }[];
+  weighted_forecast_total: number;
+  monthly_projections: {
+    month: string;
+    total_value: number;
+    weighted_value: number;
+    deal_count: number;
+  }[];
+  total_pipeline: number;
+  active_deals: number;
+}
+
+export interface BrokerProductionData {
+  success: boolean;
+  brokers: {
+    broker_id: string;
+    broker_name: string;
+    deals_closed: number;
+    total_deal_value: number;
+    total_commission: number;
+  }[];
+  totals: {
+    deals_closed: number;
+    total_deal_value: number;
+    total_commission: number;
+  };
+}
+
+export interface RevenueReportData {
+  success: boolean;
+  monthly: {
+    month: string;
+    commission: number;
+    deal_value: number;
+    deal_count: number;
+  }[];
+  type_breakdown: {
+    deal_type: string;
+    commission: number;
+    count: number;
+    deal_value: number;
+  }[];
+  totals: {
+    commission: number;
+    deal_value: number;
+    deal_count: number;
+  };
+}
+
+export interface ActivitySummaryData {
+  success: boolean;
+  by_type: {
+    type: string;
+    count: number;
+    completed: number;
+  }[];
+  by_period: {
+    month: string;
+    count: number;
+  }[];
+  task_completion: {
+    total: number;
+    completed: number;
+    rate: number;
+  };
+  total_activities: number;
+}
+
+export interface PropertyAnalyticsData {
+  success: boolean;
+  by_type: {
+    type: string;
+    count: number;
+    total_value: number;
+    avg_price_sf: number;
+  }[];
+  by_submarket: {
+    submarket: string;
+    count: number;
+    total_value: number;
+    avg_price_sf: number;
+  }[];
+  price_sf_distribution: {
+    range: string;
+    count: number;
+  }[];
+  cap_rate_distribution: {
+    range: string;
+    count: number;
+  }[];
+  summary: {
+    total_properties: number;
+    total_value: number;
+    avg_price_sf: number;
+    avg_cap_rate: number;
+  };
+}
+
+export interface ProspectingReportData {
+  success: boolean;
+  status_distribution: {
+    status: string;
+    count: number;
+  }[];
+  conversion_rates: {
+    total: number;
+    contacted: number;
+    qualified: number;
+    not_interested: number;
+    contact_rate: number;
+    qualification_rate: number;
+  };
+  per_list_breakdown: {
+    list_id: string;
+    list_name: string;
+    total_items: number;
+    [status: string]: string | number;
+  }[];
+  total_lists: number;
+  total_items: number;
+}
+
 export interface ListingSitesResponse {
   success: boolean;
   listing_sites: ListingSite[];
