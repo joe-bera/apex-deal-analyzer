@@ -499,3 +499,144 @@ export const dealAnalysisSchema = z
     notes: z.string().max(5000).optional().nullable(),
   })
   .strict();
+
+// ============================================================================
+// CRM Validation Schemas
+// ============================================================================
+
+// -- Enums --
+
+export const contactTypeEnum = z.enum([
+  'owner', 'tenant', 'buyer', 'seller', 'broker', 'lender', 'attorney',
+  'property_manager', 'investor', 'developer', 'appraiser', 'contractor', 'other',
+]);
+
+export const companyTypeEnum = z.enum([
+  'brokerage', 'investment_firm', 'developer', 'tenant_company', 'lender',
+  'law_firm', 'management_company', 'construction', 'appraisal_firm', 'title_company', 'other',
+]);
+
+export const crmDealTypeEnum = z.enum([
+  'sale', 'lease', 'listing', 'acquisition', 'disposition',
+]);
+
+export const dealStageEnum = z.enum([
+  'prospecting', 'qualification', 'proposal', 'negotiation',
+  'under_contract', 'due_diligence', 'closing', 'closed_won', 'closed_lost',
+]);
+
+export const activityTypeEnum = z.enum([
+  'call', 'email', 'meeting', 'note', 'task', 'site_visit',
+  'document_sent', 'offer_made', 'other',
+]);
+
+export const dealRoleEnum = z.enum([
+  'buyer', 'seller', 'listing_broker', 'buyers_broker', 'co_broker', 'lender',
+  'attorney_buyer', 'attorney_seller', 'escrow_officer', 'title_officer',
+  'appraiser', 'inspector', 'property_manager', 'tenant', 'other',
+]);
+
+// -- Companies --
+
+export const createCompanySchema = z.object({
+  name: z.string().min(1, 'Company name is required').max(300),
+  company_type: companyTypeEnum.optional().default('other'),
+  industry: z.string().max(200).optional(),
+  website: z.string().url().max(500).optional().or(z.literal('')),
+  phone: z.string().max(30).optional(),
+  email: z.string().email().max(300).optional().or(z.literal('')),
+  address: z.string().max(500).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(2).optional(),
+  zip: z.string().max(10).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export const updateCompanySchema = createCompanySchema.partial();
+
+// -- Contacts --
+
+export const createContactSchema = z.object({
+  first_name: z.string().min(1, 'First name is required').max(100),
+  last_name: z.string().min(1, 'Last name is required').max(100),
+  email: z.string().email().max(300).optional().or(z.literal('')),
+  phone: z.string().max(30).optional(),
+  mobile_phone: z.string().max(30).optional(),
+  company_id: z.string().uuid().optional().nullable(),
+  title: z.string().max(200).optional(),
+  contact_type: contactTypeEnum.optional().default('other'),
+  license_number: z.string().max(50).optional(),
+  source: z.string().max(200).optional(),
+  last_contacted_at: z.string().datetime().optional().nullable(),
+  next_follow_up_at: z.string().datetime().optional().nullable(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export const updateContactSchema = createContactSchema.partial();
+
+export const linkContactPropertySchema = z.object({
+  master_property_id: z.string().uuid().optional(),
+  property_id: z.string().uuid().optional(),
+  relationship: z.enum(['owner', 'tenant', 'manager', 'broker', 'buyer', 'seller', 'lender', 'other']).default('other'),
+  notes: z.string().max(2000).optional(),
+}).refine(
+  (data) => data.master_property_id || data.property_id,
+  { message: 'Either master_property_id or property_id is required' }
+);
+
+// -- CRM Deals --
+
+export const createCrmDealSchema = z.object({
+  deal_name: z.string().min(1, 'Deal name is required').max(300),
+  deal_type: crmDealTypeEnum,
+  stage: dealStageEnum.optional().default('prospecting'),
+  description: z.string().max(5000).optional(),
+  property_id: z.string().uuid().optional().nullable(),
+  master_property_id: z.string().uuid().optional().nullable(),
+  deal_value: z.number().nonnegative().optional().nullable(),
+  asking_price: z.number().nonnegative().optional().nullable(),
+  offer_price: z.number().nonnegative().optional().nullable(),
+  final_price: z.number().nonnegative().optional().nullable(),
+  commission_total: z.number().nonnegative().optional().nullable(),
+  commission_percent: z.number().min(0).max(100).optional().nullable(),
+  commission_split_percent: z.number().min(0).max(100).optional().nullable(),
+  commission_notes: z.string().max(2000).optional(),
+  expected_close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  actual_close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  listing_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  expiration_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  probability_percent: z.number().int().min(0).max(100).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  assigned_to: z.string().uuid().optional().nullable(),
+});
+
+export const updateCrmDealSchema = createCrmDealSchema.partial();
+
+export const updateDealStageSchema = z.object({
+  stage: dealStageEnum,
+  notes: z.string().max(2000).optional(),
+});
+
+export const addDealContactSchema = z.object({
+  contact_id: z.string().uuid('Invalid contact ID'),
+  role: dealRoleEnum.optional().default('other'),
+});
+
+// -- Activities --
+
+export const createActivitySchema = z.object({
+  activity_type: activityTypeEnum,
+  subject: z.string().min(1, 'Subject is required').max(300),
+  description: z.string().max(5000).optional(),
+  contact_id: z.string().uuid().optional().nullable(),
+  deal_id: z.string().uuid().optional().nullable(),
+  company_id: z.string().uuid().optional().nullable(),
+  property_id: z.string().uuid().optional().nullable(),
+  due_date: z.string().datetime().optional().nullable(),
+  is_completed: z.boolean().optional(),
+  activity_date: z.string().datetime().optional(),
+});
+
+export const updateActivitySchema = createActivitySchema.partial();

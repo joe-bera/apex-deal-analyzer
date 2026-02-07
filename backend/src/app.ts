@@ -11,6 +11,10 @@ import compsRoutes from './routes/compsRoutes';
 import photoRoutes from './routes/photoRoutes';
 import dealAnalysisRoutes from './routes/dealAnalysisRoutes';
 import masterPropertyRoutes from './routes/masterPropertyRoutes';
+import companiesRoutes from './routes/companiesRoutes';
+import contactsRoutes from './routes/contactsRoutes';
+import crmDealsRoutes from './routes/crmDealsRoutes';
+import activitiesRoutes from './routes/activitiesRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -91,6 +95,10 @@ export const createApp = (): Application => {
   app.use('/api', compsRoutes);
   app.use('/api', dealAnalysisRoutes);
   app.use('/api/master-properties', masterPropertyRoutes);
+  app.use('/api/companies', companiesRoutes);
+  app.use('/api/contacts', contactsRoutes);
+  app.use('/api/crm-deals', crmDealsRoutes);
+  app.use('/api/activities', activitiesRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);
