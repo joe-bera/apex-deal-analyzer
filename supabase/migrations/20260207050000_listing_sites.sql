@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS listing_leads (
   message TEXT,
   source TEXT DEFAULT 'listing_site',
 
-  -- CRM linkage
-  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  -- CRM linkage (no FK — contacts table may not exist yet; linked by backend logic)
+  contact_id UUID,
   is_converted BOOLEAN DEFAULT false,
 
   created_at TIMESTAMPTZ DEFAULT now()
