@@ -15,6 +15,8 @@ import CompanyDetail from './pages/CompanyDetail';
 import Deals from './pages/Deals';
 import DealDetail from './pages/DealDetail';
 import DocumentGenerator from './pages/DocumentGenerator';
+import ListingSites from './pages/ListingSites';
+import PublicListing from './pages/PublicListing';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -131,6 +133,15 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route
+        path="/listing-sites"
+        element={
+          <PrivateRoute>
+            <ListingSites />
+          </PrivateRoute>
+        }
+      />
+      <Route path="/listing/:slug" element={<PublicListing />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

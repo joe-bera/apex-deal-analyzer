@@ -951,3 +951,92 @@ export interface GeneratedDocumentResponse {
   success: boolean;
   document: GeneratedDocument;
 }
+
+// ============================================================================
+// Listing Sites Types (Phase 4)
+// ============================================================================
+
+export type ListingTemplateStyle = 'modern' | 'classic' | 'minimal';
+
+export interface ListingSite {
+  id: string;
+  master_property_id: string;
+  slug: string;
+  is_published: boolean;
+  custom_headline?: string;
+  custom_description?: string;
+  template_style: ListingTemplateStyle;
+  seo_title?: string;
+  seo_description?: string;
+  lead_capture_email?: string;
+  virtual_tour_url?: string;
+  brochure_doc_id?: string;
+  om_doc_id?: string;
+  view_count: number;
+  lead_count: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  master_properties?: MasterProperty;
+}
+
+export interface ListingLead {
+  id: string;
+  listing_site_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  message?: string;
+  source: string;
+  contact_id?: string;
+  is_converted: boolean;
+  created_at: string;
+}
+
+export interface PublicListingData {
+  id: string;
+  slug: string;
+  is_published: boolean;
+  custom_headline?: string;
+  custom_description?: string;
+  template_style: ListingTemplateStyle;
+  virtual_tour_url?: string;
+  view_count: number;
+  property: MasterProperty;
+  transaction: Transaction | null;
+  photos: Array<{
+    id: string;
+    file_path: string;
+    file_name: string;
+    photo_type: string;
+    caption?: string;
+    is_primary: boolean;
+    sort_order: number;
+    url: string;
+  }>;
+  documents: Array<{
+    id: string;
+    template_type: string;
+    title: string;
+    file_url?: string;
+  }>;
+  broker: {
+    full_name?: string;
+    company_name?: string;
+    company_phone?: string;
+    company_email?: string;
+    company_logo_url?: string;
+  } | null;
+}
+
+export interface ListingSitesResponse {
+  success: boolean;
+  listing_sites: ListingSite[];
+}
+
+export interface PublicListingResponse {
+  success: boolean;
+  listing: PublicListingData;
+}

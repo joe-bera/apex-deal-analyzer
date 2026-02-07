@@ -558,4 +558,46 @@ export const api = {
 
   deleteGeneratedDoc: (id: string) =>
     request<any>(`/generate/documents/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Listing Sites (Phase 4)
+  // =========================================================================
+  createListingSite: (data: {
+    master_property_id: string;
+    custom_headline?: string;
+    custom_description?: string;
+    template_style?: string;
+    lead_capture_email?: string;
+    virtual_tour_url?: string;
+    brochure_doc_id?: string;
+    om_doc_id?: string;
+  }) =>
+    request<any>('/listing-sites', { method: 'POST', body: JSON.stringify(data) }),
+
+  listListingSites: () => request<any>('/listing-sites'),
+
+  getListingSite: (id: string) => request<any>(`/listing-sites/${id}`),
+
+  updateListingSite: (id: string, data: Record<string, unknown>) =>
+    request<any>(`/listing-sites/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteListingSite: (id: string) =>
+    request<any>(`/listing-sites/${id}`, { method: 'DELETE' }),
+
+  getListingLeads: (id: string) => request<any>(`/listing-sites/${id}/leads`),
+
+  // Public listing endpoints (no auth header needed, but `request` adds it harmlessly)
+  fetchPublicListing: (slug: string) => {
+    const base = import.meta.env.VITE_API_URL || '/api';
+    return fetch(`${base}/public/listings/${slug}`).then(r => r.json());
+  },
+
+  submitListingLead: (slug: string, data: { name: string; email: string; phone?: string; company?: string; message?: string }) => {
+    const base = import.meta.env.VITE_API_URL || '/api';
+    return fetch(`${base}/public/listings/${slug}/leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => r.json());
+  },
 };
