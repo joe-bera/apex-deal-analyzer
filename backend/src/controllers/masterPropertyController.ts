@@ -140,15 +140,81 @@ export const getMasterProperty = async (req: Request, res: Response) => {
   }
 };
 
-// Valid columns in master_properties table
+// Valid columns in master_properties table (expanded list)
 const VALID_PROPERTY_COLUMNS = new Set([
+  // Core identification
   'address', 'city', 'state', 'zip', 'county', 'property_name', 'property_type',
-  'building_size', 'land_area_sf', 'lot_size_acres', 'year_built', 'year_renovated',
-  'number_of_floors', 'number_of_units', 'clear_height_ft', 'dock_doors', 'grade_doors',
-  'parking_spaces', 'parking_ratio', 'percent_leased', 'office_percentage',
-  'building_class', 'zoning', 'rail_served', 'source', 'created_by', 'raw_import_data',
-  // Transaction fields (handled separately)
-  'sale_price', 'price_per_sf', 'cap_rate', 'noi', 'transaction_date', 'buyer_name', 'seller_name',
+  'building_park', 'costar_id', 'crexi_id', 'apn', 'unit_suite',
+
+  // Classification
+  'property_subtype', 'building_class', 'building_status', 'zoning',
+
+  // Location
+  'latitude', 'longitude', 'submarket', 'market', 'cross_street', 'opportunity_zone',
+
+  // Size
+  'building_size', 'land_area_sf', 'lot_size_acres', 'typical_floor_size',
+  'number_of_floors', 'number_of_units', 'number_of_buildings', 'number_of_addresses',
+
+  // Building details
+  'year_built', 'month_built', 'year_renovated', 'month_renovated', 'construction_material',
+
+  // Industrial
+  'clear_height_ft', 'dock_doors', 'grade_doors', 'rail_served', 'column_spacing',
+  'sprinkler_type', 'number_of_cranes', 'power', 'office_percentage',
+
+  // Office
+  'office_space', 'number_of_elevators',
+
+  // Parking
+  'parking_spaces', 'parking_ratio',
+
+  // Leasing
+  'percent_leased', 'vacancy_percent', 'days_on_market',
+
+  // Rent
+  'rent_per_sf', 'avg_weighted_rent',
+
+  // Owner
+  'owner_name', 'owner_contact', 'owner_phone', 'owner_address',
+  'mailing_city', 'mailing_state', 'mailing_zip', 'mailing_care_of',
+  'parent_company', 'fund_name',
+
+  // Property manager
+  'property_manager_name', 'property_manager_phone',
+
+  // Leasing company
+  'leasing_company_name', 'leasing_company_contact', 'leasing_company_phone',
+
+  // Developer/Architect
+  'developer_name', 'architect_name',
+
+  // Tax
+  'improvement_value', 'land_value', 'total_parcel_value', 'parcel_value_type',
+  'tax_year', 'annual_tax_bill',
+
+  // Utilities
+  'water', 'sewer', 'gas',
+
+  // Amenities
+  'amenities', 'features',
+
+  // Meta
+  'source', 'created_by', 'raw_import_data',
+
+  // Transaction fields (handled separately but accepted in mapping)
+  'sale_price', 'price_per_sf', 'price_per_acre', 'cap_rate', 'asking_cap_rate', 'noi',
+  'transaction_date', 'buyer_name', 'seller_name', 'for_sale_status',
+  'lease_rate', 'lease_type', 'lease_term', 'lease_expiration_date', 'tenant_name',
+  'lender', 'loan_amount', 'loan_type', 'interest_rate', 'maturity_date',
+]);
+
+// Transaction-specific fields that should be stored in transactions table, not properties
+const TRANSACTION_FIELDS = new Set([
+  'sale_price', 'price_per_sf', 'price_per_acre', 'cap_rate', 'asking_cap_rate', 'noi',
+  'transaction_date', 'buyer_name', 'seller_name', 'for_sale_status',
+  'lease_rate', 'lease_type', 'lease_term', 'lease_expiration_date', 'tenant_name',
+  'lender', 'loan_amount', 'loan_type', 'interest_rate', 'maturity_date',
 ]);
 
 // Bulk import properties
@@ -219,11 +285,13 @@ export const importProperties = async (req: Request, res: Response) => {
       console.log('[Import] Batch created successfully');
     }
 
-    let imported = 0;
+    let inserted = 0;
+    let updated = 0;
     let skipped = 0;
     let errors = 0;
     const errorDetails: { row: number; error: string }[] = [];
     const propertiesCreated: string[] = [];
+    const propertiesUpdated: string[] = [];
     const transactionsCreated: string[] = [];
 
     // Process each row
@@ -243,6 +311,7 @@ export const importProperties = async (req: Request, res: Response) => {
           created_by: userId,
           raw_import_data: row,
         };
+        const transactionData: Record<string, any> = {};
 
         // Map fields from CSV to database (using validated mapping)
         for (const [csvCol, dbField] of Object.entries(validMapping)) {
@@ -252,11 +321,13 @@ export const importProperties = async (req: Request, res: Response) => {
             // Handle INTEGER fields (must be whole numbers)
             const integerFields = ['building_size', 'land_area_sf', 'year_built', 'year_renovated',
                  'number_of_floors', 'number_of_units', 'dock_doors', 'grade_doors',
-                 'parking_spaces'];
+                 'parking_spaces', 'number_of_buildings', 'number_of_addresses', 'days_on_market'];
             // Handle DECIMAL/FLOAT fields (can have decimals)
             const decimalFields = ['lot_size_acres', 'clear_height_ft', 'parking_ratio',
-                 'percent_leased', 'office_percentage', 'sale_price', 'price_per_sf',
-                 'cap_rate', 'noi'];
+                 'percent_leased', 'office_percentage', 'sale_price', 'price_per_sf', 'price_per_acre',
+                 'cap_rate', 'asking_cap_rate', 'noi', 'latitude', 'longitude', 'rent_per_sf',
+                 'improvement_value', 'land_value', 'total_parcel_value', 'annual_tax_bill',
+                 'loan_amount', 'interest_rate'];
 
             if (integerFields.includes(dbField)) {
               const parsed = parseFloat(String(value).replace(/[$,%,]/g, ''));
@@ -272,53 +343,97 @@ export const importProperties = async (req: Request, res: Response) => {
             }
 
             // Handle boolean fields
-            if (dbField === 'rail_served') {
+            if (dbField === 'rail_served' || dbField === 'opportunity_zone') {
               value = ['yes', 'true', '1', 'y'].includes(String(value).toLowerCase());
             }
 
+            // Handle state normalization (2-letter code)
+            if (dbField === 'state' && value) {
+              const stateMap: Record<string, string> = {
+                'CALIFORNIA': 'CA', 'ARIZONA': 'AZ', 'NEVADA': 'NV', 'TEXAS': 'TX',
+                'OREGON': 'OR', 'WASHINGTON': 'WA', 'COLORADO': 'CO', 'UTAH': 'UT', 'NEW MEXICO': 'NM',
+              };
+              const trimmed = String(value).trim().toUpperCase();
+              if (trimmed.length > 2 && stateMap[trimmed]) {
+                value = stateMap[trimmed];
+              } else if (trimmed.length === 2) {
+                value = trimmed;
+              }
+            }
+
             if (value !== null && value !== undefined) {
-              propertyData[dbField as string] = value;
+              // Separate transaction fields from property fields
+              if (TRANSACTION_FIELDS.has(dbField as string)) {
+                transactionData[dbField as string] = value;
+              } else {
+                propertyData[dbField as string] = value;
+              }
             }
           }
         }
 
-        // Skip if no address
-        if (!propertyData.address) {
-          if (i < 5) console.log(`[Import] Row ${i + 1}: Skipped - no address`);
+        // Validate address - reject Location Type values that got mapped incorrectly
+        const invalidAddressValues = ['suburban', 'urban', 'cbd', 'rural'];
+        if (!propertyData.address || invalidAddressValues.includes(String(propertyData.address).toLowerCase().trim())) {
+          if (i < 5) console.log(`[Import] Row ${i + 1}: Skipped - invalid or missing address: "${propertyData.address}"`);
           skipped++;
           continue;
         }
 
-        if (i < 5) console.log(`[Import] Row ${i + 1}: Address = "${propertyData.address}"`);
+        // Skip if missing city or state
+        if (!propertyData.city || !propertyData.state) {
+          if (i < 5) console.log(`[Import] Row ${i + 1}: Skipped - missing city or state`);
+          skipped++;
+          continue;
+        }
+
+        if (i < 5) console.log(`[Import] Row ${i + 1}: Address = "${propertyData.address}", City = "${propertyData.city}", State = "${propertyData.state}"`);
 
         // Normalize address for duplicate detection
         const normalizedAddr = normalizeAddress(propertyData.address);
+        const normalizedCity = propertyData.city.toLowerCase().trim();
+        const normalizedState = propertyData.state.toUpperCase().trim();
 
-        // Check for existing property
+        // Check for existing property by normalized address + city + state
         const { data: existing } = await supabase
           .from('master_properties')
           .select('id')
           .eq('address_normalized', normalizedAddr)
+          .ilike('city', normalizedCity)
+          .eq('state', normalizedState)
           .eq('is_deleted', false)
           .limit(1);
 
         let propertyId: string;
 
         if (existing && existing.length > 0) {
-          // Property exists - use existing ID
+          // Property exists - UPDATE it with new data
           propertyId = existing[0].id;
-          skipped++; // Count as skipped since we're not creating new
+
+          // Remove fields that shouldn't be updated
+          const updateData = { ...propertyData };
+          delete updateData.created_by;
+          delete updateData.raw_import_data;
+          updateData.updated_at = new Date().toISOString();
+
+          const { error: updateError } = await supabase
+            .from('master_properties')
+            .update(updateData)
+            .eq('id', propertyId);
+
+          if (updateError) {
+            if (i < 5) console.log(`[Import] Row ${i + 1}: Update error - ${updateError.message}`);
+            throw new Error(updateError.message);
+          }
+
+          propertiesUpdated.push(propertyId);
+          updated++;
+          if (i < 5) console.log(`[Import] Row ${i + 1}: Updated property ${propertyId}`);
         } else {
           // Create new property
-          // Remove transaction fields from property data
-          const transactionFields = ['sale_price', 'price_per_sf', 'cap_rate', 'noi',
-                                      'transaction_date', 'buyer_name', 'seller_name'];
-          const cleanPropertyData = { ...propertyData };
-          transactionFields.forEach(f => delete cleanPropertyData[f]);
-
           const { data: newProperty, error: insertError } = await supabase
             .from('master_properties')
-            .insert(cleanPropertyData)
+            .insert(propertyData)
             .select()
             .single();
 
@@ -329,22 +444,22 @@ export const importProperties = async (req: Request, res: Response) => {
 
           propertyId = newProperty.id;
           propertiesCreated.push(propertyId);
-          imported++;
+          inserted++;
           if (i < 5) console.log(`[Import] Row ${i + 1}: Created property ${propertyId}`);
         }
 
-        // If there's transaction data, create a transaction
-        if (propertyData.sale_price || propertyData.cap_rate || propertyData.noi) {
-          const transactionData = {
+        // If there's transaction data (sale price, cap rate, or NOI), create a transaction
+        if (transactionData.sale_price || transactionData.cap_rate || transactionData.noi) {
+          const txRecord = {
             property_id: propertyId,
-            transaction_type: 'sale',
-            sale_price: propertyData.sale_price || null,
-            price_per_sf: propertyData.price_per_sf || null,
-            cap_rate: propertyData.cap_rate || null,
-            noi: propertyData.noi || null,
-            transaction_date: propertyData.transaction_date || null,
-            buyer_name: propertyData.buyer_name || null,
-            seller_name: propertyData.seller_name || null,
+            transaction_type: transactionData.lease_rate ? 'lease' : 'sale',
+            sale_price: transactionData.sale_price || null,
+            price_per_sf: transactionData.price_per_sf || null,
+            cap_rate: transactionData.cap_rate || transactionData.asking_cap_rate || null,
+            noi: transactionData.noi || null,
+            transaction_date: transactionData.transaction_date || null,
+            buyer_name: transactionData.buyer_name || null,
+            seller_name: transactionData.seller_name || null,
             source: source || 'other',
             created_by: userId,
             raw_import_data: row,
@@ -352,7 +467,7 @@ export const importProperties = async (req: Request, res: Response) => {
 
           const { data: newTx, error: txError } = await supabase
             .from('transactions')
-            .insert(transactionData)
+            .insert(txRecord)
             .select()
             .single();
 
@@ -369,14 +484,14 @@ export const importProperties = async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`[Import] Processing complete: imported=${imported}, skipped=${skipped}, errors=${errors}`);
+    console.log(`[Import] Processing complete: inserted=${inserted}, updated=${updated}, skipped=${skipped}, errors=${errors}`);
 
     // Update batch record
     if (batch) {
       await supabase
         .from('import_batches')
         .update({
-          imported_rows: imported,
+          imported_rows: inserted + updated,
           skipped_rows: skipped,
           error_rows: errors,
           errors: errorDetails,
@@ -389,10 +504,12 @@ export const importProperties = async (req: Request, res: Response) => {
     return res.json({
       success: true,
       batch_id: batch?.id,
-      imported,
+      imported: inserted,
+      updated,
       skipped,
       errors,
       properties_created: propertiesCreated,
+      properties_updated: propertiesUpdated,
       transactions_created: transactionsCreated,
       error_details: errorDetails.length > 0 ? errorDetails.slice(0, 10) : undefined,
     });

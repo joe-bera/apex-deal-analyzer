@@ -3,6 +3,132 @@ import * as XLSX from 'xlsx';
 import { Card, CardHeader, CardTitle, CardContent, Button } from './ui';
 import type { ColumnMapping, DataSource } from '../types';
 
+// Import source detection helpers (mirrored from backend)
+type ImportSource = 'costar' | 'crexi' | 'loopnet' | 'manual';
+
+const COSTAR_DETECTION_FIELDS = [
+  'Star Rating', 'PropertyID', 'Submarket Name', 'Market Name',
+  'Building Park', 'Rentable Building Area', 'LEED Certified', 'Submarket Cluster',
+];
+
+const CREXI_DETECTION_FIELDS = [
+  'Property Link', 'Crexi', 'USPS Vacancy', 'PFC Recording Date',
+  'PFC Indicator', 'REO Sale Flag', 'Transaction Event Type', 'Mailing Address Care Of',
+];
+
+function detectImportSource(headers: string[]): ImportSource {
+  const headerSet = new Set(headers.map(h => h.toLowerCase().trim()));
+
+  const costarMatches = COSTAR_DETECTION_FIELDS.filter(f =>
+    headerSet.has(f.toLowerCase())
+  ).length;
+  if (costarMatches >= 2) return 'costar';
+
+  const crexiMatches = CREXI_DETECTION_FIELDS.filter(f =>
+    headerSet.has(f.toLowerCase())
+  ).length;
+  if (crexiMatches >= 2) return 'crexi';
+
+  if (headerSet.has('property link')) return 'crexi';
+
+  return 'manual';
+}
+
+// CoStar column mappings (source column -> db field)
+const COSTAR_MAPPINGS: Record<string, string[]> = {
+  address: ['Property Address', 'Property Location'],
+  city: ['City', 'Property City'],
+  state: ['State', 'Property State'],
+  zip: ['Zip', 'Property Zip', 'Property Zip Code'],
+  county: ['County Name', 'Property County'],
+  property_name: ['Property Name', 'Building Name'],
+  building_park: ['Building Park'],
+  costar_id: ['PropertyID', 'CoStar ID'],
+  property_type: ['Property Type'],
+  property_subtype: ['Secondary Type'],
+  building_class: ['Building Class', 'Star Rating'],
+  building_status: ['Building Status', 'Constr Status'],
+  zoning: ['Zoning', 'Proposed Land Use'],
+  latitude: ['Latitude'],
+  longitude: ['Longitude'],
+  submarket: ['Submarket Name', 'Submarket Cluster'],
+  building_size: ['Rentable Building Area', 'Building SF', 'Total Available Space (SF)'],
+  land_area_sf: ['Land Area (SF)'],
+  lot_size_acres: ['Land Area (AC)'],
+  number_of_floors: ['Number Of Stories', 'Number of Floors'],
+  number_of_units: ['Number Of Units'],
+  year_built: ['Year Built'],
+  year_renovated: ['Year Renovated'],
+  clear_height_ft: ['Ceiling Ht', 'Ceiling Height', 'Clear Height'],
+  dock_doors: ['Number Of Loading Docks', 'Loading Docks'],
+  grade_doors: ['Drive Ins', 'Grade Level Doors'],
+  rail_served: ['Rail Lines'],
+  parking_spaces: ['Number Of Parking Spaces'],
+  parking_ratio: ['Parking Ratio'],
+  percent_leased: ['Percent Leased'],
+  days_on_market: ['Days On Market'],
+  owner_name: ['Owner Name', 'True Owner Name', 'Recorded Owner Name'],
+  owner_address: ['Owner Address', 'True Owner Address'],
+  property_manager_name: ['Property Manager Name'],
+  leasing_company_name: ['Leasing Company Name'],
+  sale_price: ['Last Sale Price', 'For Sale Price'],
+  transaction_date: ['Last Sale Date'],
+  price_per_sf: ['For Sale Price Per SF'],
+  cap_rate: ['Cap Rate'],
+};
+
+// Crexi column mappings
+const CREXI_MAPPINGS: Record<string, string[]> = {
+  address: ['Address'],
+  city: ['City'],
+  state: ['State'],
+  zip: ['Zip Code'],
+  county: ['County'],
+  property_name: ['Property Name'],
+  crexi_id: ['Property Link'],
+  apn: ['APN'],
+  property_type: ['Property Type'],
+  zoning: ['Zoning Code'],
+  latitude: ['Latitude'],
+  longitude: ['Longitude'],
+  building_size: ['Building SqFt'],
+  lot_size_acres: ['Lot Size Acres'],
+  land_area_sf: ['Lot Size SqFt'],
+  number_of_units: ['Number of Units'],
+  number_of_floors: ['Number of Stories'],
+  year_built: ['Year Built'],
+  percent_leased: ['Occupancy'],
+  days_on_market: ['Days on Market'],
+  owner_name: ['Owner Name'],
+  owner_address: ['Mailing Address'],
+  mailing_city: ['Mailing Address City'],
+  mailing_state: ['Mailing Address State'],
+  mailing_zip: ['Mailing Address Zip Code'],
+  sale_price: ['Sold Price'],
+  transaction_date: ['Sale Date'],
+  price_per_sf: ['Sold Price/ SqFt'],
+  asking_cap_rate: ['Asking Cap Rate'],
+  cap_rate: ['Closing Cap Rate'],
+  noi: ['Closing NOI'],
+  lease_rate: ['Lease Rate'],
+  lease_type: ['Lease Type'],
+  tenant_name: ['Tenant(s)'],
+  lender: ['Lender'],
+  loan_amount: ['Loan Amount'],
+  improvement_value: ['Improvement Value'],
+  land_value: ['Land Value'],
+  total_parcel_value: ['Total Parcel Value'],
+  annual_tax_bill: ['Annual Tax Bill'],
+};
+
+// Fields to explicitly skip (never auto-map)
+const SKIP_FIELDS = ['Location Type', 'Continent', 'Subcontinent', 'Country'];
+
+interface AutoMapWarning {
+  type: 'critical' | 'warning';
+  message: string;
+}
+
 // Database fields that can be mapped to CSV columns
 const DB_FIELDS: { field: string; label: string; category: string }[] = [
   // Basic Info
@@ -235,10 +361,14 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
   const [importResult, setImportResult] = useState<{
     success: boolean;
     imported: number;
+    updated: number;
     skipped: number;
     errors: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detectedSource, setDetectedSource] = useState<ImportSource | null>(null);
+  const [autoMapWarnings, setAutoMapWarnings] = useState<AutoMapWarning[]>([]);
+  const [unmappedCount, setUnmappedCount] = useState(0);
 
   // Detect the delimiter used in the CSV
   const detectDelimiter = useCallback((text: string): string => {
@@ -388,18 +518,50 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     return { headers, rows };
   }, []);
 
-  // Auto-map columns based on header names
-  const autoMapColumns = useCallback((headers: string[]): ColumnMapping[] => {
-    return headers.map(header => {
+  // Auto-map columns based on header names and detected source
+  const autoMapColumns = useCallback((headers: string[], sourceType: ImportSource): {
+    mappings: ColumnMapping[];
+    warnings: AutoMapWarning[];
+    unmapped: number;
+  } => {
+    const warnings: AutoMapWarning[] = [];
+    const mappedHeaders = new Set<string>();
+
+    // Choose mapping based on source
+    const sourceMappings = sourceType === 'crexi' ? CREXI_MAPPINGS : COSTAR_MAPPINGS;
+
+    const mappings: ColumnMapping[] = headers.map(header => {
+      // Skip explicitly blocked fields
+      if (SKIP_FIELDS.includes(header)) {
+        return { csvColumn: header, dbField: null, sampleValues: [] };
+      }
+
       const normalizedHeader = header.toLowerCase().trim();
 
-      // Find matching database field
+      // First: Try source-specific mappings (exact match)
       let matchedField: string | null = null;
-      for (const [dbField, hints] of Object.entries(AUTO_MAP_HINTS)) {
-        if (hints.some(hint => normalizedHeader.includes(hint) || hint.includes(normalizedHeader))) {
-          matchedField = dbField;
-          break;
+      for (const [dbField, sourceColumns] of Object.entries(sourceMappings)) {
+        for (const sourceCol of sourceColumns) {
+          if (normalizedHeader === sourceCol.toLowerCase().trim()) {
+            matchedField = dbField;
+            break;
+          }
         }
+        if (matchedField) break;
+      }
+
+      // Fallback: Try general AUTO_MAP_HINTS
+      if (!matchedField) {
+        for (const [dbField, hints] of Object.entries(AUTO_MAP_HINTS)) {
+          if (hints.some(hint => normalizedHeader.includes(hint) || hint.includes(normalizedHeader))) {
+            matchedField = dbField;
+            break;
+          }
+        }
+      }
+
+      if (matchedField) {
+        mappedHeaders.add(header);
       }
 
       return {
@@ -408,6 +570,32 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
         sampleValues: [],
       };
     });
+
+    // Generate warnings for required fields
+    const hasAddress = mappings.some(m => m.dbField === 'address');
+    const hasCity = mappings.some(m => m.dbField === 'city');
+    const hasState = mappings.some(m => m.dbField === 'state');
+
+    if (!hasAddress) {
+      warnings.push({ type: 'critical', message: 'No address column found. Import will fail for all rows.' });
+    }
+    if (!hasCity) {
+      warnings.push({ type: 'critical', message: 'No city column found. Import will fail for all rows.' });
+    }
+    if (!hasState) {
+      warnings.push({ type: 'critical', message: 'No state column found. Import will fail for all rows.' });
+    }
+
+    // Check if Location Type was accidentally mapped to address
+    const locationTypeMapping = mappings.find(m => m.csvColumn === 'Location Type' && m.dbField === 'address');
+    if (locationTypeMapping) {
+      warnings.push({ type: 'warning', message: '"Location Type" should NOT be mapped to address. This contains "Suburban/Urban/CBD" values, not street addresses.' });
+      locationTypeMapping.dbField = null;
+    }
+
+    const unmapped = headers.filter(h => !mappedHeaders.has(h) && !SKIP_FIELDS.includes(h)).length;
+
+    return { mappings, warnings, unmapped };
   }, []);
 
   // Handle file upload
@@ -442,13 +630,25 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
 
       setParsedData(parsed);
 
-      // Auto-map columns and add sample values
-      const mappings = autoMapColumns(parsed.headers).map(mapping => ({
+      // Detect source type from headers
+      const detected = detectImportSource(parsed.headers);
+      setDetectedSource(detected);
+      console.log('[BulkUpload] Detected source:', detected);
+
+      // Auto-set source dropdown based on detection
+      if (detected === 'costar') setSource('costar');
+      else if (detected === 'crexi') setSource('crexi');
+
+      // Auto-map columns using source-specific mappings
+      const { mappings, warnings, unmapped } = autoMapColumns(parsed.headers, detected);
+      const mappingsWithSamples = mappings.map(mapping => ({
         ...mapping,
         sampleValues: parsed.rows.slice(0, 3).map(row => row[mapping.csvColumn] || ''),
       }));
 
-      setColumnMappings(mappings);
+      setColumnMappings(mappingsWithSamples);
+      setAutoMapWarnings(warnings);
+      setUnmappedCount(unmapped);
       setStep('mapping');
     } catch (err) {
       console.error('[BulkUpload] Parse error:', err);
@@ -530,6 +730,7 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
       setImportResult({
         success: true,
         imported: result.imported || 0,
+        updated: result.updated || 0,
         skipped: result.skipped || 0,
         errors: result.errors || 0,
       });
@@ -549,6 +750,9 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
     setColumnMappings([]);
     setImportResult(null);
     setError(null);
+    setDetectedSource(null);
+    setAutoMapWarnings([]);
+    setUnmappedCount(0);
   }, []);
 
   return (
@@ -650,17 +854,61 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Map Columns</CardTitle>
+                <CardTitle className="flex items-center gap-3">
+                  Map Columns
+                  {detectedSource && (
+                    <span className={`text-xs px-2 py-1 rounded-full font-normal ${
+                      detectedSource === 'costar' ? 'bg-blue-100 text-blue-700' :
+                      detectedSource === 'crexi' ? 'bg-purple-100 text-purple-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      Detected: {detectedSource === 'costar' ? 'CoStar' : detectedSource === 'crexi' ? 'Crexi' : 'Manual'}
+                    </span>
+                  )}
+                </CardTitle>
                 <p className="text-sm text-gray-500 mt-1">
-                  {parsedData.rows.length} rows found. Map your columns to database fields.
+                  {parsedData.rows.length} rows found. {columnMappings.filter(m => m.dbField).length} fields mapped, {unmappedCount} unmapped (optional).
                 </p>
               </div>
-              <div className="text-sm text-gray-500">
-                {columnMappings.filter(m => m.dbField).length} of {columnMappings.length} mapped
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (parsedData) {
+                    const { mappings, warnings, unmapped } = autoMapColumns(parsedData.headers, detectedSource || 'manual');
+                    const mappingsWithSamples = mappings.map(mapping => ({
+                      ...mapping,
+                      sampleValues: parsedData.rows.slice(0, 3).map(row => row[mapping.csvColumn] || ''),
+                    }));
+                    setColumnMappings(mappingsWithSamples);
+                    setAutoMapWarnings(warnings);
+                    setUnmappedCount(unmapped);
+                  }
+                }}
+              >
+                Re-Apply Auto-Map
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
+            {/* Warnings */}
+            {autoMapWarnings.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {autoMapWarnings.map((w, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-lg text-sm ${
+                      w.type === 'critical'
+                        ? 'bg-red-50 border border-red-200 text-red-700'
+                        : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
+                    }`}
+                  >
+                    <strong>{w.type === 'critical' ? 'CRITICAL: ' : 'Warning: '}</strong>
+                    {w.message}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-3 max-h-[500px] overflow-y-auto">
               {columnMappings.map(mapping => (
                 <div
@@ -839,8 +1087,14 @@ export default function BulkUpload({ onComplete }: BulkUploadProps) {
             <div className="flex justify-center gap-6 mb-6">
               <div>
                 <p className="text-2xl font-bold text-green-600">{importResult.imported}</p>
-                <p className="text-sm text-gray-500">Imported</p>
+                <p className="text-sm text-gray-500">Inserted</p>
               </div>
+              {importResult.updated > 0 && (
+                <div>
+                  <p className="text-2xl font-bold text-blue-600">{importResult.updated}</p>
+                  <p className="text-sm text-gray-500">Updated</p>
+                </div>
+              )}
               {importResult.skipped > 0 && (
                 <div>
                   <p className="text-2xl font-bold text-yellow-600">{importResult.skipped}</p>
