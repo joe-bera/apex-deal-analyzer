@@ -2,7 +2,17 @@ import { Resend } from 'resend';
 import { config } from '../config/env';
 import { supabaseAdmin as supabase } from '../config/supabase';
 
-const resend = new Resend(config.resend.apiKey);
+let resend: Resend | null = null;
+
+function getResend(): Resend {
+  if (!resend) {
+    if (!config.resend.apiKey) {
+      throw new Error('RESEND_API_KEY is not configured');
+    }
+    resend = new Resend(config.resend.apiKey);
+  }
+  return resend;
+}
 
 interface BrokerInfo {
   full_name?: string;
@@ -137,7 +147,7 @@ export const sendEmail = async (params: SendEmailParams): Promise<SendResult> =>
       return { success: false, error: 'RESEND_API_KEY is not configured' };
     }
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `${config.resend.fromName} <${config.resend.fromEmail}>`,
       to: [params.to],
       subject: params.subject,
