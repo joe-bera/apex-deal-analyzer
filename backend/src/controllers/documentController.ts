@@ -150,6 +150,7 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     // Validate document_type
     const validTypes = [
       'offering_memorandum',
+      'property_profile',
       'title_report',
       'comp',
       'lease',
@@ -612,7 +613,7 @@ export const uploadFromUrl = async (req: Request, res: Response): Promise<void> 
 
     // Validate document_type
     const validTypes = [
-      'offering_memorandum', 'title_report', 'comp', 'lease',
+      'offering_memorandum', 'property_profile', 'title_report', 'comp', 'lease',
       'appraisal', 'environmental_report', 'other',
     ];
     if (!validTypes.includes(document_type)) {
@@ -819,6 +820,7 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
     // Validate document_type
     const validTypes = [
       'offering_memorandum',
+      'property_profile',
       'title_report',
       'comp',
       'lease',

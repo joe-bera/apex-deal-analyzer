@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler';
  */
 export type DocumentType =
   | 'offering_memorandum'
+  | 'property_profile'
   | 'title_report'
   | 'comp'
   | 'lease'

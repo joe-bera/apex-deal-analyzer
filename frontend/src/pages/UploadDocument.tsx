@@ -51,6 +51,7 @@ export default function UploadDocument() {
 
   const documentTypes = [
     { value: 'offering_memorandum', label: 'Offering Memorandum' },
+    { value: 'property_profile', label: 'Property Profile (CoStar, Crexi, etc.)' },
     { value: 'title_report', label: 'Title Report' },
     { value: 'comp', label: 'Comparable Sale' },
     { value: 'lease', label: 'Lease Agreement' },
