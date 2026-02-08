@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
@@ -14,10 +14,13 @@ function formatFileSize(bytes: number): string {
 }
 
 type UploadMode = 'file' | 'url';
+type FileReadState = 'idle' | 'reading' | 'ready' | 'cloud_file';
 
 export default function UploadDocument() {
   const [uploadMode, setUploadMode] = useState<UploadMode>('file');
   const [file, setFile] = useState<File | null>(null);
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
+  const [fileReadState, setFileReadState] = useState<FileReadState>('idle');
   const [fileUrl, setFileUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const [documentType, setDocumentType] = useState('offering_memorandum');
@@ -28,9 +31,9 @@ export default function UploadDocument() {
   const [dragActive, setDragActive] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load properties for comp selection
     const loadProperties = async () => {
       try {
         const result: any = await api.listProperties();
@@ -41,11 +44,10 @@ export default function UploadDocument() {
     };
     loadProperties();
 
-    // Check if property_id is in URL params
     const propId = searchParams.get('property_id');
     if (propId) {
       setPropertyId(propId);
-      setDocumentType('comp'); // Default to comp if coming from property page
+      setDocumentType('comp');
     }
   }, [searchParams]);
 
@@ -60,6 +62,59 @@ export default function UploadDocument() {
     { value: 'other', label: 'Other' },
   ];
 
+  /**
+   * Eagerly read the file into memory when selected.
+   * If the file is a cloud placeholder (0 bytes), auto-switch to URL mode.
+   */
+  const processSelectedFile = async (selectedFile: File) => {
+    // Basic type check
+    const isPdf = selectedFile.type === 'application/pdf' ||
+      selectedFile.type === 'application/x-pdf' ||
+      selectedFile.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Please upload a PDF file');
+      return;
+    }
+
+    // Size check (from file metadata — may show real size even for cloud files)
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      setError(`File too large (${formatFileSize(selectedFile.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`);
+      return;
+    }
+
+    // Clear previous state
+    setFile(selectedFile);
+    setFileBuffer(null);
+    setError('');
+    setFileReadState('reading');
+
+    try {
+      // Actually read the file bytes — this is where cloud placeholders fail
+      const buffer = await selectedFile.arrayBuffer();
+
+      if (buffer.byteLength === 0) {
+        // Cloud placeholder detected — auto-switch to URL mode
+        setFileReadState('cloud_file');
+        setFile(null);
+        setUploadMode('url');
+        setFileName(selectedFile.name);
+        // No error — just a friendly info message handled in the UI
+        return;
+      }
+
+      // File is real and readable
+      setFileBuffer(buffer);
+      setFileReadState('ready');
+    } catch (readErr) {
+      // File couldn't be read (permissions, cloud placeholder, etc.)
+      console.error('File read failed:', readErr);
+      setFileReadState('cloud_file');
+      setFile(null);
+      setUploadMode('url');
+      setFileName(selectedFile.name);
+    }
+  };
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -70,57 +125,26 @@ export default function UploadDocument() {
     }
   };
 
-  const validateFile = (file: File): string | null => {
-    const isPdf = file.type === 'application/pdf' ||
-      file.type === 'application/x-pdf' ||
-      file.name.toLowerCase().endsWith('.pdf');
-    if (!isPdf) {
-      return 'Please upload a PDF file';
-    }
-    if (file.size === 0) {
-      return 'This file appears to be 0 bytes. This usually happens when the file is stored in cloud storage (Dropbox, iCloud, OneDrive) and hasn\'t been downloaded locally. Try using the "From URL" tab instead — paste the Dropbox or Google Drive share link and we\'ll download it directly.';
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return `File too large (${formatFileSize(file.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`;
-    }
-    return null;
-  };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const selectedFile = e.dataTransfer.files[0];
-      const validationError = validateFile(selectedFile);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-      setFile(selectedFile);
-      setError('');
+      processSelectedFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      const validationError = validateFile(selectedFile);
-      if (validationError) {
-        setError(validationError);
-        e.target.value = '';
-        return;
-      }
-      setFile(selectedFile);
-      setError('');
+      processSelectedFile(e.target.files[0]);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (uploadMode === 'file' && !file) {
+    if (uploadMode === 'file' && (!file || !fileBuffer)) {
       setError('Please select a file');
       return;
     }
@@ -142,7 +166,6 @@ export default function UploadDocument() {
       let documentId: string;
 
       if (uploadMode === 'url') {
-        // Upload from URL (Dropbox, Google Drive, etc.)
         const result: any = await api.uploadDocumentFromUrl(
           fileUrl.trim(),
           fileName.trim() || undefined,
@@ -151,7 +174,6 @@ export default function UploadDocument() {
         );
         documentId = result.document.id;
       } else {
-        // Upload via FormData
         const result: any = await api.uploadDocument(
           file!,
           documentType === 'comp' ? propertyId : undefined,
@@ -177,6 +199,11 @@ export default function UploadDocument() {
     }
   };
 
+  // Whether the submit button should be enabled
+  const canSubmit = uploadMode === 'file'
+    ? (file && fileReadState === 'ready')
+    : fileUrl.trim().length > 0;
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -194,11 +221,23 @@ export default function UploadDocument() {
             </div>
           )}
 
+          {/* Cloud file auto-redirect notice */}
+          {fileReadState === 'cloud_file' && uploadMode === 'url' && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded">
+              <p className="font-medium text-sm">
+                That file is stored in the cloud and isn't available locally.
+              </p>
+              <p className="text-sm mt-1">
+                Paste the Dropbox or Google Drive share link below and we'll download it directly. You can also right-click the file in Finder and choose "Make Available Offline" first.
+              </p>
+            </div>
+          )}
+
           {/* Upload Mode Toggle */}
           <div className="flex rounded-lg border border-gray-300 overflow-hidden">
             <button
               type="button"
-              onClick={() => { setUploadMode('file'); setError(''); }}
+              onClick={() => { setUploadMode('file'); setError(''); setFileReadState(file ? 'ready' : 'idle'); }}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
                 uploadMode === 'file'
                   ? 'bg-primary-600 text-white'
@@ -283,40 +322,71 @@ export default function UploadDocument() {
                 className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md ${
                   dragActive
                     ? 'border-primary-500 bg-primary-50'
+                    : fileReadState === 'ready'
+                    ? 'border-green-400 bg-green-50'
                     : 'border-gray-300 bg-white'
                 } transition-colors`}
               >
                 <div className="space-y-1 text-center">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400"
-                    stroke="currentColor"
-                    fill="none"
-                    viewBox="0 0 48 48"
-                  >
-                    <path
-                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <div className="flex text-sm text-gray-600">
-                    <label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
-                      <span>Upload a file</span>
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        onChange={handleFileChange}
-                        className="sr-only"
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">PDF up to {MAX_FILE_SIZE_DISPLAY}</p>
-                  {file && (
-                    <p className="text-sm text-gray-900 font-medium mt-2">
-                      Selected: {file.name} ({formatFileSize(file.size)})
-                    </p>
+                  {fileReadState === 'reading' ? (
+                    <>
+                      <svg className="mx-auto h-10 w-10 text-primary-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <p className="text-sm text-gray-600 mt-2">Reading file...</p>
+                    </>
+                  ) : fileReadState === 'ready' && file ? (
+                    <>
+                      <svg className="mx-auto h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm text-gray-900 font-medium mt-2">
+                        {file.name} ({formatFileSize(file.size)})
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFile(null);
+                          setFileBuffer(null);
+                          setFileReadState('idle');
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="text-xs text-primary-600 hover:text-primary-700 mt-1"
+                      >
+                        Choose a different file
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                      >
+                        <path
+                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <div className="flex text-sm text-gray-600">
+                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
+                          <span>Upload a file</span>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={handleFileChange}
+                            className="sr-only"
+                          />
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                      </div>
+                      <p className="text-xs text-gray-500">PDF up to {MAX_FILE_SIZE_DISPLAY}</p>
+                    </>
                   )}
                 </div>
               </div>
@@ -359,7 +429,7 @@ export default function UploadDocument() {
           <div className="flex gap-3">
             <Button
               type="submit"
-              disabled={uploadMode === 'file' ? !file : !fileUrl.trim()}
+              disabled={!canSubmit || loading}
               isLoading={loading}
               className="flex-1"
               size="lg"

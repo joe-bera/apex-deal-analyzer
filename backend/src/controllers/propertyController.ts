@@ -108,7 +108,7 @@ export const createPropertyFromDocument = async (
 
     // Create property record
     const { data: property, error: createError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .insert({
         created_by: req.user.id,
         address: propertyData.address,
@@ -190,7 +190,7 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
 
     // Get existing property to check ownership
     const { data: existingProperty, error: fetchError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select('*')
       .eq('id', id)
       .single();
@@ -216,7 +216,7 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
 
     // Update property
     const { data: property, error: updateError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .update({
         ...updates,
         additional_data: mergedAdditionalData,
@@ -259,7 +259,7 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
 
     // Get property with documents
     const { data: property, error: propertyError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select(
         `
         *,
@@ -326,7 +326,7 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
     const selectFields = '*, documents(id, file_name, document_type)';
 
     let query = supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select(selectFields, { count: 'exact' })
       .eq('created_by', req.user.id)
       .order('created_at', { ascending: false });
@@ -410,7 +410,7 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
 
     // Get property to check ownership
     const { data: property, error: fetchError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select('*')
       .eq('id', id)
       .single();
@@ -426,7 +426,7 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
 
     // Soft delete: mark as archived
     const { error: deleteError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .update({ is_archived: true, updated_at: new Date().toISOString() })
       .eq('id', id);
 
@@ -465,7 +465,7 @@ export const getPropertyValuation = async (
 
     // Get property to check access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select('created_by')
       .eq('id', id)
       .single();
@@ -523,7 +523,7 @@ export const analyzePropertyValuation = async (
 
     // Get property
     const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
+      .from('master_properties')
       .select('*')
       .eq('id', id)
       .single();
