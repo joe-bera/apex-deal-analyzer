@@ -174,7 +174,7 @@ export default function Dashboard() {
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Property Portfolio</h1>
+            <h1 className="text-2xl font-bold text-gray-900">My Deals</h1>
             <p className="text-gray-500 mt-1">
               Manage and analyze your commercial real estate deals
             </p>
@@ -190,7 +190,7 @@ export default function Dashboard() {
                 </svg>
               }
             >
-              Data Hub
+              Property Database
             </Button>
             {properties.length >= 2 && (
               <Button

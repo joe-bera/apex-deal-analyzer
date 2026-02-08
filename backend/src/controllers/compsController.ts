@@ -16,7 +16,7 @@ export const getCompsForProperty = async (req: Request, res: Response): Promise<
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -69,7 +69,7 @@ export const addCompToProperty = async (req: Request, res: Response): Promise<vo
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();

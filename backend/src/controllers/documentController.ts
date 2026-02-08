@@ -171,7 +171,7 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
     // If property_id provided, verify it exists and user has access
     if (property_id) {
       const { data: property, error } = await supabaseAdmin
-        .from('master_properties')
+        .from('properties')
         .select('id, created_by')
         .eq('id', property_id)
         .single();
@@ -670,7 +670,7 @@ export const uploadFromUrl = async (req: Request, res: Response): Promise<void> 
     // If property_id provided, verify access
     if (property_id) {
       const { data: property, error } = await supabaseAdmin
-        .from('master_properties')
+        .from('properties')
         .select('id, created_by')
         .eq('id', property_id)
         .single();
@@ -836,7 +836,7 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
     // If property_id provided, verify it exists and user has access
     if (property_id) {
       const { data: property, error } = await supabaseAdmin
-        .from('master_properties')
+        .from('properties')
         .select('id, created_by')
         .eq('id', property_id)
         .single();

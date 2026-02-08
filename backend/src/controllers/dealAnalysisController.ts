@@ -16,7 +16,7 @@ export const getDealAnalysis = async (req: Request, res: Response): Promise<void
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -72,7 +72,7 @@ export const saveDealAnalysis = async (req: Request, res: Response): Promise<voi
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -160,7 +160,7 @@ export const deleteDealAnalysis = async (req: Request, res: Response): Promise<v
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
