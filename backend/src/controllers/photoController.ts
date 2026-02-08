@@ -32,7 +32,7 @@ export const getPhotoUploadUrl = async (req: Request, res: Response): Promise<vo
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -99,7 +99,7 @@ export const createPhoto = async (req: Request, res: Response): Promise<void> =>
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -191,7 +191,7 @@ export const listPhotos = async (req: Request, res: Response): Promise<void> => 
 
     // Verify property exists and user has access
     const { data: property, error: propError } = await supabaseAdmin
-      .from('master_properties')
+      .from('properties')
       .select('id, created_by')
       .eq('id', propertyId)
       .single();
@@ -253,7 +253,7 @@ export const updatePhoto = async (req: Request, res: Response): Promise<void> =>
     // Get the photo to verify ownership
     const { data: photo, error: fetchError } = await supabaseAdmin
       .from('property_photos')
-      .select('*, master_properties!inner(created_by)')
+      .select('*, properties!inner(created_by)')
       .eq('id', id)
       .single();
 
@@ -262,7 +262,7 @@ export const updatePhoto = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Check if user owns the property
-    if ((photo as any).master_properties.created_by !== req.user.id) {
+    if ((photo as any).properties.created_by !== req.user.id) {
       throw new AppError(403, 'You do not have permission to update this photo');
     }
 
@@ -330,7 +330,7 @@ export const deletePhoto = async (req: Request, res: Response): Promise<void> =>
     // Get the photo to verify ownership and get file path
     const { data: photo, error: fetchError } = await supabaseAdmin
       .from('property_photos')
-      .select('*, master_properties!inner(created_by)')
+      .select('*, properties!inner(created_by)')
       .eq('id', id)
       .single();
 
@@ -339,7 +339,7 @@ export const deletePhoto = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Check if user owns the property
-    if ((photo as any).master_properties.created_by !== req.user.id) {
+    if ((photo as any).properties.created_by !== req.user.id) {
       throw new AppError(403, 'You do not have permission to delete this photo');
     }
 
@@ -392,7 +392,7 @@ export const setPrimaryPhoto = async (req: Request, res: Response): Promise<void
     // Get the photo to verify ownership
     const { data: photo, error: fetchError } = await supabaseAdmin
       .from('property_photos')
-      .select('*, master_properties!inner(created_by)')
+      .select('*, properties!inner(created_by)')
       .eq('id', id)
       .single();
 
@@ -401,7 +401,7 @@ export const setPrimaryPhoto = async (req: Request, res: Response): Promise<void
     }
 
     // Check if user owns the property
-    if ((photo as any).master_properties.created_by !== req.user.id) {
+    if ((photo as any).properties.created_by !== req.user.id) {
       throw new AppError(403, 'You do not have permission to update this photo');
     }
 
