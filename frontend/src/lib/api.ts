@@ -55,7 +55,7 @@ export const api = {
 
   getCurrentUser: () => request<{ user: any }>('/auth/me'),
 
-  // Documents - Direct upload to Supabase (bypasses backend proxy issues)
+  // Documents - Upload directly to Supabase Storage (bypasses Railway proxy size limits)
   uploadDocument: async (file: File, propertyId?: string, documentType?: string) => {
     const token = localStorage.getItem('token');
 
@@ -64,31 +64,63 @@ export const api = {
       throw new APIError(401, 'Please log in to upload documents.');
     }
 
-    // Upload via FormData to multer endpoint (no buffer pre-read needed)
-    const formData = new FormData();
-    formData.append('file', file);
-    if (documentType) formData.append('document_type', documentType);
-    if (propertyId) formData.append('property_id', propertyId);
+    console.log('[API] uploadDocument:', file.name, 'size:', file.size);
 
-    console.log('[API] uploadDocument via FormData:', file.name, 'size:', file.size);
-
-    const response = await fetch(`${API_BASE}/documents/upload`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // Do NOT set Content-Type - browser sets it with boundary for FormData
-      },
-      body: formData,
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('[API] Upload failed:', data);
-      throw new APIError(response.status, data.error || 'Failed to upload document');
+    // Read file into buffer first
+    const fileBuffer = await file.arrayBuffer();
+    if (fileBuffer.byteLength === 0) {
+      throw new APIError(400, 'File appears to be empty (0 bytes). If the file is stored in cloud storage, use the "From URL" tab instead.');
     }
 
-    console.log('[API] Document uploaded successfully:', data.document?.id);
-    return data;
+    // Step 1: Get signed upload URL from backend
+    const uploadUrlResponse = await fetch(`${API_BASE}/documents/upload-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ file_name: file.name, file_size: file.size }),
+    });
+
+    const uploadUrlData = await uploadUrlResponse.json();
+    if (!uploadUrlResponse.ok) {
+      throw new APIError(uploadUrlResponse.status, uploadUrlData.error || 'Failed to prepare upload');
+    }
+
+    // Step 2: Upload directly to Supabase Storage (bypasses Railway)
+    const storageResponse = await fetch(uploadUrlData.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: fileBuffer,
+    });
+
+    if (!storageResponse.ok) {
+      throw new APIError(storageResponse.status, 'Failed to upload file to storage');
+    }
+
+    // Step 3: Create document record in backend
+    const createResponse = await fetch(`${API_BASE}/documents/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        storage_path: uploadUrlData.storage_path,
+        file_name: file.name,
+        file_size: file.size,
+        property_id: propertyId,
+        document_type: documentType,
+      }),
+    });
+
+    const createData = await createResponse.json();
+    if (!createResponse.ok) {
+      throw new APIError(createResponse.status, createData.error || 'Failed to create document record');
+    }
+
+    console.log('[API] Document uploaded successfully:', createData.document?.id);
+    return createData;
   },
 
   uploadDocumentFromUrl: async (
