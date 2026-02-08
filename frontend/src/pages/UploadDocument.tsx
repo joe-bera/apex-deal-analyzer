@@ -74,11 +74,12 @@ export default function UploadDocument() {
   };
 
   const validateFile = (file: File): string | null => {
-    if (file.type !== 'application/pdf') {
+    // Accept application/pdf or files with .pdf extension (some browsers report non-standard MIME types)
+    const isPdf = file.type === 'application/pdf' ||
+      file.type === 'application/x-pdf' ||
+      file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
       return 'Please upload a PDF file';
-    }
-    if (file.size <= 0) {
-      return 'File appears to be empty. Please select a valid PDF file.';
     }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large (${formatFileSize(file.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`;
@@ -100,7 +101,7 @@ export default function UploadDocument() {
       const buffer = await selectedFile.arrayBuffer();
 
       if (buffer.byteLength === 0) {
-        setError('Failed to read file. Please try selecting the file again.');
+        setError('File appears to be empty (0 bytes). Please select a valid PDF file.');
         return false;
       }
 
@@ -290,7 +291,7 @@ export default function UploadDocument() {
                     <span>Upload a file</span>
                     <input
                       type="file"
-                      accept=".pdf"
+                      accept="application/pdf,.pdf"
                       onChange={handleFileChange}
                       className="sr-only"
                     />
