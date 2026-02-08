@@ -7,6 +7,7 @@ import {
   extractDocument,
   getUploadUrl,
   createDocument,
+  uploadFromUrl,
 } from '../controllers/documentController';
 import { authenticate } from '../middleware/auth';
 import { upload } from '../middleware/upload';
@@ -43,6 +44,14 @@ router.post(
   '/create',
   authenticate,
   createDocument
+);
+
+// Upload document from URL (Dropbox, Google Drive, etc.)
+router.post(
+  '/upload-from-url',
+  authenticate,
+  uploadLimiter,
+  uploadFromUrl
 );
 
 // List documents

@@ -91,6 +91,23 @@ export const api = {
     return data;
   },
 
+  uploadDocumentFromUrl: async (
+    url: string,
+    fileName?: string,
+    propertyId?: string,
+    documentType?: string
+  ) => {
+    return request('/documents/upload-from-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        url,
+        file_name: fileName,
+        property_id: propertyId,
+        document_type: documentType,
+      }),
+    });
+  },
+
   // Upload with pre-read buffer (prevents mobile browser File blob expiration)
   uploadDocumentWithBuffer: async (
     fileData: { name: string; size: number; type: string; buffer: ArrayBuffer },

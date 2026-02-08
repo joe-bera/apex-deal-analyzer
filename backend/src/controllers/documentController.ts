@@ -592,6 +592,167 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
 };
 
 /**
+ * Upload document from a URL (Dropbox, Google Drive share links, etc.)
+ * POST /api/documents/upload-from-url
+ *
+ * Downloads the file from the provided URL and processes it.
+ * Converts Dropbox/Google Drive share links to direct download URLs.
+ */
+export const uploadFromUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { url, file_name, property_id, document_type = 'other' } = req.body;
+
+    if (!url) {
+      throw new AppError(400, 'url is required');
+    }
+
+    // Validate document_type
+    const validTypes = [
+      'offering_memorandum', 'title_report', 'comp', 'lease',
+      'appraisal', 'environmental_report', 'other',
+    ];
+    if (!validTypes.includes(document_type)) {
+      throw new AppError(400, `Invalid document_type. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    // Convert cloud share links to direct download URLs
+    let downloadUrl = url.trim();
+
+    // Dropbox: change dl=0 to dl=1, or add dl=1
+    if (downloadUrl.includes('dropbox.com')) {
+      downloadUrl = downloadUrl.replace(/\?dl=0/, '?dl=1');
+      if (!downloadUrl.includes('dl=1')) {
+        downloadUrl += (downloadUrl.includes('?') ? '&' : '?') + 'dl=1';
+      }
+    }
+
+    // Google Drive: convert share link to direct download
+    const gdriveMatch = downloadUrl.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if (gdriveMatch) {
+      downloadUrl = `https://drive.google.com/uc?export=download&id=${gdriveMatch[1]}`;
+    }
+
+    console.log('[DocumentController] Downloading from URL:', downloadUrl);
+
+    // Download the file
+    let response;
+    try {
+      response = await fetch(downloadUrl, {
+        headers: { 'User-Agent': 'ApexDealAnalyzer/1.0' },
+        redirect: 'follow',
+      });
+    } catch (fetchErr: any) {
+      throw new AppError(400, `Failed to download file: ${fetchErr.message}`);
+    }
+
+    if (!response.ok) {
+      throw new AppError(400, `Failed to download file: HTTP ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+
+    if (fileBuffer.length === 0) {
+      throw new AppError(400, 'Downloaded file is empty. Please check the URL and sharing permissions.');
+    }
+
+    console.log('[DocumentController] Downloaded file, size:', fileBuffer.length);
+
+    // Determine filename
+    const resolvedName = file_name ||
+      decodeURIComponent(downloadUrl.split('/').pop()?.split('?')[0] || 'document.pdf');
+
+    // If property_id provided, verify access
+    if (property_id) {
+      const { data: property, error } = await supabaseAdmin
+        .from('properties')
+        .select('id, created_by')
+        .eq('id', property_id)
+        .single();
+
+      if (error || !property) {
+        throw new AppError(404, 'Property not found');
+      }
+      if (property.created_by !== req.user.id) {
+        throw new AppError(403, 'You do not have access to this property');
+      }
+    }
+
+    // Parse PDF
+    let extractedText = '';
+    let pdfMetadata = {};
+    const MAX_EXTRACTED_TEXT_LENGTH = 500000;
+
+    try {
+      const pdfData = await parsePDF(fileBuffer);
+      extractedText = cleanPDFText(pdfData.text);
+      if (extractedText.length > MAX_EXTRACTED_TEXT_LENGTH) {
+        extractedText = extractedText.substring(0, MAX_EXTRACTED_TEXT_LENGTH) + '\n\n[Text truncated due to length...]';
+      }
+      pdfMetadata = {
+        num_pages: pdfData.numPages,
+        title: pdfData.info.Title,
+        author: pdfData.info.Author,
+        creation_date: pdfData.info.CreationDate,
+      };
+    } catch (parseErr) {
+      console.error('PDF parsing error from URL:', parseErr);
+    }
+
+    // Upload to Supabase Storage
+    const { filePath, publicUrl } = await uploadToStorage(fileBuffer, resolvedName, req.user.id);
+
+    // Create document record
+    const { data: document, error: dbError } = await supabaseAdmin
+      .from('documents')
+      .insert({
+        property_id: property_id || null,
+        uploaded_by: req.user.id,
+        file_name: resolvedName,
+        file_path: filePath,
+        file_size: fileBuffer.length,
+        document_type,
+        extraction_status: extractedText ? 'completed' : 'pending',
+        extracted_data: extractedText
+          ? { raw_text: extractedText, metadata: pdfMetadata, extracted_at: new Date().toISOString() }
+          : null,
+      })
+      .select()
+      .single();
+
+    if (dbError || !document) {
+      console.error('[DocumentController] DB error creating document from URL:', dbError);
+      throw new AppError(500, 'Failed to create document record');
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Document uploaded from URL successfully',
+      document: {
+        id: document.id,
+        file_name: document.file_name,
+        file_size: document.file_size,
+        document_type: document.document_type,
+        extraction_status: document.extraction_status,
+        uploaded_at: document.uploaded_at,
+        url: publicUrl,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Upload from URL error:', error);
+      res.status(500).json({ success: false, error: 'Failed to upload document from URL' });
+    }
+  }
+};
+
+/**
  * Get a signed URL for direct upload to Supabase Storage
  * POST /api/documents/upload-url
  *
