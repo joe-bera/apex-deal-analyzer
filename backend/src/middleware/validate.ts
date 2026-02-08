@@ -331,16 +331,17 @@ export const createCompSchema = z
     comp_state: z.string().length(2, 'State must be 2 characters'),
     comp_zip_code: z.string().max(10).optional(),
     comp_property_type: propertyTypeEnum,
-    comp_square_footage: z.number().positive('Square footage must be positive').optional(),
+    comp_square_footage: z.number().positive('Square footage must be positive').nullable().optional(),
     comp_year_built: z
       .number()
       .int()
       .min(1800)
       .max(new Date().getFullYear() + 5)
+      .nullable()
       .optional(),
     comp_sale_price: z.number().positive('Sale price must be positive'),
     comp_sale_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sale date must be YYYY-MM-DD format'),
-    comp_price_per_sqft: z.number().positive().optional(),
+    comp_price_per_sqft: z.number().positive().nullable().optional(),
     comp_cap_rate: z.number().min(0).max(100).optional(),
     distance_miles: z.number().nonnegative().optional(),
     similarity_score: z.number().min(0).max(100).optional(),
