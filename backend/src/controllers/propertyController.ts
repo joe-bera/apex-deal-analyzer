@@ -257,21 +257,10 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
 
     const { id } = req.params;
 
-    // Get property with documents
+    // Get property
     const { data: property, error: propertyError } = await supabaseAdmin
       .from('master_properties')
-      .select(
-        `
-        *,
-        documents (
-          id,
-          file_name,
-          document_type,
-          extraction_status,
-          uploaded_at
-        )
-      `
-      )
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -322,12 +311,9 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
       offset = 0,
     } = req.query;
 
-    // Build select - property_photos may not exist if migration wasn't run
-    const selectFields = '*, documents(id, file_name, document_type)';
-
     let query = supabaseAdmin
       .from('master_properties')
-      .select(selectFields, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('created_by', req.user.id)
       .order('created_at', { ascending: false });
 
