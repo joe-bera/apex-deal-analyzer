@@ -13,17 +13,8 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-// Store file data immediately to prevent mobile browser issues where File blob expires
-interface FileData {
-  name: string;
-  size: number;
-  type: string;
-  buffer: ArrayBuffer;
-}
-
 export default function UploadDocument() {
   const [file, setFile] = useState<File | null>(null);
-  const [fileData, setFileData] = useState<FileData | null>(null);
   const [documentType, setDocumentType] = useState('offering_memorandum');
   const [propertyId, setPropertyId] = useState<string>('');
   const [properties, setProperties] = useState<any[]>([]);
@@ -74,7 +65,6 @@ export default function UploadDocument() {
   };
 
   const validateFile = (file: File): string | null => {
-    // Accept application/pdf or files with .pdf extension (some browsers report non-standard MIME types)
     const isPdf = file.type === 'application/pdf' ||
       file.type === 'application/x-pdf' ||
       file.name.toLowerCase().endsWith('.pdf');
@@ -87,63 +77,40 @@ export default function UploadDocument() {
     return null;
   };
 
-  // Read file data immediately to prevent mobile browser File blob expiration
-  const processFile = async (selectedFile: File) => {
-    const validationError = validateFile(selectedFile);
-    if (validationError) {
-      setError(validationError);
-      return false;
-    }
-
-    try {
-      // Read file data immediately - this prevents the mobile browser bug
-      // where File blob data expires after some time
-      const buffer = await selectedFile.arrayBuffer();
-
-      if (buffer.byteLength === 0) {
-        setError('File appears to be empty (0 bytes). Please select a valid PDF file.');
-        return false;
-      }
-
-      setFileData({
-        name: selectedFile.name,
-        size: selectedFile.size,
-        type: selectedFile.type,
-        buffer,
-      });
-      setFile(selectedFile);
-      setError('');
-      console.log('[Upload] File processed:', selectedFile.name, 'size:', buffer.byteLength);
-      return true;
-    } catch (err) {
-      console.error('[Upload] Error reading file:', err);
-      setError('Failed to read file. Please try again.');
-      return false;
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await processFile(e.dataTransfer.files[0]);
+      const selectedFile = e.dataTransfer.files[0];
+      const validationError = validateFile(selectedFile);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      setFile(selectedFile);
+      setError('');
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const success = await processFile(e.target.files[0]);
-      if (!success) {
-        e.target.value = ''; // Reset input
+      const selectedFile = e.target.files[0];
+      const validationError = validateFile(selectedFile);
+      if (validationError) {
+        setError(validationError);
+        e.target.value = '';
+        return;
       }
+      setFile(selectedFile);
+      setError('');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileData) {
+    if (!file) {
       setError('Please select a file');
       return;
     }
@@ -153,44 +120,25 @@ export default function UploadDocument() {
       return;
     }
 
-    // Double-check that we have valid file data
-    if (fileData.buffer.byteLength === 0) {
-      setError('File data is invalid. Please select the file again.');
-      setFile(null);
-      setFileData(null);
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
-      console.log('[Upload] Starting upload, documentType:', documentType, 'propertyId:', propertyId);
-      console.log('[Upload] File data:', fileData.name, 'size:', fileData.size, 'buffer:', fileData.buffer.byteLength);
-
-      // Upload document with property_id if it's a comp
-      const result: any = await api.uploadDocumentWithBuffer(
-        fileData,
+      // Upload via FormData (no buffer pre-read needed)
+      const result: any = await api.uploadDocument(
+        file,
         documentType === 'comp' ? propertyId : undefined,
         documentType
       );
       const documentId = result.document.id;
-      console.log('[Upload] Document uploaded, id:', documentId);
 
       // Extract data from document
-      console.log('[Upload] Starting extraction...');
       await api.extractDocument(documentId);
-      console.log('[Upload] Extraction complete');
 
       if (documentType === 'comp' && propertyId) {
-        // For comp documents, go back to the property page
-        console.log('[Upload] Navigating to property:', propertyId);
         navigate(`/properties/${propertyId}`);
       } else {
-        // For other documents, create property from extracted data
-        console.log('[Upload] Creating property from document...');
         const propertyResult: any = await api.createPropertyFromDocument(documentId);
-        console.log('[Upload] Property created:', propertyResult.property.id);
         navigate(`/properties/${propertyResult.property.id}`);
       }
     } catch (err: any) {
@@ -299,9 +247,9 @@ export default function UploadDocument() {
                   <p className="pl-1">or drag and drop</p>
                 </div>
                 <p className="text-xs text-gray-500">PDF up to {MAX_FILE_SIZE_DISPLAY}</p>
-                {fileData && (
+                {file && (
                   <p className="text-sm text-gray-900 font-medium mt-2">
-                    Selected: {fileData.name} ({formatFileSize(fileData.buffer.byteLength)})
+                    Selected: {file.name} ({formatFileSize(file.size)})
                   </p>
                 )}
               </div>
