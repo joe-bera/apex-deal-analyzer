@@ -1,17 +1,63 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Apex brand color
-const APEX_RED_RGB: [number, number, number] = [178, 31, 36];
-const DARK_GRAY: [number, number, number] = [51, 51, 51];
-const MED_GRAY: [number, number, number] = [102, 102, 102];
-const LIGHT_GRAY: [number, number, number] = [200, 200, 200];
-const WHITE: [number, number, number] = [255, 255, 255];
+// ============================================================================
+// Color Themes — inspired by reference brochure styles
+// ============================================================================
 
-const PAGE_WIDTH = 210; // A4 mm
-const PAGE_HEIGHT = 297;
+export type ThemeStyle = 'apex' | 'modern' | 'corporate';
+
+interface Theme {
+  primary: [number, number, number];
+  accent: [number, number, number];
+  dark: [number, number, number];
+  medium: [number, number, number];
+  light: [number, number, number];
+  white: [number, number, number];
+}
+
+const THEMES: Record<ThemeStyle, Theme> = {
+  apex: {
+    primary: [120, 0, 20],
+    accent: [178, 31, 36],
+    dark: [33, 33, 33],
+    medium: [100, 100, 100],
+    light: [220, 220, 220],
+    white: [255, 255, 255],
+  },
+  modern: {
+    primary: [25, 25, 28],
+    accent: [190, 30, 45],
+    dark: [33, 33, 33],
+    medium: [100, 100, 100],
+    light: [220, 220, 220],
+    white: [255, 255, 255],
+  },
+  corporate: {
+    primary: [0, 51, 102],
+    accent: [0, 128, 155],
+    dark: [33, 33, 33],
+    medium: [100, 100, 100],
+    light: [220, 220, 220],
+    white: [255, 255, 255],
+  },
+};
+
+// ============================================================================
+// Page Constants
+// ============================================================================
+
+const PW = 210;
+const PH = 297;
 const MARGIN = 20;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const SIDEBAR_W = 4;
+const LEFT = MARGIN + SIDEBAR_W + 2;
+const CW = PW - LEFT - MARGIN;
+const HEADER_H = 30;
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface PropertyData {
   address?: string;
@@ -47,12 +93,12 @@ interface ContentSections {
   property_description?: string;
   executive_summary?: string;
   location_analysis?: string;
-  property_highlights?: string; // JSON stringified array
+  property_highlights?: string;
   market_analysis?: string;
   team_intro?: string;
 }
 
-interface GeneratorOptions {
+export interface GeneratorOptions {
   property: PropertyData;
   transaction?: TransactionData | null;
   content: ContentSections;
@@ -60,155 +106,44 @@ interface GeneratorOptions {
   companyPhone?: string;
   companyEmail?: string;
   companyAddress?: string;
+  style?: ThemeStyle;
 }
 
 // ============================================================================
-// Shared Helpers
+// Utility Helpers
 // ============================================================================
 
-function addHeader(doc: jsPDF, title: string, companyName: string = 'Apex Real Estate Services'): number {
-  let y = MARGIN;
-
-  // Red accent bar at top
-  doc.setFillColor(...APEX_RED_RGB);
-  doc.rect(0, 0, PAGE_WIDTH, 4, 'F');
-
-  // Company name
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text(companyName.toUpperCase(), MARGIN, y + 8);
-
-  // Title
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(...DARK_GRAY);
-  doc.text(title, MARGIN, y + 20);
-
-  // Divider line
-  y += 26;
-  doc.setDrawColor(...APEX_RED_RGB);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
-
-  return y + 6;
+function getTheme(style?: ThemeStyle): Theme {
+  return THEMES[style || 'apex'];
 }
 
-function addFooter(doc: jsPDF, companyName: string = 'Apex Real Estate Services', companyPhone?: string) {
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...MED_GRAY);
-
-    // Footer line
-    doc.setDrawColor(...LIGHT_GRAY);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN, PAGE_HEIGHT - 15, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 15);
-
-    // Left: company info
-    const footerText = companyPhone ? `${companyName} | ${companyPhone}` : companyName;
-    doc.text(footerText, MARGIN, PAGE_HEIGHT - 10);
-
-    // Right: page number
-    doc.text(`Page ${i} of ${pageCount}`, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 10, { align: 'right' });
-  }
-}
-
-function addSectionTitle(doc: jsPDF, title: string, y: number): number {
-  y = checkPageBreak(doc, y, 20);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text(title, MARGIN, y);
-
-  // Red underline
-  y += 2;
-  doc.setDrawColor(...APEX_RED_RGB);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, y, MARGIN + doc.getTextWidth(title), y);
-
-  return y + 8;
-}
-
-function addParagraph(doc: jsPDF, text: string, y: number, fontSize: number = 10): number {
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(fontSize);
-  doc.setTextColor(...DARK_GRAY);
-
-  const lines = doc.splitTextToSize(text, CONTENT_WIDTH);
-
-  for (const line of lines) {
-    y = checkPageBreak(doc, y, 6);
-    doc.text(line, MARGIN, y);
-    y += fontSize * 0.45; // line height
-  }
-
-  return y + 4;
-}
-
-function addMetricsGrid(doc: jsPDF, metrics: { label: string; value: string }[], y: number): number {
-  y = checkPageBreak(doc, y, 30);
-
-  const colCount = Math.min(metrics.length, 4);
-  const colWidth = CONTENT_WIDTH / colCount;
-
-  // Background
-  doc.setFillColor(245, 245, 245);
-  doc.roundedRect(MARGIN, y - 4, CONTENT_WIDTH, 24, 2, 2, 'F');
-
-  metrics.slice(0, 4).forEach((metric, i) => {
-    const x = MARGIN + i * colWidth + colWidth / 2;
-
-    // Value
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(...DARK_GRAY);
-    doc.text(metric.value, x, y + 6, { align: 'center' });
-
-    // Label
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(...MED_GRAY);
-    doc.text(metric.label, x, y + 13, { align: 'center' });
-  });
-
-  return y + 28;
-}
-
-function checkPageBreak(doc: jsPDF, y: number, needed: number): number {
-  if (y + needed > PAGE_HEIGHT - 20) {
-    doc.addPage();
-    return MARGIN + 10;
-  }
-  return y;
-}
-
-function formatCurrency(val?: number): string {
+function fmt$(val?: number): string {
   if (!val) return 'N/A';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
 }
 
-function formatNumber(val?: number): string {
+function fmtNum(val?: number): string {
   if (!val) return 'N/A';
   return val.toLocaleString();
 }
 
-function buildPropertyMetrics(property: PropertyData, transaction?: TransactionData | null): { label: string; value: string }[] {
-  const metrics: { label: string; value: string }[] = [];
+function buildAddress(p: PropertyData): string {
+  return [p.address, p.city, p.state, p.zip].filter(Boolean).join(', ');
+}
 
-  if (property.building_size) metrics.push({ label: 'BUILDING SIZE', value: `${formatNumber(property.building_size)} SF` });
-  if (property.year_built) metrics.push({ label: 'YEAR BUILT', value: String(property.year_built) });
-  if (property.clear_height_ft) metrics.push({ label: 'CLEAR HEIGHT', value: `${property.clear_height_ft} FT` });
-  if (property.percent_leased != null) metrics.push({ label: 'LEASED', value: `${property.percent_leased}%` });
-  if (transaction?.sale_price) metrics.push({ label: 'SALE PRICE', value: formatCurrency(transaction.sale_price) });
-  if (transaction?.asking_price) metrics.push({ label: 'ASKING PRICE', value: formatCurrency(transaction.asking_price) });
-  if (transaction?.price_per_sf) metrics.push({ label: 'PRICE/SF', value: formatCurrency(transaction.price_per_sf) });
-  if (transaction?.cap_rate) metrics.push({ label: 'CAP RATE', value: `${transaction.cap_rate}%` });
-
-  return metrics.slice(0, 4);
+function buildMetrics(p: PropertyData, t?: TransactionData | null): { label: string; value: string }[] {
+  const m: { label: string; value: string }[] = [];
+  if (t?.asking_price) m.push({ label: 'ASKING PRICE', value: fmt$(t.asking_price) });
+  if (t?.sale_price) m.push({ label: 'SALE PRICE', value: fmt$(t.sale_price) });
+  if (p.building_size) m.push({ label: 'BUILDING SIZE', value: `${fmtNum(p.building_size)} SF` });
+  if (t?.price_per_sf) m.push({ label: 'PRICE / SF', value: fmt$(t.price_per_sf) });
+  if (t?.cap_rate) m.push({ label: 'CAP RATE', value: `${t.cap_rate}%` });
+  if (t?.noi) m.push({ label: 'NOI', value: fmt$(t.noi) });
+  if (p.year_built) m.push({ label: 'YEAR BUILT', value: String(p.year_built) });
+  if (p.clear_height_ft) m.push({ label: 'CLEAR HEIGHT', value: `${p.clear_height_ft} FT` });
+  if (p.percent_leased != null) m.push({ label: 'OCCUPANCY', value: `${p.percent_leased}%` });
+  if (p.lot_size_acres) m.push({ label: 'LOT SIZE', value: `${p.lot_size_acres} AC` });
+  return m;
 }
 
 function parseHighlights(raw?: string): string[] {
@@ -222,360 +157,693 @@ function parseHighlights(raw?: string): string[] {
   }
 }
 
-function buildAddress(property: PropertyData): string {
-  const parts = [property.address];
-  if (property.city) parts.push(property.city);
-  if (property.state) parts.push(property.state);
-  if (property.zip) parts.push(property.zip);
-  return parts.filter(Boolean).join(', ');
+function buildSpecs(p: PropertyData): [string, string][] {
+  const specs: [string, string][] = [];
+  if (p.building_size) specs.push(['Building Size', `${fmtNum(p.building_size)} SF`]);
+  if (p.lot_size_acres) specs.push(['Lot Size', `${p.lot_size_acres} acres`]);
+  if (p.year_built) specs.push(['Year Built', String(p.year_built)]);
+  if (p.clear_height_ft) specs.push(['Clear Height', `${p.clear_height_ft} ft`]);
+  if (p.dock_doors) specs.push(['Dock Doors', String(p.dock_doors)]);
+  if (p.grade_doors) specs.push(['Grade-Level Doors', String(p.grade_doors)]);
+  if (p.parking_spaces) specs.push(['Parking', `${p.parking_spaces} spaces`]);
+  if (p.zoning) specs.push(['Zoning', p.zoning]);
+  if (p.percent_leased != null) specs.push(['Occupancy', `${p.percent_leased}%`]);
+  return specs;
 }
 
 // ============================================================================
-// BROCHURE TEMPLATE (1-2 pages)
+// Drawing Primitives
 // ============================================================================
 
-export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName, companyPhone } = options;
-  const doc = new jsPDF('p', 'mm', 'a4');
+/**
+ * Draw cover page — full-color background with centered white content card
+ */
+function drawCover(
+  doc: jsPDF,
+  title: string,
+  options: GeneratorOptions,
+  theme: Theme
+): void {
+  const { property, transaction, companyName } = options;
   const company = companyName || 'Apex Real Estate Services';
 
-  // Header
-  let y = addHeader(doc, 'PROPERTY BROCHURE', company);
+  // Full page primary fill
+  doc.setFillColor(...theme.primary);
+  doc.rect(0, 0, PW, PH, 'F');
 
-  // Property address block
-  y += 4;
+  // Accent stripe at very top
+  doc.setFillColor(...theme.accent);
+  doc.rect(0, 0, PW, 6, 'F');
+
+  // White content card
+  const cardX = 28;
+  const cardY = 50;
+  const cardW = PW - 56;
+  const cardH = 170;
+  doc.setFillColor(...theme.white);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 3, 3, 'F');
+
+  // Document type label
+  let y = cardY + 20;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(...DARK_GRAY);
-  doc.text(property.property_name || property.address || 'Property', MARGIN, y);
-  y += 7;
+  doc.setFontSize(10);
+  doc.setTextColor(...theme.accent);
+  doc.text(title, PW / 2, y, { align: 'center' });
 
-  if (property.address) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.setTextColor(...MED_GRAY);
-    doc.text(buildAddress(property), MARGIN, y);
-    y += 4;
+  // Thin accent line below label
+  y += 6;
+  doc.setDrawColor(...theme.accent);
+  doc.setLineWidth(0.8);
+  const labelW = doc.getTextWidth(title);
+  doc.line(PW / 2 - labelW / 2 - 8, y, PW / 2 + labelW / 2 + 8, y);
+
+  // Property name
+  y += 18;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(24);
+  doc.setTextColor(...theme.dark);
+  const propName = property.property_name || property.address || 'Property';
+  const nameLines = doc.splitTextToSize(propName, cardW - 30);
+  for (const line of nameLines) {
+    doc.text(line, PW / 2, y, { align: 'center' });
+    y += 11;
   }
+
+  // Address
+  y += 2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(...theme.medium);
+  doc.text(buildAddress(property), PW / 2, y, { align: 'center' });
+  y += 12;
 
   // Property type badge
   const typeLabel = (property.property_subtype || property.property_type || 'commercial').replace(/_/g, ' ').toUpperCase();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text(typeLabel, MARGIN, y + 4);
+  const badgeW = doc.getTextWidth(typeLabel) + 16;
+  doc.setFillColor(245, 245, 245);
+  doc.roundedRect(PW / 2 - badgeW / 2, y - 4, badgeW, 10, 2, 2, 'F');
+  doc.setTextColor(...theme.accent);
+  doc.text(typeLabel, PW / 2, y + 2, { align: 'center' });
+
+  // Transaction type badge (FOR SALE / FOR LEASE)
+  if (transaction?.transaction_type) {
+    const txType = transaction.transaction_type.toUpperCase().includes('LEASE') ? 'FOR LEASE' : 'FOR SALE';
+    y += 14;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    const txBadgeW = doc.getTextWidth(txType) + 20;
+    doc.setFillColor(...theme.accent);
+    doc.roundedRect(PW / 2 - txBadgeW / 2, y - 5, txBadgeW, 12, 2, 2, 'F');
+    doc.setTextColor(...theme.white);
+    doc.text(txType, PW / 2, y + 2, { align: 'center' });
+    y += 14;
+  } else {
+    y += 8;
+  }
+
+  // Divider
+  y += 4;
+  doc.setDrawColor(...theme.light);
+  doc.setLineWidth(0.3);
+  doc.line(cardX + 20, y, cardX + cardW - 20, y);
   y += 12;
 
-  // Metrics bar
-  const metrics = buildPropertyMetrics(property, transaction);
+  // Key metrics on cover (up to 4)
+  const metrics = buildMetrics(property, transaction).slice(0, 4);
   if (metrics.length > 0) {
-    y = addMetricsGrid(doc, metrics, y);
-  }
-
-  // Property Description
-  if (content.property_description) {
-    y = addSectionTitle(doc, 'Property Overview', y);
-    y = addParagraph(doc, content.property_description, y);
-  }
-
-  // Property Highlights
-  const highlights = parseHighlights(content.property_highlights);
-  if (highlights.length > 0) {
-    y = addSectionTitle(doc, 'Property Highlights', y);
-    for (const bullet of highlights) {
-      y = checkPageBreak(doc, y, 8);
+    const mColW = (cardW - 40) / metrics.length;
+    metrics.forEach((m, i) => {
+      const mx = cardX + 20 + i * mColW + mColW / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(...theme.dark);
+      doc.text(m.value, mx, y, { align: 'center' });
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(...DARK_GRAY);
-
-      // Bullet point
-      doc.setFillColor(...APEX_RED_RGB);
-      doc.circle(MARGIN + 2, y - 1.5, 1.2, 'F');
-      const bulletLines = doc.splitTextToSize(bullet, CONTENT_WIDTH - 8);
-      for (const line of bulletLines) {
-        y = checkPageBreak(doc, y, 5);
-        doc.text(line, MARGIN + 7, y);
-        y += 4.5;
-      }
-      y += 1;
-    }
-    y += 4;
-  }
-
-  // Building Specs Table
-  const specs: [string, string][] = [];
-  if (property.building_size) specs.push(['Building Size', `${formatNumber(property.building_size)} SF`]);
-  if (property.lot_size_acres) specs.push(['Lot Size', `${property.lot_size_acres} acres`]);
-  if (property.year_built) specs.push(['Year Built', String(property.year_built)]);
-  if (property.clear_height_ft) specs.push(['Clear Height', `${property.clear_height_ft} ft`]);
-  if (property.dock_doors) specs.push(['Dock Doors', String(property.dock_doors)]);
-  if (property.grade_doors) specs.push(['Grade-Level Doors', String(property.grade_doors)]);
-  if (property.parking_spaces) specs.push(['Parking', `${property.parking_spaces} spaces`]);
-  if (property.zoning) specs.push(['Zoning', property.zoning]);
-
-  if (specs.length > 0) {
-    y = addSectionTitle(doc, 'Building Specifications', y);
-    y = checkPageBreak(doc, y, 10 + specs.length * 8);
-
-    autoTable(doc, {
-      startY: y,
-      head: [],
-      body: specs,
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 3, textColor: DARK_GRAY },
-      columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 50 },
-        1: { cellWidth: CONTENT_WIDTH - 50 },
-      },
-      margin: { left: MARGIN, right: MARGIN },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
+      doc.setFontSize(7);
+      doc.setTextColor(...theme.medium);
+      doc.text(m.label, mx, y + 6, { align: 'center' });
     });
-
-    y = (doc as any).lastAutoTable.finalY + 8;
   }
 
-  // Contact section
-  y = checkPageBreak(doc, y, 30);
-  doc.setFillColor(...APEX_RED_RGB);
-  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 20, 2, 2, 'F');
+  // Company name at bottom of page
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(...WHITE);
-  doc.text('For more information, contact:', MARGIN + 6, y + 8);
+  doc.setTextColor(...theme.white);
+  doc.text(company.toUpperCase(), PW / 2, PH - 35, { align: 'center' });
+
+  if (title === 'OFFERING MEMORANDUM') {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(180, 180, 180);
+    doc.text('CONFIDENTIAL', PW / 2, PH - 26, { align: 'center' });
+  }
+}
+
+/**
+ * Start a new interior page with colored header bar + sidebar accent
+ * Returns the Y position where content should start
+ */
+function startInteriorPage(doc: jsPDF, title: string, theme: Theme, companyName: string): number {
+  doc.addPage();
+
+  // Header bar
+  doc.setFillColor(...theme.primary);
+  doc.rect(0, 0, PW, HEADER_H, 'F');
+
+  // Accent stripe below header
+  doc.setFillColor(...theme.accent);
+  doc.rect(0, HEADER_H, PW, 2, 'F');
+
+  // Company name in header (small, top-left)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...theme.white);
+  doc.text(companyName.toUpperCase(), MARGIN, 10);
+
+  // Page title in header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...theme.white);
+  doc.text(title, MARGIN, HEADER_H - 8);
+
+  // Left sidebar accent stripe
+  doc.setFillColor(...theme.accent);
+  doc.rect(0, HEADER_H + 2, SIDEBAR_W, PH - HEADER_H - 2, 'F');
+
+  return HEADER_H + 14;
+}
+
+/**
+ * Draw a colored section bar (full-width accent background with white text)
+ */
+function drawSectionBar(doc: jsPDF, title: string, y: number, theme: Theme): number {
+  y = pageBreak(doc, y, 22, theme);
+
+  doc.setFillColor(...theme.accent);
+  doc.rect(LEFT - 2, y - 4, CW + 4, 10, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...theme.white);
+  doc.text(title.toUpperCase(), LEFT + 4, y + 3);
+
+  return y + 14;
+}
+
+/**
+ * Draw a section title (text with accent-colored underline)
+ */
+function drawSectionTitle(doc: jsPDF, title: string, y: number, theme: Theme): number {
+  y = pageBreak(doc, y, 16, theme);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...theme.accent);
+  doc.text(title, LEFT, y);
+
+  y += 2;
+  doc.setDrawColor(...theme.accent);
+  doc.setLineWidth(0.6);
+  doc.line(LEFT, y, LEFT + doc.getTextWidth(title) * 1.05, y);
+
+  return y + 8;
+}
+
+/**
+ * Draw paragraph text
+ */
+function drawParagraph(doc: jsPDF, text: string, y: number, theme: Theme, fontSize: number = 9.5): number {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(fontSize);
+  doc.setTextColor(...theme.dark);
+
+  const lines = doc.splitTextToSize(text, CW);
+  const lineH = fontSize * 0.42;
+
+  for (const line of lines) {
+    y = pageBreak(doc, y, lineH + 1, theme);
+    doc.text(line, LEFT, y);
+    y += lineH;
+  }
+
+  return y + 4;
+}
+
+/**
+ * Draw metrics in card-style grid with left accent border
+ */
+function drawMetricsCards(doc: jsPDF, metrics: { label: string; value: string }[], y: number, theme: Theme): number {
+  const display = metrics.slice(0, 8);
+  if (display.length === 0) return y;
+
+  const cols = Math.min(display.length, 4);
+  const rows = Math.ceil(display.length / cols);
+  const cardW = (CW - (cols - 1) * 4) / cols;
+  const cardH = 22;
+
+  y = pageBreak(doc, y, rows * (cardH + 4) + 4, theme);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      if (idx >= display.length) break;
+
+      const m = display[idx];
+      const cx = LEFT + c * (cardW + 4);
+      const cy = y + r * (cardH + 4);
+
+      // Card background
+      doc.setFillColor(248, 248, 248);
+      doc.roundedRect(cx, cy, cardW, cardH, 1.5, 1.5, 'F');
+
+      // Left accent border
+      doc.setFillColor(...theme.accent);
+      doc.rect(cx, cy + 2, 2, cardH - 4, 'F');
+
+      // Value
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...theme.dark);
+      doc.text(m.value, cx + 8, cy + 9);
+
+      // Label
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...theme.medium);
+      doc.text(m.label, cx + 8, cy + 16);
+    }
+  }
+
+  return y + rows * (cardH + 4) + 6;
+}
+
+/**
+ * Draw bullet list with accent-colored dots
+ */
+function drawBulletList(doc: jsPDF, items: string[], y: number, theme: Theme): number {
+  for (const item of items) {
+    y = pageBreak(doc, y, 8, theme);
+
+    doc.setFillColor(...theme.accent);
+    doc.circle(LEFT + 2, y - 1.2, 1.2, 'F');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...theme.dark);
+    const lines = doc.splitTextToSize(item, CW - 10);
+    for (const line of lines) {
+      y = pageBreak(doc, y, 5, theme);
+      doc.text(line, LEFT + 8, y);
+      y += 4.2;
+    }
+    y += 1.5;
+  }
+  return y + 3;
+}
+
+/**
+ * Draw specs table with colored header and alternating rows
+ */
+function drawSpecsTable(doc: jsPDF, specs: [string, string][], y: number, theme: Theme): number {
+  y = pageBreak(doc, y, 14 + specs.length * 8, theme);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Specification', 'Detail']],
+    body: specs,
+    theme: 'striped',
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      textColor: theme.dark,
+      lineWidth: 0.1,
+      lineColor: theme.light,
+    },
+    headStyles: {
+      fillColor: theme.primary,
+      textColor: theme.white,
+      fontStyle: 'bold',
+      fontSize: 8.5,
+    },
+    alternateRowStyles: {
+      fillColor: [248, 248, 248],
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 55 },
+    },
+    margin: { left: LEFT, right: MARGIN },
+  });
+
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
+/**
+ * Draw financial data table
+ */
+function drawFinancialTable(doc: jsPDF, data: [string, string][], y: number, theme: Theme): number {
+  y = pageBreak(doc, y, 14 + data.length * 10, theme);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Financial Metric', 'Value']],
+    body: data,
+    theme: 'striped',
+    styles: {
+      fontSize: 10,
+      cellPadding: 5,
+      textColor: theme.dark,
+      lineWidth: 0.1,
+      lineColor: theme.light,
+    },
+    headStyles: {
+      fillColor: theme.primary,
+      textColor: theme.white,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [248, 248, 248],
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 80 },
+    },
+    margin: { left: LEFT, right: MARGIN },
+  });
+
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
+/**
+ * Draw contact / back page with full-color background
+ */
+function drawContactPage(doc: jsPDF, options: GeneratorOptions, theme: Theme): void {
+  doc.addPage();
+
+  // Full page fill
+  doc.setFillColor(...theme.primary);
+  doc.rect(0, 0, PW, PH, 'F');
+
+  // Accent bar at top
+  doc.setFillColor(...theme.accent);
+  doc.rect(0, 0, PW, 6, 'F');
+
+  // White content card centered
+  const cardX = 35;
+  const cardY = 80;
+  const cardW = PW - 70;
+  const cardH = 130;
+  doc.setFillColor(...theme.white);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 3, 3, 'F');
+
+  let y = cardY + 22;
+
+  // "FOR MORE INFORMATION"
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  const contactLine = [company, options.companyPhone, options.companyEmail].filter(Boolean).join(' | ');
-  doc.text(contactLine, MARGIN + 6, y + 14);
+  doc.setTextColor(...theme.medium);
+  doc.text('FOR MORE INFORMATION', PW / 2, y, { align: 'center' });
+  y += 12;
 
-  // Footer
-  addFooter(doc, company, companyPhone);
+  // Accent divider line
+  doc.setDrawColor(...theme.accent);
+  doc.setLineWidth(1);
+  doc.line(PW / 2 - 22, y, PW / 2 + 22, y);
+  y += 16;
+
+  // Company name
+  const company = options.companyName || 'Apex Real Estate Services';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...theme.dark);
+  doc.text(company, PW / 2, y, { align: 'center' });
+  y += 14;
+
+  // Contact details
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...theme.medium);
+
+  if (options.companyPhone) {
+    doc.text(options.companyPhone, PW / 2, y, { align: 'center' });
+    y += 7;
+  }
+  if (options.companyEmail) {
+    doc.text(options.companyEmail, PW / 2, y, { align: 'center' });
+    y += 7;
+  }
+  if (options.companyAddress) {
+    doc.text(options.companyAddress, PW / 2, y, { align: 'center' });
+    y += 7;
+  }
+
+  // Disclaimer at bottom
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(180, 180, 180);
+  const disclaimer = 'Information deemed reliable but not guaranteed. Buyer to verify all information independently.';
+  doc.text(disclaimer, PW / 2, PH - 20, { align: 'center' });
+}
+
+/**
+ * Add footers to all interior pages (skip cover and contact/back page)
+ */
+function drawAllFooters(doc: jsPDF, companyName: string, theme: Theme): void {
+  const pages = doc.getNumberOfPages();
+  for (let i = 2; i <= pages; i++) {
+    // Skip the last page (contact/back page)
+    if (i === pages) continue;
+
+    doc.setPage(i);
+
+    // Footer line
+    doc.setDrawColor(...theme.light);
+    doc.setLineWidth(0.3);
+    doc.line(LEFT, PH - 14, PW - MARGIN, PH - 14);
+
+    // Left: company name
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...theme.medium);
+    doc.text(companyName, LEFT, PH - 9);
+
+    // Right: page number
+    doc.text(`${i - 1}`, PW - MARGIN, PH - 9, { align: 'right' });
+  }
+}
+
+/**
+ * Page break check — creates new overflow page with sidebar + top accent
+ */
+function pageBreak(doc: jsPDF, y: number, needed: number, theme: Theme): number {
+  if (y + needed > PH - 18) {
+    doc.addPage();
+
+    // Sidebar accent
+    doc.setFillColor(...theme.accent);
+    doc.rect(0, 0, SIDEBAR_W, PH, 'F');
+
+    // Top accent bar for visual continuity
+    doc.setFillColor(...theme.primary);
+    doc.rect(0, 0, PW, 3, 'F');
+
+    return 14;
+  }
+  return y;
+}
+
+// ============================================================================
+// BROCHURE TEMPLATE (4-6 pages)
+// ============================================================================
+
+export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
+  const { property, transaction, content, companyName } = options;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const theme = getTheme(options.style);
+  const company = companyName || 'Apex Real Estate Services';
+
+  // === PAGE 1: COVER ===
+  drawCover(doc, 'PROPERTY BROCHURE', options, theme);
+
+  // === PAGE 2: EXECUTIVE SUMMARY ===
+  let y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company);
+
+  // Property address block
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(...theme.dark);
+  doc.text(property.property_name || property.address || 'Property', LEFT, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...theme.medium);
+  doc.text(buildAddress(property), LEFT, y);
+  y += 10;
+
+  // Key metrics cards
+  const metrics = buildMetrics(property, transaction);
+  if (metrics.length > 0) {
+    y = drawMetricsCards(doc, metrics.slice(0, 4), y, theme);
+  }
+
+  // Executive summary text (if available), otherwise property description
+  if (content.executive_summary) {
+    y = drawSectionTitle(doc, 'Overview', y, theme);
+    y = drawParagraph(doc, content.executive_summary, y, theme);
+  } else if (content.property_description) {
+    y = drawSectionTitle(doc, 'Property Overview', y, theme);
+    y = drawParagraph(doc, content.property_description, y, theme);
+  }
+
+  // === PAGE 3: PROPERTY DETAILS ===
+  y = startInteriorPage(doc, 'PROPERTY DETAILS', theme, company);
+
+  // Highlights
+  const highlights = parseHighlights(content.property_highlights);
+  if (highlights.length > 0) {
+    y = drawSectionTitle(doc, 'Property Highlights', y, theme);
+    y = drawBulletList(doc, highlights, y, theme);
+  }
+
+  // Building specs
+  const specs = buildSpecs(property);
+  if (specs.length > 0) {
+    y = drawSectionBar(doc, 'Building Specifications', y, theme);
+    y = drawSpecsTable(doc, specs, y, theme);
+  }
+
+  // Property description if we used exec summary on previous page
+  if (content.executive_summary && content.property_description) {
+    y = drawSectionTitle(doc, 'Property Description', y, theme);
+    y = drawParagraph(doc, content.property_description, y, theme);
+  }
+
+  // === PAGE 4: LOCATION ANALYSIS (if available) ===
+  if (content.location_analysis) {
+    y = startInteriorPage(doc, 'LOCATION OVERVIEW', theme, company);
+    y = drawParagraph(doc, content.location_analysis, y, theme);
+  }
+
+  // === LAST PAGE: CONTACT ===
+  drawContactPage(doc, options, theme);
+
+  // Footers
+  drawAllFooters(doc, company, theme);
 
   return doc;
 }
 
 // ============================================================================
-// OFFERING MEMORANDUM TEMPLATE (5-10 pages)
+// OFFERING MEMORANDUM TEMPLATE (6-10 pages)
 // ============================================================================
 
 export function generateOMPDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName, companyPhone } = options;
+  const { property, transaction, content, companyName } = options;
   const doc = new jsPDF('p', 'mm', 'a4');
+  const theme = getTheme(options.style);
   const company = companyName || 'Apex Real Estate Services';
 
-  // ---- COVER PAGE ----
-  // Full-color cover
-  doc.setFillColor(...APEX_RED_RGB);
-  doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, 'F');
+  // === PAGE 1: COVER ===
+  drawCover(doc, 'OFFERING MEMORANDUM', options, theme);
 
-  // White text area
-  doc.setFillColor(...WHITE);
-  doc.roundedRect(30, 60, PAGE_WIDTH - 60, 120, 4, 4, 'F');
-
-  // "OFFERING MEMORANDUM"
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text('OFFERING MEMORANDUM', PAGE_WIDTH / 2, 80, { align: 'center' });
-
-  // Property name
-  doc.setFontSize(22);
-  doc.setTextColor(...DARK_GRAY);
-  const propTitle = property.property_name || property.address || 'Property';
-  const titleLines = doc.splitTextToSize(propTitle, PAGE_WIDTH - 80);
-  let coverY = 95;
-  for (const line of titleLines) {
-    doc.text(line, PAGE_WIDTH / 2, coverY, { align: 'center' });
-    coverY += 10;
-  }
-
-  // Address
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.setTextColor(...MED_GRAY);
-  doc.text(buildAddress(property), PAGE_WIDTH / 2, coverY + 5, { align: 'center' });
-  coverY += 15;
-
-  // Property type
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(...APEX_RED_RGB);
-  const coverType = (property.property_subtype || property.property_type || 'commercial').replace(/_/g, ' ').toUpperCase();
-  doc.text(coverType, PAGE_WIDTH / 2, coverY + 5, { align: 'center' });
-
-  // Key metrics on cover
-  const coverMetrics = buildPropertyMetrics(property, transaction);
-  if (coverMetrics.length > 0) {
-    coverY += 20;
-    const metricWidth = (PAGE_WIDTH - 80) / Math.min(coverMetrics.length, 4);
-    coverMetrics.slice(0, 4).forEach((m, i) => {
-      const mx = 40 + i * metricWidth + metricWidth / 2;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(...DARK_GRAY);
-      doc.text(m.value, mx, coverY, { align: 'center' });
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.setTextColor(...MED_GRAY);
-      doc.text(m.label, mx, coverY + 5, { align: 'center' });
-    });
-  }
-
-  // Company at bottom of cover
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(...WHITE);
-  doc.text(company.toUpperCase(), PAGE_WIDTH / 2, PAGE_HEIGHT - 40, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('CONFIDENTIAL', PAGE_WIDTH / 2, PAGE_HEIGHT - 30, { align: 'center' });
-
-  // ---- TABLE OF CONTENTS ----
-  doc.addPage();
-  let y = addHeader(doc, 'TABLE OF CONTENTS', company);
+  // === PAGE 2: TABLE OF CONTENTS ===
+  let y = startInteriorPage(doc, 'TABLE OF CONTENTS', theme, company);
   y += 8;
 
-  const tocItems = [
-    'Executive Summary',
-    'Property Overview',
-    'Building Specifications',
-    'Financial Analysis',
-  ];
+  const tocItems: string[] = ['Executive Summary', 'Property Overview'];
+  if (parseHighlights(content.property_highlights).length > 0) tocItems.push('Property Highlights');
+  tocItems.push('Building Specifications');
+  if (transaction && (transaction.sale_price || transaction.asking_price || transaction.noi)) {
+    tocItems.push('Financial Analysis');
+  }
   if (content.location_analysis) tocItems.push('Location Analysis');
-  if (parseHighlights(content.property_highlights).length > 0) tocItems.splice(2, 0, 'Property Highlights');
+  tocItems.push('Confidentiality Notice');
 
   tocItems.forEach((item, i) => {
+    // Numbered label in accent color
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...theme.accent);
+    doc.text(`${String(i + 1).padStart(2, '0')}`, LEFT, y);
+
+    // Item name
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
-    doc.setTextColor(...DARK_GRAY);
-    doc.text(`${i + 1}.  ${item}`, MARGIN + 5, y);
-    y += 10;
+    doc.setTextColor(...theme.dark);
+    doc.text(item, LEFT + 14, y);
+
+    // Dotted line to right
+    doc.setDrawColor(...theme.light);
+    doc.setLineWidth(0.3);
+    const textEnd = LEFT + 14 + doc.getTextWidth(item) + 4;
+    doc.line(textEnd, y - 1, PW - MARGIN - 20, y - 1);
+
+    y += 12;
   });
 
-  // ---- EXECUTIVE SUMMARY ----
-  doc.addPage();
-  y = addHeader(doc, 'EXECUTIVE SUMMARY', company);
-  y += 4;
+  // === PAGE 3: EXECUTIVE SUMMARY ===
+  y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company);
 
   if (content.executive_summary) {
-    y = addParagraph(doc, content.executive_summary, y, 10);
+    y = drawParagraph(doc, content.executive_summary, y, theme, 10);
   }
 
-  // Metrics
-  const metrics = buildPropertyMetrics(property, transaction);
+  // Key metrics
+  const metrics = buildMetrics(property, transaction);
   if (metrics.length > 0) {
     y += 4;
-    y = addMetricsGrid(doc, metrics, y);
+    y = drawMetricsCards(doc, metrics.slice(0, 8), y, theme);
   }
 
-  // ---- PROPERTY OVERVIEW ----
-  doc.addPage();
-  y = addHeader(doc, 'PROPERTY OVERVIEW', company);
-  y += 4;
+  // === PAGE 4: PROPERTY OVERVIEW ===
+  y = startInteriorPage(doc, 'PROPERTY OVERVIEW', theme, company);
 
   if (content.property_description) {
-    y = addParagraph(doc, content.property_description, y);
+    y = drawParagraph(doc, content.property_description, y, theme);
     y += 4;
   }
 
   // Highlights
   const highlights = parseHighlights(content.property_highlights);
   if (highlights.length > 0) {
-    y = addSectionTitle(doc, 'Property Highlights', y);
-    for (const bullet of highlights) {
-      y = checkPageBreak(doc, y, 8);
-      doc.setFillColor(...APEX_RED_RGB);
-      doc.circle(MARGIN + 2, y - 1.5, 1.2, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(...DARK_GRAY);
-      const bulletLines = doc.splitTextToSize(bullet, CONTENT_WIDTH - 8);
-      for (const line of bulletLines) {
-        y = checkPageBreak(doc, y, 5);
-        doc.text(line, MARGIN + 7, y);
-        y += 4.5;
-      }
-      y += 1;
-    }
-    y += 6;
+    y = drawSectionTitle(doc, 'Property Highlights', y, theme);
+    y = drawBulletList(doc, highlights, y, theme);
   }
 
-  // Building specs table
-  const specs: [string, string][] = [];
-  if (property.building_size) specs.push(['Building Size', `${formatNumber(property.building_size)} SF`]);
-  if (property.lot_size_acres) specs.push(['Lot Size', `${property.lot_size_acres} acres`]);
-  if (property.year_built) specs.push(['Year Built', String(property.year_built)]);
-  if (property.clear_height_ft) specs.push(['Clear Height', `${property.clear_height_ft} ft`]);
-  if (property.dock_doors) specs.push(['Dock Doors', String(property.dock_doors)]);
-  if (property.grade_doors) specs.push(['Grade-Level Doors', String(property.grade_doors)]);
-  if (property.parking_spaces) specs.push(['Parking', `${property.parking_spaces} spaces`]);
-  if (property.zoning) specs.push(['Zoning', property.zoning]);
-  if (property.percent_leased != null) specs.push(['Occupancy', `${property.percent_leased}%`]);
+  // === PAGE 5: BUILDING SPECS ===
+  y = startInteriorPage(doc, 'BUILDING SPECIFICATIONS', theme, company);
 
+  const specs = buildSpecs(property);
   if (specs.length > 0) {
-    y = addSectionTitle(doc, 'Building Specifications', y);
-    y = checkPageBreak(doc, y, 10 + specs.length * 8);
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Specification', 'Detail']],
-      body: specs,
-      theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 4, textColor: DARK_GRAY },
-      headStyles: { fillColor: APEX_RED_RGB, textColor: WHITE, fontStyle: 'bold' },
-      columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 55 },
-      },
-      margin: { left: MARGIN, right: MARGIN },
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = drawSpecsTable(doc, specs, y, theme);
   }
 
-  // ---- FINANCIAL ANALYSIS ----
+  // === PAGE 6: FINANCIAL ANALYSIS (if data available) ===
   if (transaction && (transaction.sale_price || transaction.asking_price || transaction.noi)) {
-    doc.addPage();
-    y = addHeader(doc, 'FINANCIAL ANALYSIS', company);
-    y += 4;
+    y = startInteriorPage(doc, 'FINANCIAL ANALYSIS', theme, company);
 
     const finData: [string, string][] = [];
-    if (transaction.asking_price) finData.push(['Asking Price', formatCurrency(transaction.asking_price)]);
-    if (transaction.sale_price) finData.push(['Sale Price', formatCurrency(transaction.sale_price)]);
-    if (transaction.price_per_sf) finData.push(['Price Per SF', formatCurrency(transaction.price_per_sf)]);
-    if (transaction.noi) finData.push(['Net Operating Income (NOI)', formatCurrency(transaction.noi)]);
+    if (transaction.asking_price) finData.push(['Asking Price', fmt$(transaction.asking_price)]);
+    if (transaction.sale_price) finData.push(['Sale Price', fmt$(transaction.sale_price)]);
+    if (transaction.price_per_sf) finData.push(['Price Per SF', fmt$(transaction.price_per_sf)]);
+    if (transaction.noi) finData.push(['Net Operating Income (NOI)', fmt$(transaction.noi)]);
     if (transaction.cap_rate) finData.push(['Capitalization Rate', `${transaction.cap_rate}%`]);
 
     if (finData.length > 0) {
-      autoTable(doc, {
-        startY: y,
-        head: [['Metric', 'Value']],
-        body: finData,
-        theme: 'striped',
-        styles: { fontSize: 10, cellPadding: 5, textColor: DARK_GRAY },
-        headStyles: { fillColor: APEX_RED_RGB, textColor: WHITE, fontStyle: 'bold' },
-        columnStyles: {
-          0: { fontStyle: 'bold', cellWidth: 80 },
-        },
-        margin: { left: MARGIN, right: MARGIN },
-      });
-
-      y = (doc as any).lastAutoTable.finalY + 10;
+      y = drawFinancialTable(doc, finData, y, theme);
     }
   }
 
-  // ---- LOCATION ANALYSIS ----
+  // === PAGE 7: LOCATION ANALYSIS ===
   if (content.location_analysis) {
-    doc.addPage();
-    y = addHeader(doc, 'LOCATION ANALYSIS', company);
-    y += 4;
-    y = addParagraph(doc, content.location_analysis, y);
+    y = startInteriorPage(doc, 'LOCATION ANALYSIS', theme, company);
+    y = drawParagraph(doc, content.location_analysis, y, theme);
   }
 
-  // ---- CONFIDENTIALITY NOTICE ----
-  doc.addPage();
-  y = addHeader(doc, 'CONFIDENTIALITY NOTICE', company);
-  y += 8;
+  // === PAGE 8: CONFIDENTIALITY NOTICE ===
+  y = startInteriorPage(doc, 'CONFIDENTIALITY NOTICE', theme, company);
 
-  const confidentialityText = `This Offering Memorandum has been prepared by ${company} for the exclusive use of authorized prospective purchasers. This document is confidential and proprietary and is not to be reproduced, distributed, or shared with any third party without the prior written consent of ${company}.
+  const confidText = `This Offering Memorandum has been prepared by ${company} for the exclusive use of authorized prospective purchasers. This document is confidential and proprietary and is not to be reproduced, distributed, or shared with any third party without the prior written consent of ${company}.
 
 The information contained herein has been obtained from sources believed to be reliable but has not been independently verified. No representation, warranty, or guarantee of any kind is made regarding the accuracy or completeness of the information contained herein. Prospective purchasers are encouraged to conduct their own independent investigation and due diligence.
 
@@ -583,152 +851,147 @@ ${company} and its affiliates, agents, and representatives make no representatio
 
 By accepting this Offering Memorandum, you agree to maintain the confidentiality of the information contained herein and to return it upon request.`;
 
-  y = addParagraph(doc, confidentialityText, y, 9);
+  y = drawParagraph(doc, confidText, y, theme, 9);
 
-  // Footer on all pages
-  addFooter(doc, company, companyPhone);
+  // === LAST PAGE: CONTACT ===
+  drawContactPage(doc, options, theme);
+
+  // Footers
+  drawAllFooters(doc, company, theme);
 
   return doc;
 }
 
 // ============================================================================
-// PROPOSAL TEMPLATE (3-5 pages)
+// PROPOSAL TEMPLATE (4-6 pages)
 // ============================================================================
 
 export function generateProposalPDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName, companyPhone, companyEmail, companyAddress } = options;
+  const { property, transaction, content, companyName, companyAddress } = options;
   const doc = new jsPDF('p', 'mm', 'a4');
+  const theme = getTheme(options.style);
   const company = companyName || 'Apex Real Estate Services';
 
-  // ---- COVER PAGE ----
-  // Clean white cover with red accent
-  doc.setFillColor(...APEX_RED_RGB);
-  doc.rect(0, 0, 8, PAGE_HEIGHT, 'F'); // Left red bar
+  // === PAGE 1: COVER ===
+  // Proposal cover uses a left-bar accent design (different from brochure/OM)
+  doc.setFillColor(...theme.white);
+  doc.rect(0, 0, PW, PH, 'F');
 
-  let coverY = 60;
+  // Left accent bars
+  doc.setFillColor(...theme.primary);
+  doc.rect(0, 0, 10, PH, 'F');
+  doc.setFillColor(...theme.accent);
+  doc.rect(10, 0, 3, PH, 'F');
+
+  let y = 60;
+
+  // "INVESTMENT PROPOSAL"
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text('INVESTMENT PROPOSAL', MARGIN + 10, coverY);
-  coverY += 15;
+  doc.setTextColor(...theme.accent);
+  doc.text('INVESTMENT PROPOSAL', MARGIN + 12, y);
+  y += 15;
 
-  doc.setFontSize(24);
-  doc.setTextColor(...DARK_GRAY);
+  // Property name
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(26);
+  doc.setTextColor(...theme.dark);
   const propTitle = property.property_name || property.address || 'Property';
-  const titleLines = doc.splitTextToSize(propTitle, CONTENT_WIDTH - 10);
+  const titleLines = doc.splitTextToSize(propTitle, PW - MARGIN - 24);
   for (const line of titleLines) {
-    doc.text(line, MARGIN + 10, coverY);
-    coverY += 12;
+    doc.text(line, MARGIN + 12, y);
+    y += 13;
   }
 
+  // Address
+  y += 2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.setTextColor(...MED_GRAY);
-  doc.text(buildAddress(property), MARGIN + 10, coverY + 5);
-  coverY += 20;
+  doc.setTextColor(...theme.medium);
+  doc.text(buildAddress(property), MARGIN + 12, y);
+  y += 16;
 
   // Type badge
   const typeLabel = (property.property_subtype || property.property_type || 'commercial').replace(/_/g, ' ').toUpperCase();
-  doc.setFillColor(245, 245, 245);
-  const badgeWidth = doc.getTextWidth(typeLabel) + 12;
-  doc.roundedRect(MARGIN + 10, coverY - 4, badgeWidth, 10, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(...APEX_RED_RGB);
-  doc.text(typeLabel, MARGIN + 16, coverY + 2);
+  const badgeW = doc.getTextWidth(typeLabel) + 16;
+  doc.setFillColor(245, 245, 245);
+  doc.roundedRect(MARGIN + 12, y - 4, badgeW, 10, 2, 2, 'F');
+  doc.setTextColor(...theme.accent);
+  doc.text(typeLabel, MARGIN + 20, y + 2);
 
-  // Prepared by
+  // Prepared by (bottom of cover)
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...MED_GRAY);
-  doc.text('Prepared by', MARGIN + 10, PAGE_HEIGHT - 60);
+  doc.setFontSize(8);
+  doc.setTextColor(...theme.medium);
+  doc.text('Prepared by', MARGIN + 12, PH - 65);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...DARK_GRAY);
-  doc.text(company, MARGIN + 10, PAGE_HEIGHT - 52);
+  doc.setFontSize(12);
+  doc.setTextColor(...theme.dark);
+  doc.text(company, MARGIN + 12, PH - 55);
   if (companyAddress) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.setTextColor(...MED_GRAY);
-    doc.text(companyAddress, MARGIN + 10, PAGE_HEIGHT - 45);
+    doc.setTextColor(...theme.medium);
+    doc.text(companyAddress, MARGIN + 12, PH - 47);
   }
 
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.setTextColor(...MED_GRAY);
-  doc.text(today, MARGIN + 10, PAGE_HEIGHT - 35);
+  doc.setTextColor(...theme.medium);
+  doc.text(today, MARGIN + 12, PH - 35);
 
-  // ---- WHY APEX / TEAM INTRO ----
+  // === PAGE 2: WHY [COMPANY] ===
   if (content.team_intro) {
-    doc.addPage();
-    let y = addHeader(doc, `WHY ${company.toUpperCase()}`, company);
-    y += 4;
-    y = addParagraph(doc, content.team_intro, y);
+    y = startInteriorPage(doc, `WHY ${company.toUpperCase()}`, theme, company);
+    y = drawParagraph(doc, content.team_intro, y, theme, 10);
   }
 
-  // ---- MARKET ANALYSIS ----
+  // === PAGE 3: MARKET ANALYSIS ===
   if (content.market_analysis) {
-    doc.addPage();
-    let y = addHeader(doc, 'MARKET ANALYSIS', company);
-    y += 4;
-    y = addParagraph(doc, content.market_analysis, y);
+    y = startInteriorPage(doc, 'MARKET ANALYSIS', theme, company);
+    y = drawParagraph(doc, content.market_analysis, y, theme, 10);
   }
 
-  // ---- PROPERTY RECOMMENDATION ----
-  doc.addPage();
-  let y = addHeader(doc, 'PROPERTY RECOMMENDATION', company);
-  y += 4;
+  // === PAGE 4: PROPERTY RECOMMENDATION ===
+  y = startInteriorPage(doc, 'PROPERTY RECOMMENDATION', theme, company);
 
-  // Property info
+  // Property header
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.setTextColor(...DARK_GRAY);
-  doc.text(property.property_name || property.address || 'Property', MARGIN, y);
-  y += 6;
+  doc.setTextColor(...theme.dark);
+  doc.text(property.property_name || property.address || 'Property', LEFT, y);
+  y += 5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(...MED_GRAY);
-  doc.text(buildAddress(property), MARGIN, y);
+  doc.setFontSize(9);
+  doc.setTextColor(...theme.medium);
+  doc.text(buildAddress(property), LEFT, y);
   y += 10;
 
   // Metrics
-  const metrics = buildPropertyMetrics(property, transaction);
+  const metrics = buildMetrics(property, transaction);
   if (metrics.length > 0) {
-    y = addMetricsGrid(doc, metrics, y);
+    y = drawMetricsCards(doc, metrics.slice(0, 4), y, theme);
   }
 
   // Description
   if (content.property_description) {
-    y = addSectionTitle(doc, 'Property Overview', y);
-    y = addParagraph(doc, content.property_description, y);
+    y = drawSectionTitle(doc, 'Property Overview', y, theme);
+    y = drawParagraph(doc, content.property_description, y, theme);
   }
 
   // Highlights
   const highlights = parseHighlights(content.property_highlights);
   if (highlights.length > 0) {
-    y = addSectionTitle(doc, 'Key Highlights', y);
-    for (const bullet of highlights) {
-      y = checkPageBreak(doc, y, 8);
-      doc.setFillColor(...APEX_RED_RGB);
-      doc.circle(MARGIN + 2, y - 1.5, 1.2, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(...DARK_GRAY);
-      const bulletLines = doc.splitTextToSize(bullet, CONTENT_WIDTH - 8);
-      for (const line of bulletLines) {
-        y = checkPageBreak(doc, y, 5);
-        doc.text(line, MARGIN + 7, y);
-        y += 4.5;
-      }
-      y += 1;
-    }
-    y += 6;
+    y = drawSectionTitle(doc, 'Key Highlights', y, theme);
+    y = drawBulletList(doc, highlights, y, theme);
   }
 
-  // ---- NEXT STEPS ----
-  y = checkPageBreak(doc, y, 50);
-  y = addSectionTitle(doc, 'Next Steps', y);
+  // === NEXT STEPS ===
+  y = pageBreak(doc, y, 60, theme);
+  y = drawSectionBar(doc, 'Next Steps', y, theme);
 
   const steps = [
     'Schedule a property tour at your convenience',
@@ -738,37 +1001,29 @@ export function generateProposalPDF(options: GeneratorOptions): jsPDF {
   ];
 
   steps.forEach((step, i) => {
-    y = checkPageBreak(doc, y, 8);
+    y = pageBreak(doc, y, 12, theme);
+
+    // Step number circle
+    doc.setFillColor(...theme.accent);
+    doc.circle(LEFT + 4, y - 1, 4, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...APEX_RED_RGB);
-    doc.text(`${i + 1}.`, MARGIN, y);
+    doc.setFontSize(8);
+    doc.setTextColor(...theme.white);
+    doc.text(String(i + 1), LEFT + 4, y + 0.5, { align: 'center' });
+
+    // Step text
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...DARK_GRAY);
-    doc.text(step, MARGIN + 8, y);
-    y += 7;
+    doc.setFontSize(10);
+    doc.setTextColor(...theme.dark);
+    doc.text(step, LEFT + 14, y);
+    y += 10;
   });
 
-  y += 10;
+  // === LAST PAGE: CONTACT ===
+  drawContactPage(doc, options, theme);
 
-  // Contact block
-  y = checkPageBreak(doc, y, 35);
-  doc.setFillColor(...APEX_RED_RGB);
-  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 28, 2, 2, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...WHITE);
-  doc.text("Let's Get Started", MARGIN + 6, y + 8);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  const contactInfo = [company, companyPhone, companyEmail].filter(Boolean).join(' | ');
-  doc.text(contactInfo, MARGIN + 6, y + 16);
-  if (companyAddress) {
-    doc.text(companyAddress, MARGIN + 6, y + 22);
-  }
-
-  // Footer
-  addFooter(doc, company, companyPhone);
+  // Footers
+  drawAllFooters(doc, company, theme);
 
   return doc;
 }

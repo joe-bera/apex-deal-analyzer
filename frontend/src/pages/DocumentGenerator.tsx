@@ -9,11 +9,11 @@ import {
   GenerateContentResponse,
   MasterProperty,
 } from '../types';
-import { generateBrochurePDF, generateOMPDF, generateProposalPDF } from '../utils/pdfBuilder';
+import { generateBrochurePDF, generateOMPDF, generateProposalPDF, ThemeStyle } from '../utils/pdfBuilder';
 
 // Content types required per template
 const TEMPLATE_CONTENT_TYPES: Record<TemplateType, ContentType[]> = {
-  brochure: ['property_description', 'property_highlights'],
+  brochure: ['property_description', 'property_highlights', 'executive_summary', 'location_analysis'],
   om: ['property_description', 'property_highlights', 'executive_summary', 'location_analysis'],
   proposal: ['property_description', 'property_highlights', 'market_analysis', 'team_intro'],
 };
@@ -22,20 +22,38 @@ const TEMPLATE_INFO: { type: TemplateType; label: string; description: string; p
   {
     type: 'brochure',
     label: 'Property Brochure',
-    description: 'One-page marketing flyer with property overview, key metrics, highlights, and specs.',
-    pages: '1-2 pages',
+    description: 'Professional marketing brochure with cover page, executive summary, property details, location overview, and contact page.',
+    pages: '4-6 pages',
   },
   {
     type: 'om',
     label: 'Offering Memorandum',
-    description: 'Comprehensive investment package with executive summary, financials, specs, and location analysis.',
-    pages: '5-10 pages',
+    description: 'Comprehensive investment package with cover, table of contents, executive summary, financials, location analysis, and confidentiality notice.',
+    pages: '6-10 pages',
   },
   {
     type: 'proposal',
     label: 'Investment Proposal',
-    description: 'Client-facing proposal with company intro, market analysis, property recommendation, and next steps.',
-    pages: '3-5 pages',
+    description: 'Client-facing proposal with company intro, market analysis, property recommendation, next steps, and contact page.',
+    pages: '4-6 pages',
+  },
+];
+
+const STYLE_INFO: { style: ThemeStyle; label: string; description: string }[] = [
+  {
+    style: 'apex',
+    label: 'Apex Maroon',
+    description: 'Deep maroon with red accents — classic Apex branding',
+  },
+  {
+    style: 'modern',
+    label: 'Modern Dark',
+    description: 'Charcoal black with red accents — sleek and contemporary',
+  },
+  {
+    style: 'corporate',
+    label: 'Corporate Blue',
+    description: 'Navy blue with teal accents — professional and corporate',
   },
 ];
 
@@ -55,6 +73,7 @@ export default function DocumentGenerator() {
 
   // Template
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<ThemeStyle>('apex');
 
   // Content generation
   const [generating, setGenerating] = useState(false);
@@ -134,34 +153,32 @@ export default function DocumentGenerator() {
     }
   };
 
+  // Build PDF generation options
+  const buildPdfOptions = () => ({
+    property: propertyData,
+    transaction: transactionData,
+    content: generatedContent,
+    companyName: user?.company_name || 'Apex Real Estate Services',
+    companyPhone: user?.company_phone,
+    companyEmail: user?.company_email,
+    companyAddress: user?.company_address,
+    style: selectedStyle,
+  });
+
+  const buildPdf = () => {
+    if (!selectedTemplate || !propertyData) return null;
+    const options = buildPdfOptions();
+    switch (selectedTemplate) {
+      case 'brochure': return generateBrochurePDF(options);
+      case 'om': return generateOMPDF(options);
+      case 'proposal': return generateProposalPDF(options);
+    }
+  };
+
   // Generate and open PDF
   const handleExportPDF = () => {
-    if (!selectedTemplate || !propertyData) return;
-
-    const options = {
-      property: propertyData,
-      transaction: transactionData,
-      content: generatedContent,
-      companyName: user?.company_name || 'Apex Real Estate Services',
-      companyPhone: user?.company_phone,
-      companyEmail: user?.company_email,
-      companyAddress: user?.company_address,
-    };
-
-    let doc;
-    switch (selectedTemplate) {
-      case 'brochure':
-        doc = generateBrochurePDF(options);
-        break;
-      case 'om':
-        doc = generateOMPDF(options);
-        break;
-      case 'proposal':
-        doc = generateProposalPDF(options);
-        break;
-    }
-
-    // Open in new tab
+    const doc = buildPdf();
+    if (!doc) return;
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     window.open(url, '_blank');
@@ -169,31 +186,8 @@ export default function DocumentGenerator() {
 
   // Download PDF
   const handleDownloadPDF = () => {
-    if (!selectedTemplate || !propertyData) return;
-
-    const options = {
-      property: propertyData,
-      transaction: transactionData,
-      content: generatedContent,
-      companyName: user?.company_name || 'Apex Real Estate Services',
-      companyPhone: user?.company_phone,
-      companyEmail: user?.company_email,
-      companyAddress: user?.company_address,
-    };
-
-    let doc;
-    switch (selectedTemplate) {
-      case 'brochure':
-        doc = generateBrochurePDF(options);
-        break;
-      case 'om':
-        doc = generateOMPDF(options);
-        break;
-      case 'proposal':
-        doc = generateProposalPDF(options);
-        break;
-    }
-
+    const doc = buildPdf();
+    if (!doc || !propertyData) return;
     const filename = `${selectedTemplate}_${propertyData.address || 'property'}_${new Date().toISOString().slice(0, 10)}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
     doc.save(filename);
   };
@@ -223,6 +217,7 @@ export default function DocumentGenerator() {
     setStep('select-property');
     setSelectedProperty(null);
     setSelectedTemplate(null);
+    setSelectedStyle('apex');
     setGeneratedContent({});
     setPropertyData(null);
     setTransactionData(null);
@@ -389,11 +384,12 @@ export default function DocumentGenerator() {
                   key={tmpl.type}
                   onClick={() => {
                     setSelectedTemplate(tmpl.type);
-                    setStep('generate-content');
                   }}
                   className="text-left"
                 >
-                  <Card className="h-full hover:border-primary-400 hover:shadow-md transition-all cursor-pointer">
+                  <Card className={`h-full hover:border-primary-400 hover:shadow-md transition-all cursor-pointer ${
+                    selectedTemplate === tmpl.type ? 'border-primary-500 ring-2 ring-primary-200' : ''
+                  }`}>
                     <CardContent className="p-6 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -422,6 +418,53 @@ export default function DocumentGenerator() {
                 </button>
               ))}
             </div>
+
+            {/* Color Theme selector */}
+            {selectedTemplate && (
+              <>
+                <h3 className="text-sm font-medium text-gray-700 mt-6">Color Theme</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {STYLE_INFO.map((s) => (
+                    <button
+                      key={s.style}
+                      onClick={() => setSelectedStyle(s.style)}
+                      className={`text-left p-4 border rounded-lg transition-all ${
+                        selectedStyle === s.style
+                          ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1">
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{
+                              backgroundColor: s.style === 'apex' ? '#780014' : s.style === 'modern' ? '#19191C' : '#003366',
+                            }}
+                          />
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{
+                              backgroundColor: s.style === 'apex' ? '#B21F24' : s.style === 'modern' ? '#BE1E2D' : '#00809B',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{s.label}</p>
+                          <p className="text-xs text-gray-500">{s.description}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-2">
+                  <Button onClick={() => setStep('generate-content')}>
+                    Continue with {TEMPLATE_INFO.find(t => t.type === selectedTemplate)?.label}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
