@@ -197,9 +197,8 @@ export default function PropertyDetail() {
 
     try {
       await api.addComp(id!, compData);
-      await loadPropertyData();
       setShowAddComp(false);
-      e.currentTarget.reset();
+      await loadPropertyData();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to add comp';
       setError(message);
