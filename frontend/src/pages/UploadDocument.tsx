@@ -71,6 +71,9 @@ export default function UploadDocument() {
     if (!isPdf) {
       return 'Please upload a PDF file';
     }
+    if (file.size === 0) {
+      return 'This file appears to be 0 bytes. If the file is stored in iCloud Drive, open it in Finder first to download it locally, then try again.';
+    }
     if (file.size > MAX_FILE_SIZE) {
       return `File too large (${formatFileSize(file.size)}). Maximum size is ${MAX_FILE_SIZE_DISPLAY}.`;
     }
