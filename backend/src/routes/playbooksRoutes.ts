@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import {
   listPlaybooks,
   getPlaybook,
@@ -19,23 +19,23 @@ import {
 const router = Router();
 
 // Playbook template CRUD
-router.get('/', optionalAuth, listPlaybooks);
-router.get('/:id', optionalAuth, getPlaybook);
-router.post('/', optionalAuth, createPlaybook);
-router.patch('/:id', optionalAuth, updatePlaybook);
-router.delete('/:id', optionalAuth, deletePlaybook);
+router.get('/', authenticate, listPlaybooks);
+router.get('/:id', authenticate, getPlaybook);
+router.post('/', authenticate, createPlaybook);
+router.patch('/:id', authenticate, updatePlaybook);
+router.delete('/:id', authenticate, deletePlaybook);
 
 // Playbook task templates
-router.post('/:id/tasks', optionalAuth, addPlaybookTask);
-router.patch('/:playbookId/tasks/:taskId', optionalAuth, updatePlaybookTask);
-router.delete('/:playbookId/tasks/:taskId', optionalAuth, deletePlaybookTask);
+router.post('/:id/tasks', authenticate, addPlaybookTask);
+router.patch('/:playbookId/tasks/:taskId', authenticate, updatePlaybookTask);
+router.delete('/:playbookId/tasks/:taskId', authenticate, deletePlaybookTask);
 
 export default router;
 
 // Deal tasks router (mounted under /api/crm-deals)
 export const dealTasksRouter = Router();
-dealTasksRouter.get('/:dealId/tasks', optionalAuth, listDealTasks);
-dealTasksRouter.post('/:dealId/tasks', optionalAuth, createDealTask);
-dealTasksRouter.patch('/:dealId/tasks/:taskId', optionalAuth, updateDealTask);
-dealTasksRouter.delete('/:dealId/tasks/:taskId', optionalAuth, deleteDealTask);
-dealTasksRouter.post('/:dealId/apply-playbook', optionalAuth, applyPlaybook);
+dealTasksRouter.get('/:dealId/tasks', authenticate, listDealTasks);
+dealTasksRouter.post('/:dealId/tasks', authenticate, createDealTask);
+dealTasksRouter.patch('/:dealId/tasks/:taskId', authenticate, updateDealTask);
+dealTasksRouter.delete('/:dealId/tasks/:taskId', authenticate, deleteDealTask);
+dealTasksRouter.post('/:dealId/apply-playbook', authenticate, applyPlaybook);

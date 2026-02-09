@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { Company, CompanyType } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import Layout from '../components/Layout';
+import Breadcrumbs from '../components/Breadcrumbs';
 
 const COMPANY_TYPES: { value: CompanyType; label: string }[] = [
   { value: 'brokerage', label: 'Brokerage' }, { value: 'investment_firm', label: 'Investment Firm' },
@@ -99,10 +100,10 @@ export default function CompanyDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <button onClick={() => navigate('/crm/companies')} className="text-sm text-gray-500 hover:text-gray-700 mb-1 flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                Back to Companies
-              </button>
+              <Breadcrumbs items={[
+                { label: 'Companies', href: '/crm/companies' },
+                { label: company?.name || 'Company' },
+              ]} />
               <h1 className="text-2xl font-bold text-gray-900">{company.name}</h1>
               <Badge variant="info" className="mt-1">{company.company_type?.replace(/_/g, ' ')}</Badge>
             </div>

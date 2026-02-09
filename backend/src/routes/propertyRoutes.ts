@@ -18,7 +18,7 @@ import {
   createPhoto,
   listPhotos,
 } from '../controllers/photoController';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
   uuidParamSchema,
@@ -39,7 +39,7 @@ const router = Router();
 // Create property from extracted document data
 router.post(
   '/from-document/:documentId',
-  optionalAuth,
+  authenticate,
   validate(documentIdParamSchema, 'params'),
   validate(propertyOverridesSchema, 'body'),
   createPropertyFromDocument
@@ -48,7 +48,7 @@ router.post(
 // List properties with filters
 router.get(
   '/',
-  optionalAuth,
+  authenticate,
   validate(listPropertiesQuerySchema, 'query'),
   listProperties
 );
@@ -56,7 +56,7 @@ router.get(
 // Get single property with documents
 router.get(
   '/:id',
-  optionalAuth,
+  authenticate,
   validate(uuidParamSchema, 'params'),
   getProperty
 );
@@ -64,7 +64,7 @@ router.get(
 // Update property
 router.patch(
   '/:id',
-  optionalAuth,
+  authenticate,
   validate(uuidParamSchema, 'params'),
   validate(updatePropertySchema, 'body'),
   updateProperty
@@ -73,7 +73,7 @@ router.patch(
 // Delete property (soft delete)
 router.delete(
   '/:id',
-  optionalAuth,
+  authenticate,
   validate(uuidParamSchema, 'params'),
   deleteProperty
 );
@@ -81,7 +81,7 @@ router.delete(
 // Get latest valuation result
 router.get(
   '/:id/valuation',
-  optionalAuth,
+  authenticate,
   validate(uuidParamSchema, 'params'),
   getPropertyValuation
 );
@@ -89,7 +89,7 @@ router.get(
 // Analyze property valuation with AI (rate limited)
 router.post(
   '/:id/analyze',
-  optionalAuth,
+  authenticate,
   aiLimiter,
   validate(uuidParamSchema, 'params'),
   analyzePropertyValuation
@@ -98,21 +98,21 @@ router.post(
 // Generate LOI for property
 router.post(
   '/:propertyId/loi',
-  optionalAuth,
+  authenticate,
   generatePropertyLOI
 );
 
 // Get all LOIs for a property
 router.get(
   '/:propertyId/lois',
-  optionalAuth,
+  authenticate,
   getPropertyLOIs
 );
 
 // Update LOI (separate route for LOI by ID)
 router.patch(
   '/lois/:loiId',
-  optionalAuth,
+  authenticate,
   updateLOI
 );
 
@@ -123,7 +123,7 @@ router.patch(
 // Get signed URL for photo upload
 router.post(
   '/:propertyId/photos/upload-url',
-  optionalAuth,
+  authenticate,
   uploadLimiter,
   getPhotoUploadUrl
 );
@@ -131,7 +131,7 @@ router.post(
 // Create photo record after upload
 router.post(
   '/:propertyId/photos',
-  optionalAuth,
+  authenticate,
   uploadLimiter,
   createPhoto
 );
@@ -139,7 +139,7 @@ router.post(
 // List all photos for a property
 router.get(
   '/:propertyId/photos',
-  optionalAuth,
+  authenticate,
   listPhotos
 );
 

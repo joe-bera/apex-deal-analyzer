@@ -6,24 +6,24 @@ import {
   getDocument,
   deleteDocument,
 } from '../controllers/documentGeneratorController';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { aiLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
 // Generate AI content for a property (rate limited)
-router.post('/content', optionalAuth, aiLimiter, generateContent);
+router.post('/content', authenticate, aiLimiter, generateContent);
 
 // Save a generated document record
-router.post('/save', optionalAuth, saveDocument);
+router.post('/save', authenticate, saveDocument);
 
 // List generated documents
-router.get('/documents', optionalAuth, listDocuments);
+router.get('/documents', authenticate, listDocuments);
 
 // Get single generated document
-router.get('/documents/:id', optionalAuth, getDocument);
+router.get('/documents/:id', authenticate, getDocument);
 
 // Delete a generated document
-router.delete('/documents/:id', optionalAuth, deleteDocument);
+router.delete('/documents/:id', authenticate, deleteDocument);
 
 export default router;

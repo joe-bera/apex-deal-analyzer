@@ -22,13 +22,6 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
 }
 
-const ANONYMOUS_USER: User = {
-  id: 'anonymous',
-  email: 'guest@apex.app',
-  full_name: 'Guest User',
-  role: 'analyst',
-};
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -43,12 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((data: any) => setUser(data.user))
         .catch(() => {
           localStorage.removeItem('token');
-          setUser(ANONYMOUS_USER);
+          setUser(null);
         })
         .finally(() => setLoading(false));
     } else {
-      // No token — use anonymous user so the app works without login
-      setUser(ANONYMOUS_USER);
+      setUser(null);
       setLoading(false);
     }
   }, []);

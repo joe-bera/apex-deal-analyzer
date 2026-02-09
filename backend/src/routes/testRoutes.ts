@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -23,7 +23,7 @@ router.get('/public', (_req: Request, res: Response) => {
  * Protected test endpoint
  * GET /api/test/protected
  */
-router.get('/protected', optionalAuth, (req: Request, res: Response) => {
+router.get('/protected', authenticate, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'This endpoint uses optional auth.',
@@ -36,7 +36,7 @@ router.get('/protected', optionalAuth, (req: Request, res: Response) => {
  * Admin test endpoint
  * GET /api/test/admin
  */
-router.get('/admin', optionalAuth, (req: Request, res: Response) => {
+router.get('/admin', authenticate, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'This endpoint uses optional auth.',
@@ -49,7 +49,7 @@ router.get('/admin', optionalAuth, (req: Request, res: Response) => {
  * Broker test endpoint
  * GET /api/test/broker
  */
-router.get('/broker', optionalAuth, (req: Request, res: Response) => {
+router.get('/broker', authenticate, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'This endpoint uses optional auth.',

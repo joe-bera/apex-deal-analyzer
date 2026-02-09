@@ -27,9 +27,9 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    // Clear stale token on 401 but don't redirect (app works without auth)
     if (response.status === 401) {
       localStorage.removeItem('token');
+      window.location.href = '/login';
     }
     throw new APIError(response.status, data.error || 'Request failed');
   }

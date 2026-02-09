@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import Layout from '../components/Layout';
+import Breadcrumbs from '../components/Breadcrumbs';
 import { api } from '../lib/api';
 import type { OwnerResearch, OwnerEntityType, ResearchSource } from '../types';
 
@@ -556,6 +557,10 @@ export default function MasterPropertyDetail() {
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Breadcrumbs items={[
+            { label: 'Property Database', href: '/data-hub' },
+            { label: property.address || 'Property' },
+          ]} />
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -569,9 +574,6 @@ export default function MasterPropertyDetail() {
                 {property.county ? ` | ${property.county} County` : ''}
               </p>
             </div>
-            <Button variant="outline" onClick={() => navigate('/data-hub')}>
-              Back to Data Hub
-            </Button>
           </div>
         </div>
       </div>

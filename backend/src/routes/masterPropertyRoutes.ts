@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  createProperty,
   getMasterProperties,
   getMasterProperty,
   importProperties,
@@ -7,12 +8,15 @@ import {
   getVerificationQueue,
   verifyProperty,
 } from '../controllers/masterPropertyController';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
 // All routes require authentication
-router.use(optionalAuth);
+router.use(authenticate);
+
+// Create single property
+router.post('/', createProperty);
 
 // List properties
 router.get('/', getMasterProperties);

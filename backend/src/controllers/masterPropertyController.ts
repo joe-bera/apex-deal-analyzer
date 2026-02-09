@@ -47,6 +47,73 @@ function mapPropertyType(type: string | undefined): string | null {
   return null;
 }
 
+// Create a single property manually
+export const createProperty = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const {
+      address, city, state, zip, property_name, property_type,
+      building_size, lot_size_acres, year_built, clear_height_ft,
+      dock_doors, grade_doors, owner_name, percent_leased,
+      sale_price, price_per_sf, cap_rate,
+    } = req.body;
+
+    if (!address || !city) {
+      return res.status(400).json({ success: false, error: 'Address and city are required' });
+    }
+
+    const propertyData: Record<string, any> = {
+      address,
+      city,
+      state: state || 'CA',
+      zip: zip || null,
+      property_name: property_name || null,
+      property_type: mapPropertyType(property_type) || null,
+      building_size: building_size ? Math.round(Number(building_size)) : null,
+      lot_size_acres: lot_size_acres ? Number(lot_size_acres) : null,
+      year_built: year_built ? Math.round(Number(year_built)) : null,
+      clear_height_ft: clear_height_ft ? Number(clear_height_ft) : null,
+      dock_doors: dock_doors ? Math.round(Number(dock_doors)) : null,
+      grade_doors: grade_doors ? Math.round(Number(grade_doors)) : null,
+      owner_name: owner_name || null,
+      percent_leased: percent_leased ? Number(percent_leased) : null,
+      source: 'manual',
+      created_by: userId,
+    };
+
+    const { data: newProperty, error: insertError } = await supabase
+      .from('master_properties')
+      .insert(propertyData)
+      .select()
+      .single();
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return res.status(409).json({ success: false, error: 'Property at this address already exists' });
+      }
+      throw insertError;
+    }
+
+    // If transaction fields provided, create a transaction record
+    if (sale_price || cap_rate) {
+      await supabase.from('transactions').insert({
+        property_id: newProperty.id,
+        transaction_type: 'sale',
+        sale_price: sale_price ? Number(sale_price) : null,
+        price_per_sf: price_per_sf ? Number(price_per_sf) : null,
+        cap_rate: cap_rate ? Number(cap_rate) : null,
+        source: 'manual',
+        created_by: userId,
+      });
+    }
+
+    return res.status(201).json({ success: true, property: newProperty });
+  } catch (error) {
+    console.error('Error creating property:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create property' });
+  }
+};
+
 // Get all master properties
 export const getMasterProperties = async (req: Request, res: Response) => {
   try {

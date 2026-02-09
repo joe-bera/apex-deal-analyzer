@@ -11,12 +11,12 @@ import {
   updateProspectListItem,
   bulkUpdateItems,
 } from '../controllers/prospectListController';
-import { optionalAuth } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
 // All routes require authentication
-router.use(optionalAuth);
+router.use(authenticate);
 
 // Preview filters (before saving a list)
 router.post('/preview', previewFilters);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 
@@ -13,6 +13,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     logout();
     navigate('/login');
   };
+
+  // Close mobile menu on scroll
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleScroll = () => setMobileMenuOpen(false);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [mobileMenuOpen]);
 
   const isActive = (path: string) => location.pathname === path;
 

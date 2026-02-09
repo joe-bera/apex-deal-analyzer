@@ -32,6 +32,14 @@ export default function DataHub() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [pagination, setPagination] = useState({ total: 0, limit: 50, offset: 0 });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({
+    address: '', city: '', state: 'CA', zip: '', property_name: '',
+    property_type: '', building_size: '', year_built: '', owner_name: '',
+    sale_price: '', cap_rate: '',
+  });
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const fetchProperties = useCallback(async (search?: string) => {
     setLoading(true);
@@ -81,6 +89,40 @@ export default function DataHub() {
     e.preventDefault();
     setPagination(prev => ({ ...prev, offset: 0 }));
     fetchProperties(searchQuery);
+  };
+
+  const handleAddProperty = async () => {
+    if (!addForm.address || !addForm.city) {
+      setAddError('Address and city are required');
+      return;
+    }
+    setAddSaving(true);
+    setAddError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      const body: Record<string, any> = { ...addForm };
+      // Convert numeric fields
+      if (body.building_size) body.building_size = Number(body.building_size);
+      if (body.year_built) body.year_built = Number(body.year_built);
+      if (body.sale_price) body.sale_price = Number(body.sale_price);
+      if (body.cap_rate) body.cap_rate = Number(body.cap_rate);
+      // Remove empty strings
+      Object.keys(body).forEach(k => { if (body[k] === '') delete body[k]; });
+
+      const response = await fetch(`${apiBase}/master-properties`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to create property');
+      navigate(`/data-hub/${data.property.id}`);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to create property');
+    } finally {
+      setAddSaving(false);
+    }
   };
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -138,6 +180,17 @@ export default function DataHub() {
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => navigate('/dashboard')}>
                 My Deals
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddModal(true)}
+                leftIcon={
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                }
+              >
+                Add Property
               </Button>
               <Button
                 onClick={() => setActiveTab('upload')}
@@ -387,6 +440,91 @@ export default function DataHub() {
           </div>
         )}
       </div>
+
+      {/* Add Property Modal */}
+      {showAddModal && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAddModal(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Add Property</h2>
+              {addError && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{addError}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                  <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                    <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))} placeholder="Ontario" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.state} onChange={e => setAddForm(f => ({ ...f, state: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ZIP</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.zip} onChange={e => setAddForm(f => ({ ...f, zip: e.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Property Name</label>
+                    <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.property_name} onChange={e => setAddForm(f => ({ ...f, property_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.property_type} onChange={e => setAddForm(f => ({ ...f, property_type: e.target.value }))}>
+                      <option value="">Select...</option>
+                      <option value="industrial">Industrial</option>
+                      <option value="office">Office</option>
+                      <option value="retail">Retail</option>
+                      <option value="multifamily">Multifamily</option>
+                      <option value="land">Land</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Building Size (SF)</label>
+                    <input type="number" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.building_size} onChange={e => setAddForm(f => ({ ...f, building_size: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
+                    <input type="number" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.year_built} onChange={e => setAddForm(f => ({ ...f, year_built: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
+                    <input className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.owner_name} onChange={e => setAddForm(f => ({ ...f, owner_name: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="border-t pt-4 mt-4">
+                  <p className="text-sm font-medium text-gray-500 mb-3">Transaction (optional)</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price</label>
+                      <input type="number" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.sale_price} onChange={e => setAddForm(f => ({ ...f, sale_price: e.target.value }))} placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cap Rate (%)</label>
+                      <input type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value={addForm.cap_rate} onChange={e => setAddForm(f => ({ ...f, cap_rate: e.target.value }))} placeholder="5.50" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <Button variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
+                <Button onClick={handleAddProperty} disabled={addSaving}>
+                  {addSaving ? 'Creating...' : 'Create Property'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   );
 }

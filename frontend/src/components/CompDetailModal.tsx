@@ -108,6 +108,12 @@ export default function CompDetailModal({
 
       {/* Slideout Panel - wider for more content */}
       <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-xl z-50 transform transition-transform overflow-y-auto">
+        {/* Subject property context bar */}
+        {subjectProperty && (
+          <div className="bg-primary-50 border-b border-primary-200 px-6 py-2 text-sm text-primary-800">
+            Viewing comp for: <span className="font-semibold">{subjectProperty.address}</span>
+          </div>
+        )}
         {/* Header with Street View */}
         <div className="relative">
           <StreetViewImage

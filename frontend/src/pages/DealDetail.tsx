@@ -8,6 +8,7 @@ import {
 } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import Layout from '../components/Layout';
+import Breadcrumbs from '../components/Breadcrumbs';
 
 type DealTab = 'overview' | 'deal-room' | 'tasks';
 
@@ -377,10 +378,10 @@ export default function DealDetail() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <button onClick={() => navigate('/crm/deals')} className="text-sm text-gray-500 hover:text-gray-700 mb-1 flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                Back to Deals
-              </button>
+              <Breadcrumbs items={[
+                { label: 'Deals', href: '/crm/deals' },
+                { label: deal?.deal_name || 'Deal' },
+              ]} />
               <h1 className="text-2xl font-bold text-gray-900">{deal.deal_name}</h1>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant={stageBadgeVariant(deal.stage)}>{deal.stage?.replace(/_/g, ' ')}</Badge>

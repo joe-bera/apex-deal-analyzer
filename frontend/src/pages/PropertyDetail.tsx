@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -22,6 +22,7 @@ import type {
 } from '../types';
 import CompDetailModal from '../components/CompDetailModal';
 import InvestmentAnalysis from '../components/InvestmentAnalysis';
+import Breadcrumbs from '../components/Breadcrumbs';
 import {
   Button,
   Card,
@@ -445,15 +446,10 @@ export default function PropertyDetail() {
       <div className="space-y-6">
         {/* Breadcrumb & Header */}
         <div>
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center text-sm text-gray-500 hover:text-primary-600 transition-colors mb-4"
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Portfolio
-          </Link>
+          <Breadcrumbs items={[
+            { label: 'My Deals', href: '/dashboard' },
+            { label: property.address || 'Property' },
+          ]} />
 
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
