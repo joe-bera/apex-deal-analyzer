@@ -441,3 +441,231 @@ export function buildIRRCashFlows(
 
   return cashFlows;
 }
+
+// ============================================================================
+// Investment Decision Engine — Strategy Thresholds & Goal-Seek
+// ============================================================================
+
+export type InvestmentStrategy = 'core' | 'value_add' | 'opportunistic';
+
+export interface StrategyThresholds {
+  cap_rate: number | null;
+  cash_on_cash: number;
+  irr: number;
+  equity_multiple: number;
+  dscr: number;
+}
+
+export const STRATEGY_THRESHOLDS: Record<InvestmentStrategy, StrategyThresholds> = {
+  core: { cap_rate: 6.50, cash_on_cash: 8.50, irr: 12.0, equity_multiple: 1.60, dscr: 1.30 },
+  value_add: { cap_rate: 5.75, cash_on_cash: 8.75, irr: 15.0, equity_multiple: 1.80, dscr: 1.25 },
+  opportunistic: { cap_rate: null, cash_on_cash: 9.50, irr: 18.0, equity_multiple: 2.00, dscr: 1.20 },
+};
+
+/**
+ * NPV = Σ (CF_t / (1 + r)^t)
+ */
+export function calculateNPV(cashFlows: number[], discountRate: number): number {
+  let npv = 0;
+  for (let t = 0; t < cashFlows.length; t++) {
+    npv += cashFlows[t] / Math.pow(1 + discountRate / 100, t);
+  }
+  return npv;
+}
+
+/**
+ * Average Cash-on-Cash return across holding period
+ */
+export function calculateAvgCashOnCash(projections: YearProjection[], totalCashInvested: number): number {
+  if (totalCashInvested === 0 || projections.length === 0) return 0;
+  const totalCoC = projections.reduce((sum, p) => sum + calculateCashOnCash(p.cashFlow, totalCashInvested), 0);
+  return totalCoC / projections.length;
+}
+
+/**
+ * Suggest exit cap rate from comparable sales — median of comp cap rates
+ */
+export function suggestExitCapRate(comps: Array<{ comp_cap_rate?: number | null }>): number | null {
+  const rates = comps.map(c => c.comp_cap_rate).filter((r): r is number => r != null && r > 0);
+  if (rates.length === 0) return null;
+  rates.sort((a, b) => a - b);
+  const mid = Math.floor(rates.length / 2);
+  return rates.length % 2 === 0 ? (rates[mid - 1] + rates[mid]) / 2 : rates[mid];
+}
+
+/**
+ * Benchmark price per sqft from comps
+ */
+export function benchmarkPricePerSqft(comps: Array<{ comp_price_per_sqft?: number | null }>): { avg: number; min: number; max: number } | null {
+  const prices = comps.map(c => c.comp_price_per_sqft).filter((p): p is number => p != null && p > 0);
+  if (prices.length === 0) return null;
+  return {
+    avg: prices.reduce((s, p) => s + p, 0) / prices.length,
+    min: Math.min(...prices),
+    max: Math.max(...prices),
+  };
+}
+
+// ============================================================================
+// Goal-Seek Functions (binary search to hit target IRR)
+// ============================================================================
+
+interface GoalSeekInputs {
+  purchasePrice: number;
+  initialNOI: number;
+  incomeGrowthRate: number;
+  expenseGrowthRate: number;
+  initialIncome: number;
+  initialExpenses: number;
+  loanAmount: number;
+  interestRate: number;
+  amortizationYears: number;
+  holdingPeriod: number;
+  exitCapRate: number;
+  sellingCostsPercent: number;
+  totalCashInvested: number;
+  closingCostsPercent: number;
+  ltvPercent: number;
+  buildingSqft: number;
+  expenseRatio: number;
+}
+
+/**
+ * Helper: compute IRR for a given set of deal parameters
+ */
+function computeDealIRR(params: {
+  purchasePrice: number;
+  initialIncome: number;
+  initialExpenses: number;
+  incomeGrowthRate: number;
+  expenseGrowthRate: number;
+  ltvPercent: number;
+  interestRate: number;
+  amortizationYears: number;
+  holdingPeriod: number;
+  exitCapRate: number;
+  sellingCostsPercent: number;
+  closingCostsPercent: number;
+}): number {
+  const loanAmt = params.purchasePrice * (params.ltvPercent / 100);
+  const downPmt = params.purchasePrice - loanAmt;
+  const closingCosts = params.purchasePrice * (params.closingCostsPercent / 100);
+  const totalCash = downPmt + closingCosts;
+
+  const projections = generateProjections({
+    initialIncome: params.initialIncome,
+    initialExpenses: params.initialExpenses,
+    incomeGrowthRate: params.incomeGrowthRate,
+    expenseGrowthRate: params.expenseGrowthRate,
+    purchasePrice: params.purchasePrice,
+    loanAmount: loanAmt,
+    interestRate: params.interestRate,
+    amortizationYears: params.amortizationYears,
+    holdingPeriod: params.holdingPeriod,
+    exitCapRate: params.exitCapRate,
+    sellingCosts: params.sellingCostsPercent,
+  });
+
+  if (projections.length === 0) return 0;
+
+  const lastYear = projections[projections.length - 1];
+  const saleProceeds = calculateSaleProceeds(
+    lastYear.noi, params.exitCapRate, lastYear.loanBalance, params.sellingCostsPercent
+  );
+  const cashFlows = buildIRRCashFlows(totalCash, projections, saleProceeds.netToSeller);
+  return calculateIRR(cashFlows);
+}
+
+/**
+ * Max purchase price to achieve target IRR (binary search)
+ */
+export function solveMaxPurchasePrice(targetIRR: number, inputs: GoalSeekInputs): number {
+  let lo = 1;
+  let hi = inputs.purchasePrice * 3;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    const irr = computeDealIRR({
+      ...inputs,
+      purchasePrice: mid,
+    });
+    if (irr > targetIRR) lo = mid;
+    else hi = mid;
+  }
+  return Math.round((lo + hi) / 2);
+}
+
+/**
+ * Required NOI lift (stabilized NOI) to achieve target IRR
+ * Adjusts initialIncome proportionally to hit NOI target
+ */
+export function solveRequiredNOILift(targetIRR: number, inputs: GoalSeekInputs): number {
+  // We adjust initial income to change NOI
+  let lo = inputs.initialExpenses; // minimum income = expenses (NOI=0)
+  let hi = inputs.initialIncome * 5;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    const irr = computeDealIRR({
+      ...inputs,
+      initialIncome: mid,
+    });
+    if (irr < targetIRR) lo = mid;
+    else hi = mid;
+  }
+  const requiredIncome = (lo + hi) / 2;
+  return requiredIncome - inputs.initialExpenses; // required NOI
+}
+
+/**
+ * Required rent PSF to hit target NOI
+ */
+export function solveRequiredRentPSF(targetNOI: number, sqft: number, expenseRatio: number): number {
+  if (sqft === 0) return 0;
+  // NOI = Income * (1 - expenseRatio/100)
+  // Income = NOI / (1 - expenseRatio/100)
+  // RentPSF = Income / sqft
+  const factor = 1 - expenseRatio / 100;
+  if (factor <= 0) return 0;
+  return (targetNOI / factor) / sqft;
+}
+
+/**
+ * CapEx ceiling to achieve target IRR
+ * This adjusts total cash invested (adds capex to equity required)
+ */
+export function solveCapexCeiling(targetIRR: number, inputs: GoalSeekInputs): number {
+  // Binary search on capex amount — higher capex = lower IRR
+  let lo = 0;
+  let hi = inputs.purchasePrice; // capex won't exceed purchase price
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    // Capex increases total cash invested but doesn't change income projections
+    // Model it as increasing closing costs
+    const adjustedClosingPercent = inputs.closingCostsPercent + (mid / inputs.purchasePrice) * 100;
+    const irr = computeDealIRR({
+      ...inputs,
+      closingCostsPercent: adjustedClosingPercent,
+    });
+    if (irr > targetIRR) lo = mid;
+    else hi = mid;
+  }
+  return Math.round((lo + hi) / 2);
+}
+
+/**
+ * Target exit cap rate to achieve target IRR
+ */
+export function solveTargetExitCap(targetIRR: number, inputs: GoalSeekInputs): number {
+  // Lower exit cap = higher exit value = higher IRR
+  let lo = 1;
+  let hi = 15;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    const irr = computeDealIRR({
+      ...inputs,
+      exitCapRate: mid,
+    });
+    if (irr > targetIRR) lo = mid; // can afford higher exit cap
+    else hi = mid; // need lower exit cap
+  }
+  return parseFloat(((lo + hi) / 2).toFixed(2));
+}

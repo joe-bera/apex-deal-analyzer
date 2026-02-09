@@ -395,10 +395,59 @@ export interface DealAnalysis {
   // Notes
   notes?: string | null;
 
+  // Strategy
+  investment_strategy?: string | null;
+
+  // Value-Add Attribution
+  va_below_market_rents?: boolean | null;
+  va_below_market_rents_note?: string | null;
+  va_vacancy_leaseup?: boolean | null;
+  va_vacancy_leaseup_note?: string | null;
+  va_expense_reduction?: boolean | null;
+  va_expense_reduction_note?: string | null;
+  va_re_tenanting?: boolean | null;
+  va_re_tenanting_note?: string | null;
+  va_physical_improvements?: boolean | null;
+  va_physical_improvements_note?: string | null;
+
+  // As-Is vs Stabilized
+  as_is_rent_psf?: number | null;
+  stabilized_rent_psf?: number | null;
+  as_is_occupancy?: number | null;
+  stabilized_occupancy?: number | null;
+  as_is_other_income?: number | null;
+  stabilized_other_income?: number | null;
+  as_is_expense_ratio?: number | null;
+  stabilized_expense_ratio?: number | null;
+
+  // Value-Add Costs
+  va_capex?: number | null;
+  va_ti_leasing?: number | null;
+  va_carry_costs?: number | null;
+  va_contingency?: number | null;
+  va_total_cost?: number | null;
+
+  // Proforma Settings
+  income_growth_rate?: number | null;
+  expense_growth_rate?: number | null;
+  holding_period?: number | null;
+
+  // Exit Analysis
+  exit_cap_rate?: number | null;
+  selling_costs_percent?: number | null;
+
+  // Return Metrics
+  irr?: number | null;
+  equity_multiple?: number | null;
+  avg_cash_on_cash?: number | null;
+  total_project_cost?: number | null;
+
   // Metadata
   created_at: string;
   updated_at: string;
 }
+
+export type InvestmentStrategy = 'core' | 'value_add' | 'opportunistic';
 
 export type DealAnalysisInput = Omit<DealAnalysis, 'id' | 'property_id' | 'created_by' | 'created_at' | 'updated_at'>;
 

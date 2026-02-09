@@ -21,7 +21,7 @@ import type {
   DealAnalysisResponse,
 } from '../types';
 import CompDetailModal from '../components/CompDetailModal';
-import DealAnalysisWorksheet from '../components/DealAnalysisWorksheet';
+import InvestmentAnalysis from '../components/InvestmentAnalysis';
 import {
   Button,
   Card,
@@ -593,9 +593,9 @@ export default function PropertyDetail() {
           </CardContent>
         </Card>
 
-        {/* Deal Analysis Worksheet */}
+        {/* Investment Analysis Engine */}
         {property && (
-          <DealAnalysisWorksheet
+          <InvestmentAnalysis
             property={property}
             comps={comps}
             initialData={dealAnalysis || undefined}
