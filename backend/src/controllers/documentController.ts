@@ -180,11 +180,6 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
         throw new AppError(404, 'Property not found');
       }
 
-      // Check if user owns the property or has access
-      if (property.created_by !== req.user.id) {
-        // TODO: Check shared_access table for permission
-        throw new AppError(403, 'You do not have access to this property');
-      }
     }
 
     // Extract text from PDF before uploading
@@ -678,9 +673,6 @@ export const uploadFromUrl = async (req: Request, res: Response): Promise<void> 
       if (error || !property) {
         throw new AppError(404, 'Property not found');
       }
-      if (property.created_by !== req.user.id) {
-        throw new AppError(403, 'You do not have access to this property');
-      }
     }
 
     // Parse PDF
@@ -845,9 +837,6 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
         throw new AppError(404, 'Property not found');
       }
 
-      if (property.created_by !== req.user.id) {
-        throw new AppError(403, 'You do not have access to this property');
-      }
     }
 
     // Get URLs for the uploaded file

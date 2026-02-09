@@ -118,7 +118,7 @@ export const listListingSites = async (req: Request, res: Response): Promise<voi
     const { data: sites, error } = await supabaseAdmin
       .from('listing_sites')
       .select('*, master_properties(id, address, city, state, zip, property_type, building_size)')
-      .eq('created_by', req.user.id)
+      // .eq('created_by', req.user.id) // open access mode
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -153,7 +153,7 @@ export const getListingSite = async (req: Request, res: Response): Promise<void>
       .from('listing_sites')
       .select('*, master_properties(*)')
       .eq('id', id)
-      .eq('created_by', req.user.id)
+      // .eq('created_by', req.user.id) // open access mode
       .single();
 
     if (error || !site) {
@@ -204,10 +204,6 @@ export const updateListingSite = async (req: Request, res: Response): Promise<vo
 
     if (fetchError || !existing) {
       throw new AppError(404, 'Listing site not found');
-    }
-
-    if (existing.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to update this listing site');
     }
 
     if (template_style && !VALID_TEMPLATE_STYLES.includes(template_style)) {
@@ -272,10 +268,6 @@ export const deleteListingSite = async (req: Request, res: Response): Promise<vo
       throw new AppError(404, 'Listing site not found');
     }
 
-    if (existing.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to delete this listing site');
-    }
-
     const { error: deleteError } = await supabaseAdmin
       .from('listing_sites')
       .delete()
@@ -317,10 +309,6 @@ export const getListingLeads = async (req: Request, res: Response): Promise<void
 
     if (siteError || !site) {
       throw new AppError(404, 'Listing site not found');
-    }
-
-    if (site.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to view these leads');
     }
 
     const { data: leads, error } = await supabaseAdmin

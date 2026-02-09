@@ -8,16 +8,12 @@ import { AppError } from '../middleware/errorHandler';
  */
 export const getDealAnalysis = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
-      throw new AppError(401, 'Authentication required');
-    }
-
     const { propertyId } = req.params;
 
-    // Verify property exists and user has access
+    // Verify property exists
     const { data: property, error: propError } = await supabaseAdmin
       .from('properties')
-      .select('id, created_by')
+      .select('id')
       .eq('id', propertyId)
       .single();
 
@@ -25,20 +21,16 @@ export const getDealAnalysis = async (req: Request, res: Response): Promise<void
       throw new AppError(404, 'Property not found');
     }
 
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
     // Get deal analysis for this property
     const { data: analysis, error: analysisError } = await supabaseAdmin
       .from('deal_analyses')
       .select('*')
       .eq('property_id', propertyId)
-      .eq('created_by', req.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (analysisError && analysisError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned, which is fine
       console.error('Error fetching deal analysis:', analysisError);
       throw new AppError(500, 'Failed to fetch deal analysis');
     }
@@ -63,17 +55,14 @@ export const getDealAnalysis = async (req: Request, res: Response): Promise<void
  */
 export const saveDealAnalysis = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
-      throw new AppError(401, 'Authentication required');
-    }
-
     const { propertyId } = req.params;
     const analysisData = req.body;
+    const userId = req.user?.id || 'anonymous';
 
-    // Verify property exists and user has access
+    // Verify property exists
     const { data: property, error: propError } = await supabaseAdmin
       .from('properties')
-      .select('id, created_by')
+      .select('id')
       .eq('id', propertyId)
       .single();
 
@@ -81,16 +70,13 @@ export const saveDealAnalysis = async (req: Request, res: Response): Promise<voi
       throw new AppError(404, 'Property not found');
     }
 
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
-    // Check if analysis already exists
+    // Check if analysis already exists for this property
     const { data: existing } = await supabaseAdmin
       .from('deal_analyses')
       .select('id')
       .eq('property_id', propertyId)
-      .eq('created_by', req.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .single();
 
     let analysis;
@@ -116,7 +102,7 @@ export const saveDealAnalysis = async (req: Request, res: Response): Promise<voi
         .from('deal_analyses')
         .insert({
           property_id: propertyId,
-          created_by: req.user.id,
+          created_by: userId,
           ...analysisData,
         })
         .select()
@@ -152,33 +138,13 @@ export const saveDealAnalysis = async (req: Request, res: Response): Promise<voi
  */
 export const deleteDealAnalysis = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
-      throw new AppError(401, 'Authentication required');
-    }
-
     const { propertyId } = req.params;
 
-    // Verify property exists and user has access
-    const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
-      .select('id, created_by')
-      .eq('id', propertyId)
-      .single();
-
-    if (propError || !property) {
-      throw new AppError(404, 'Property not found');
-    }
-
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
-    // Delete analysis
+    // Delete all analyses for this property
     const { error: deleteError } = await supabaseAdmin
       .from('deal_analyses')
       .delete()
-      .eq('property_id', propertyId)
-      .eq('created_by', req.user.id);
+      .eq('property_id', propertyId);
 
     if (deleteError) {
       console.error('Error deleting deal analysis:', deleteError);

@@ -12,29 +12,29 @@ import {
   getSyndicationActivity,
   bulkPublish,
 } from '../controllers/syndicationController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
 // Platforms
-router.get('/platforms', authenticate, listPlatforms);
+router.get('/platforms', optionalAuth, listPlatforms);
 
 // Bulk publish (before /:id routes)
-router.post('/bulk-publish', authenticate, bulkPublish);
+router.post('/bulk-publish', optionalAuth, bulkPublish);
 
 // CRUD
-router.get('/', authenticate, listSyndications);
-router.post('/', authenticate, createSyndication);
-router.get('/:id', authenticate, getSyndication);
-router.delete('/:id', authenticate, deleteSyndication);
+router.get('/', optionalAuth, listSyndications);
+router.post('/', optionalAuth, createSyndication);
+router.get('/:id', optionalAuth, getSyndication);
+router.delete('/:id', optionalAuth, deleteSyndication);
 
 // Actions
-router.post('/:id/publish', authenticate, publishSyndication);
-router.post('/:id/sync', authenticate, syncSyndication);
-router.post('/:id/delist', authenticate, delistSyndication);
-router.post('/:id/export', authenticate, generateExport);
+router.post('/:id/publish', optionalAuth, publishSyndication);
+router.post('/:id/sync', optionalAuth, syncSyndication);
+router.post('/:id/delist', optionalAuth, delistSyndication);
+router.post('/:id/export', optionalAuth, generateExport);
 
 // Activity
-router.get('/:id/activity', authenticate, getSyndicationActivity);
+router.get('/:id/activity', optionalAuth, getSyndicationActivity);
 
 export default router;

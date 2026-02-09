@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,40 +20,40 @@ router.get('/public', (_req: Request, res: Response) => {
 });
 
 /**
- * Protected test endpoint (authentication required)
+ * Protected test endpoint
  * GET /api/test/protected
  */
-router.get('/protected', authenticate, (req: Request, res: Response) => {
+router.get('/protected', optionalAuth, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
-    message: 'This is a protected endpoint. Authentication required.',
-    user: req.user,
+    message: 'This endpoint uses optional auth.',
+    user: req.user || null,
     timestamp: new Date().toISOString(),
   });
 });
 
 /**
- * Admin-only test endpoint (authentication + admin role required)
+ * Admin test endpoint
  * GET /api/test/admin
  */
-router.get('/admin', authenticate, authorize(['admin']), (req: Request, res: Response) => {
+router.get('/admin', optionalAuth, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
-    message: 'This is an admin-only endpoint.',
-    user: req.user,
+    message: 'This endpoint uses optional auth.',
+    user: req.user || null,
     timestamp: new Date().toISOString(),
   });
 });
 
 /**
- * Broker/Admin test endpoint (authentication + broker or admin role required)
+ * Broker test endpoint
  * GET /api/test/broker
  */
-router.get('/broker', authenticate, authorize(['admin', 'broker']), (req: Request, res: Response) => {
+router.get('/broker', optionalAuth, (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
-    message: 'This endpoint requires broker or admin role.',
-    user: req.user,
+    message: 'This endpoint uses optional auth.',
+    user: req.user || null,
     timestamp: new Date().toISOString(),
   });
 });

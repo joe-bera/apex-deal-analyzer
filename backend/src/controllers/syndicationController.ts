@@ -509,7 +509,7 @@ export const bulkPublish = async (req: Request, res: Response): Promise<void> =>
       platform_id,
       status: 'published',
       published_at: new Date().toISOString(),
-      created_by: req.user!.id,
+      created_by: req.user.id,
     }));
 
     const { data, error } = await supabaseAdmin
@@ -530,7 +530,7 @@ export const bulkPublish = async (req: Request, res: Response): Promise<void> =>
       const activityRows = data.map((s: any) => ({
         syndication_listing_id: s.id,
         action: 'published',
-        details: { published_by: req.user!.id, bulk: true },
+        details: { published_by: req.user.id, bulk: true },
       }));
       await supabaseAdmin.from('syndication_activity_log').insert(activityRows);
     }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 import {
   getDealAnalysis,
   saveDealAnalysis,
@@ -18,7 +18,7 @@ const router = Router();
 // Get deal analysis for a property
 router.get(
   '/properties/:propertyId/analysis',
-  authenticate,
+  optionalAuth,
   validate(propertyIdParamSchema, 'params'),
   getDealAnalysis
 );
@@ -26,7 +26,7 @@ router.get(
 // Create or update deal analysis for a property
 router.put(
   '/properties/:propertyId/analysis',
-  authenticate,
+  optionalAuth,
   validate(propertyIdParamSchema, 'params'),
   validate(dealAnalysisSchema, 'body'),
   saveDealAnalysis
@@ -35,7 +35,7 @@ router.put(
 // Delete deal analysis for a property
 router.delete(
   '/properties/:propertyId/analysis',
-  authenticate,
+  optionalAuth,
   validate(propertyIdParamSchema, 'params'),
   deleteDealAnalysis
 );

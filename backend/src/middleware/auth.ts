@@ -8,7 +8,7 @@ import { AppError } from './errorHandler';
 declare global {
   namespace Express {
     interface Request {
-      user?: {
+      user: {
         id: string;
         email: string;
         role: string;
@@ -140,8 +140,9 @@ export const optionalAuth = async (
   try {
     const authHeader = req.headers.authorization;
 
-    // If no token, just continue without user
+    // If no token, set anonymous user and continue
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.user = { id: 'anonymous', email: 'guest@apex.app', role: 'analyst' };
       return next();
     }
 
@@ -151,7 +152,8 @@ export const optionalAuth = async (
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      // Invalid token, but don't fail - just continue without user
+      // Invalid token — set anonymous user and continue
+      req.user = { id: 'anonymous', email: 'guest@apex.app', role: 'analyst' };
       return next();
     }
 
@@ -169,11 +171,14 @@ export const optionalAuth = async (
         role: profile.role,
         full_name: profile.full_name,
       };
+    } else {
+      req.user = { id: 'anonymous', email: 'guest@apex.app', role: 'analyst' };
     }
 
     next();
   } catch (_error) {
-    // If anything fails, just continue without user (optional auth)
+    // If anything fails, set anonymous user and continue
+    req.user = { id: 'anonymous', email: 'guest@apex.app', role: 'analyst' };
     next();
   }
 };

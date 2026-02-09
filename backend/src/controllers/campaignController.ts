@@ -34,7 +34,7 @@ const verifyUnsubscribeToken = (email: string, token: string): boolean => {
 /** GET / — List user's campaigns, newest first */
 export const listCampaigns = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
 
     const { data, error } = await supabase
       .from('email_campaigns')
@@ -54,7 +54,7 @@ export const listCampaigns = async (req: Request, res: Response) => {
 /** GET /:id — Campaign + recipients list */
 export const getCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id } = req.params;
 
     const { data: campaign, error: campError } = await supabase
@@ -90,7 +90,7 @@ export const getCampaign = async (req: Request, res: Response) => {
 /** POST / — Create draft campaign */
 export const createCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { name, campaign_type, subject, html_body, master_property_id } = req.body;
 
     if (!name) {
@@ -123,7 +123,7 @@ export const createCampaign = async (req: Request, res: Response) => {
 /** PATCH /:id — Update draft campaign only */
 export const updateCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id } = req.params;
     const { name, campaign_type, subject, html_body, master_property_id } = req.body;
 
@@ -169,7 +169,7 @@ export const updateCampaign = async (req: Request, res: Response) => {
 /** DELETE /:id — Delete draft campaign only */
 export const deleteCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id } = req.params;
 
     // Verify ownership and draft status
@@ -259,7 +259,7 @@ export const generateContent = async (req: Request, res: Response) => {
 /** POST /:id/recipients — Add recipients by contact_ids[], contact_type, or tag. Dedupes by email */
 export const addRecipients = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id } = req.params;
     const { contact_ids, contact_type, tag } = req.body;
 
@@ -360,7 +360,7 @@ export const addRecipients = async (req: Request, res: Response) => {
 /** DELETE /:id/recipients/:recipientId — Remove single recipient */
 export const removeRecipient = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id, recipientId } = req.params;
 
     // Verify campaign ownership
@@ -412,7 +412,7 @@ export const removeRecipient = async (req: Request, res: Response) => {
 /** POST /:id/send — Send the campaign to all eligible recipients */
 export const sendCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
     const { id } = req.params;
 
     // Verify campaign ownership and draft status

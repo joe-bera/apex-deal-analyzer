@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 import {
   getCompsForProperty,
   addCompToProperty,
@@ -24,7 +24,7 @@ const router = Router();
 // Get all comps for a property
 router.get(
   '/properties/:propertyId/comps',
-  authenticate,
+  optionalAuth,
   validate(propertyIdParamSchema, 'params'),
   getCompsForProperty
 );
@@ -32,7 +32,7 @@ router.get(
 // Add a comp to a property
 router.post(
   '/properties/:propertyId/comps',
-  authenticate,
+  optionalAuth,
   validate(propertyIdParamSchema, 'params'),
   validate(createCompSchema, 'body'),
   addCompToProperty
@@ -41,7 +41,7 @@ router.post(
 // Update a comp
 router.patch(
   '/comps/:compId',
-  authenticate,
+  optionalAuth,
   validate(compIdParamSchema, 'params'),
   validate(updateCompSchema, 'body'),
   updateComp
@@ -50,7 +50,7 @@ router.patch(
 // Delete a comp
 router.delete(
   '/comps/:compId',
-  authenticate,
+  optionalAuth,
   validate(compIdParamSchema, 'params'),
   deleteComp
 );

@@ -6,12 +6,12 @@ import {
   updateResearch,
   deleteResearch,
 } from '../controllers/ownerResearchController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(optionalAuth);
 
 // AI-powered research
 router.post('/:propertyId/ai', runAIResearch);

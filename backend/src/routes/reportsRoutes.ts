@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 import {
   getPipelineForecast,
   getBrokerProduction,
@@ -13,14 +13,14 @@ import {
 const router = Router();
 
 // Report endpoints
-router.get('/pipeline-forecast', authenticate, getPipelineForecast);
-router.get('/broker-production', authenticate, getBrokerProduction);
-router.get('/revenue', authenticate, getRevenueReport);
-router.get('/activity-summary', authenticate, getActivitySummary);
-router.get('/property-analytics', authenticate, getPropertyAnalytics);
-router.get('/prospecting', authenticate, getProspectingReport);
+router.get('/pipeline-forecast', optionalAuth, getPipelineForecast);
+router.get('/broker-production', optionalAuth, getBrokerProduction);
+router.get('/revenue', optionalAuth, getRevenueReport);
+router.get('/activity-summary', optionalAuth, getActivitySummary);
+router.get('/property-analytics', optionalAuth, getPropertyAnalytics);
+router.get('/prospecting', optionalAuth, getProspectingReport);
 
 // CSV export (must come after named routes to avoid param collision)
-router.get('/:type/export', authenticate, exportReportCSV);
+router.get('/:type/export', optionalAuth, exportReportCSV);
 
 export default router;

@@ -4,7 +4,7 @@ import {
   deletePhoto,
   setPrimaryPhoto,
 } from '../controllers/photoController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,21 +20,21 @@ const router = Router();
 // PATCH /api/photos/:id - Update photo metadata
 router.patch(
   '/:id',
-  authenticate,
+  optionalAuth,
   updatePhoto
 );
 
 // DELETE /api/photos/:id - Delete a photo
 router.delete(
   '/:id',
-  authenticate,
+  optionalAuth,
   deletePhoto
 );
 
 // POST /api/photos/:id/set-primary - Set as primary photo
 router.post(
   '/:id/set-primary',
-  authenticate,
+  optionalAuth,
   setPrimaryPhoto
 );
 

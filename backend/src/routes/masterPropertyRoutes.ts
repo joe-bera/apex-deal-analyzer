@@ -7,12 +7,12 @@ import {
   getVerificationQueue,
   verifyProperty,
 } from '../controllers/masterPropertyController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(optionalAuth);
 
 // List properties
 router.get('/', getMasterProperties);

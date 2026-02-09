@@ -202,7 +202,7 @@ export const listDocuments = async (req: Request, res: Response): Promise<void> 
     let query = supabaseAdmin
       .from('generated_documents')
       .select('*')
-      .eq('created_by', req.user.id)
+      // .eq('created_by', req.user.id) // open access mode
       .order('created_at', { ascending: false });
 
     if (master_property_id) {
@@ -248,7 +248,7 @@ export const getDocument = async (req: Request, res: Response): Promise<void> =>
       .from('generated_documents')
       .select('*')
       .eq('id', id)
-      .eq('created_by', req.user.id)
+      // .eq('created_by', req.user.id) // open access mode
       .single();
 
     if (error || !doc) {
@@ -289,10 +289,6 @@ export const deleteDocument = async (req: Request, res: Response): Promise<void>
 
     if (fetchError || !doc) {
       throw new AppError(404, 'Document not found');
-    }
-
-    if (doc.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to delete this document');
     }
 
     const { error: deleteError } = await supabaseAdmin

@@ -37,11 +37,6 @@ export const generatePropertyLOI = async (req: Request, res: Response): Promise<
       throw new AppError(404, 'Property not found');
     }
 
-    // Check access
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
     console.log(`[LOI] Generating LOI for property ${propertyId}, use_ai: ${use_ai}`);
 
     // Generate LOI (use template by default, AI if requested)
@@ -116,10 +111,6 @@ export const getPropertyLOIs = async (req: Request, res: Response): Promise<void
       throw new AppError(404, 'Property not found');
     }
 
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
     // Get LOIs
     const { data: lois, error: loisError } = await supabaseAdmin
       .from('lois')
@@ -166,10 +157,6 @@ export const updateLOI = async (req: Request, res: Response): Promise<void> => {
 
     if (fetchError || !loi) {
       throw new AppError(404, 'LOI not found');
-    }
-
-    if (loi.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to update this LOI');
     }
 
     // Update LOI

@@ -9,7 +9,7 @@ import {
   createDocument,
   uploadFromUrl,
 } from '../controllers/documentController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 import { upload } from '../middleware/upload';
 import { validate, uuidParamSchema, documentUploadSchema } from '../middleware/validate';
 import { uploadLimiter, aiLimiter } from '../middleware/rateLimit';
@@ -24,7 +24,7 @@ const router = Router();
 // Upload document (with file) - rate limited (legacy, may not work on some cloud platforms)
 router.post(
   '/upload',
-  authenticate,
+  optionalAuth,
   uploadLimiter,
   upload.single('file'),
   validate(documentUploadSchema, 'body'),
@@ -34,7 +34,7 @@ router.post(
 // Get signed URL for direct upload to Supabase Storage (recommended)
 router.post(
   '/upload-url',
-  authenticate,
+  optionalAuth,
   uploadLimiter,
   getUploadUrl
 );
@@ -42,25 +42,25 @@ router.post(
 // Create document record after direct upload
 router.post(
   '/create',
-  authenticate,
+  optionalAuth,
   createDocument
 );
 
 // Upload document from URL (Dropbox, Google Drive, etc.)
 router.post(
   '/upload-from-url',
-  authenticate,
+  optionalAuth,
   uploadLimiter,
   uploadFromUrl
 );
 
 // List documents
-router.get('/', authenticate, listDocuments);
+router.get('/', optionalAuth, listDocuments);
 
 // Get single document
 router.get(
   '/:id',
-  authenticate,
+  optionalAuth,
   validate(uuidParamSchema, 'params'),
   getDocument
 );
@@ -68,7 +68,7 @@ router.get(
 // Extract property data from document - rate limited (AI operation)
 router.post(
   '/:id/extract',
-  authenticate,
+  optionalAuth,
   aiLimiter,
   validate(uuidParamSchema, 'params'),
   extractDocument
@@ -77,7 +77,7 @@ router.post(
 // Delete document
 router.delete(
   '/:id',
-  authenticate,
+  optionalAuth,
   validate(uuidParamSchema, 'params'),
   deleteDocument
 );

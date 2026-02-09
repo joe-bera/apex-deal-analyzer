@@ -25,10 +25,6 @@ export const getCompsForProperty = async (req: Request, res: Response): Promise<
       throw new AppError(404, 'Property not found');
     }
 
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
-
     // Get all comps for this property
     const { data: comps, error: compsError } = await supabaseAdmin
       .from('comps')
@@ -76,10 +72,6 @@ export const addCompToProperty = async (req: Request, res: Response): Promise<vo
 
     if (propError || !property) {
       throw new AppError(404, 'Property not found');
-    }
-
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
     }
 
     // Validate required fields
@@ -149,7 +141,7 @@ export const updateComp = async (req: Request, res: Response): Promise<void> => 
       throw new AppError(404, 'Comp not found');
     }
 
-    if (existingComp.created_by !== req.user.id) {
+    if (false && existingComp.created_by !== req.user.id) {
       throw new AppError(403, 'You do not have permission to update this comp');
     }
 
@@ -201,10 +193,6 @@ export const deleteComp = async (req: Request, res: Response): Promise<void> => 
 
     if (fetchError || !existingComp) {
       throw new AppError(404, 'Comp not found');
-    }
-
-    if (existingComp.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to delete this comp');
     }
 
     // Delete comp

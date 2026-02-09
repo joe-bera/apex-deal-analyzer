@@ -199,10 +199,7 @@ export const updateProperty = async (req: Request, res: Response): Promise<void>
       throw new AppError(404, 'Property not found');
     }
 
-    // Check ownership
-    if (existingProperty.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to edit this property');
-    }
+    // Ownership check skipped — open access mode
 
     // Merge additional_data if provided
     let mergedAdditionalData = existingProperty.additional_data;
@@ -268,11 +265,7 @@ export const getProperty = async (req: Request, res: Response): Promise<void> =>
       throw new AppError(404, 'Property not found');
     }
 
-    // Check access permission
-    if (property.created_by !== req.user.id) {
-      // TODO: Check shared_access table for permission
-      throw new AppError(403, 'You do not have access to this property');
-    }
+    // Ownership check skipped — open access mode
 
     res.status(200).json({
       success: true,
@@ -314,7 +307,6 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
     let query = supabaseAdmin
       .from('properties')
       .select('*, documents(id, file_name, document_type)', { count: 'exact' })
-      .eq('created_by', req.user.id)
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -405,10 +397,7 @@ export const deleteProperty = async (req: Request, res: Response): Promise<void>
       throw new AppError(404, 'Property not found');
     }
 
-    // Check ownership
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to delete this property');
-    }
+    // Ownership check skipped — open access mode
 
     // Soft delete: mark as archived
     const { error: deleteError } = await supabaseAdmin
@@ -460,9 +449,7 @@ export const getPropertyValuation = async (
       throw new AppError(404, 'Property not found');
     }
 
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
+    // Ownership check skipped — open access mode
 
     // Get latest deal with valuation result
     const { data: deal, error: dealError } = await supabaseAdmin
@@ -519,9 +506,7 @@ export const analyzePropertyValuation = async (
     }
 
     // Check access
-    if (property.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have access to this property');
-    }
+    // Ownership check skipped — open access mode
 
     // Get all comps for this property
     const { data: comps, error: compsError } = await supabaseAdmin

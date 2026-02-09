@@ -27,11 +27,9 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    // Handle expired/invalid token - redirect to login
+    // Clear stale token on 401 but don't redirect (app works without auth)
     if (response.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
-      throw new APIError(401, 'Session expired. Please log in again.');
     }
     throw new APIError(response.status, data.error || 'Request failed');
   }

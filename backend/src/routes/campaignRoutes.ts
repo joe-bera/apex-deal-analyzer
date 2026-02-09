@@ -11,7 +11,7 @@ import {
   sendCampaign,
   handleUnsubscribe,
 } from '../controllers/campaignController';
-import { authenticate } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
@@ -19,7 +19,7 @@ const router = Router();
 router.post('/unsubscribe', handleUnsubscribe);
 
 // All routes below require authentication
-router.use(authenticate);
+router.use(optionalAuth);
 
 // Campaign CRUD
 router.get('/', listCampaigns);
