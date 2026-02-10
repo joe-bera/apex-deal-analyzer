@@ -57,6 +57,73 @@ const mapPropertyTypeToDatabase = (extractedType: string | undefined | null, sub
 };
 
 /**
+ * Create property manually (no document required)
+ * POST /api/properties
+ */
+export const createProperty = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const data = req.body;
+    const mappedPropertyType = data.property_type
+      ? mapPropertyTypeToDatabase(data.property_type)
+      : 'other';
+
+    const { data: property, error: createError } = await supabaseAdmin
+      .from('properties')
+      .insert({
+        created_by: req.user.id,
+        address: data.address,
+        city: data.city,
+        state: data.state || 'CA',
+        zip_code: data.zip_code,
+        apn: data.apn,
+        property_type: mappedPropertyType,
+        subtype: data.subtype,
+        building_size: data.building_size,
+        lot_size: data.lot_size,
+        year_built: data.year_built,
+        stories: data.stories,
+        units: data.units,
+        price: data.price,
+        price_per_sqft: data.price_per_sqft,
+        cap_rate: data.cap_rate,
+        noi: data.noi,
+        gross_income: data.gross_income,
+        operating_expenses: data.operating_expenses,
+        occupancy_rate: data.occupancy_rate,
+        market: data.market,
+        submarket: data.submarket,
+        zoning: data.zoning,
+        parking_spaces: data.parking_spaces,
+        status: data.status || 'prospect',
+      })
+      .select()
+      .single();
+
+    if (createError || !property) {
+      console.error('Property creation error:', createError);
+      throw new AppError(500, 'Failed to create property');
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Property created successfully',
+      property,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Create property error:', error);
+      res.status(500).json({ success: false, error: 'Failed to create property' });
+    }
+  }
+};
+
+/**
  * Create property from extracted document data
  * POST /api/properties/from-document/:documentId
  */

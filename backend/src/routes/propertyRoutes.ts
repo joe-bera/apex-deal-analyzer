@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  createProperty,
   createPropertyFromDocument,
   getProperty,
   listProperties,
@@ -23,6 +24,7 @@ import { validate } from '../middleware/validate';
 import {
   uuidParamSchema,
   documentIdParamSchema,
+  createPropertySchema,
   updatePropertySchema,
   propertyOverridesSchema,
   listPropertiesQuerySchema,
@@ -35,6 +37,14 @@ const router = Router();
  * Property Routes
  * All routes require authentication
  */
+
+// Create property manually
+router.post(
+  '/',
+  authenticate,
+  validate(createPropertySchema, 'body'),
+  createProperty
+);
 
 // Create property from extracted document data
 router.post(

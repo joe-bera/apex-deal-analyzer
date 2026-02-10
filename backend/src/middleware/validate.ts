@@ -260,6 +260,18 @@ export const updatePropertySchema = z
   .strict();
 
 /**
+ * Schema for creating a property manually (address + city required)
+ */
+export const createPropertySchema = z
+  .object({
+    ...propertyBaseFields,
+    address: z.string().min(1, 'Address is required').max(500),
+    city: z.string().min(1, 'City is required').max(100),
+    status: propertyStatusEnum.optional(),
+  })
+  .strict();
+
+/**
  * Schema for property overrides when creating from document
  */
 export const propertyOverridesSchema = z

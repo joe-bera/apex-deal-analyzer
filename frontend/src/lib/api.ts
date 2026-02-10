@@ -253,6 +253,12 @@ export const api = {
     request(`/documents/${id}/extract`, { method: 'POST' }),
 
   // Properties
+  createProperty: (data: Record<string, unknown>) =>
+    request('/properties', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   createPropertyFromDocument: (documentId: string, overrides?: any) =>
     request(`/properties/from-document/${documentId}`, {
       method: 'POST',

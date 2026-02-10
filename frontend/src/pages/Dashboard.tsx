@@ -8,6 +8,11 @@ import {
   StatsCard,
   SearchInput,
   Select,
+  Input,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
   PropertyCard,
   PropertyCardCompact,
   EmptyState,
@@ -30,6 +35,10 @@ export default function Dashboard() {
   const [propertyTypeFilter, setPropertyTypeFilter] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showComparison, setShowComparison] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<'choose' | 'manual'>('choose');
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState('');
 
   useEffect(() => {
     api
@@ -41,6 +50,37 @@ export default function Dashboard() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleManualSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAddSaving(true);
+    setAddError('');
+
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, unknown> = {
+      address: fd.get('address') as string,
+      city: fd.get('city') as string,
+      state: (fd.get('state') as string) || 'CA',
+      zip_code: fd.get('zip_code') as string || undefined,
+      property_type: fd.get('property_type') as string || undefined,
+      building_size: fd.get('building_size') ? Number(fd.get('building_size')) : undefined,
+      year_built: fd.get('year_built') ? Number(fd.get('year_built')) : undefined,
+      price: fd.get('price') ? Number(fd.get('price')) : undefined,
+      cap_rate: fd.get('cap_rate') ? Number(fd.get('cap_rate')) : undefined,
+    };
+    // Remove undefined values
+    Object.keys(body).forEach((k) => { if (body[k] === undefined || body[k] === '') delete body[k]; });
+
+    try {
+      const result: any = await api.createProperty(body);
+      setShowAddModal(false);
+      navigate(`/properties/${result.property.id}`);
+    } catch (err: any) {
+      setAddError(err.message || 'Failed to create property');
+    } finally {
+      setAddSaving(false);
+    }
+  };
 
   // Calculate portfolio stats with health metrics
   const stats = useMemo(() => {
@@ -208,7 +248,7 @@ export default function Dashboard() {
             )}
             <Button
               size="lg"
-              onClick={() => navigate('/upload')}
+              onClick={() => { setShowAddModal(true); setAddMode('choose'); setAddError(''); }}
               leftIcon={
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -487,6 +527,101 @@ export default function Dashboard() {
           properties={properties}
           onClose={() => setShowComparison(false)}
         />
+      )}
+
+      {/* Add Property Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>{addMode === 'choose' ? 'Add Property' : 'New Property'}</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowAddModal(false)}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {addMode === 'choose' ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => { setShowAddModal(false); navigate('/upload'); }}
+                    className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className="p-3 bg-primary-100 rounded-lg flex-shrink-0">
+                      <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Upload a Document</p>
+                      <p className="text-sm text-gray-500">Upload a PDF and auto-extract property data</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setAddMode('manual')}
+                    className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className="p-3 bg-gray-100 rounded-lg flex-shrink-0">
+                      <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Enter Manually</p>
+                      <p className="text-sm text-gray-500">Type in property details by hand</p>
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleManualSubmit} className="space-y-4">
+                  {addError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+                      {addError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <Input name="address" required label="Address *" placeholder="123 Industrial Blvd" />
+                    </div>
+                    <Input name="city" required label="City *" placeholder="Ontario" />
+                    <Input name="state" label="State" placeholder="CA" defaultValue="CA" maxLength={2} />
+                    <Input name="zip_code" label="Zip Code" placeholder="91761" />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Property Type</label>
+                      <select
+                        name="property_type"
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+                      >
+                        <option value="">Select type...</option>
+                        <option value="warehouse">Warehouse</option>
+                        <option value="distribution_center">Distribution Center</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="flex_space">Flex Space</option>
+                        <option value="cold_storage">Cold Storage</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <Input name="building_size" type="number" label="Building Size (SF)" placeholder="50000" />
+                    <Input name="year_built" type="number" label="Year Built" placeholder="2005" />
+                    <Input name="price" type="number" label="Price" placeholder="5000000" />
+                    <Input name="cap_rate" type="number" step="0.01" label="CAP Rate (%)" placeholder="5.5" />
+                  </div>
+                  <div className="flex gap-3 pt-2 border-t">
+                    <Button type="button" variant="outline" onClick={() => setAddMode('choose')} className="flex-1">
+                      Back
+                    </Button>
+                    <Button type="submit" isLoading={addSaving} disabled={addSaving} className="flex-1">
+                      {addSaving ? 'Creating...' : 'Create Property'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </Layout>
   );
