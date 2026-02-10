@@ -529,37 +529,73 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
     // Write extracted fields back to master_properties for property profiles and OMs
     if (
       ['property_profile', 'offering_memorandum'].includes(document.document_type) &&
-      document.property_id &&
       extractedData
     ) {
-      // Map extracted fields to master_properties columns (only set non-null values)
-      const propertyUpdate: Record<string, any> = {};
-      if (extractedData.building_size) propertyUpdate.building_size = Math.round(extractedData.building_size);
-      if (extractedData.lot_size) propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
-      if (extractedData.year_built) propertyUpdate.year_built = extractedData.year_built;
-      if (extractedData.stories) propertyUpdate.number_of_floors = extractedData.stories;
-      if (extractedData.units) propertyUpdate.number_of_units = extractedData.units;
-      if (extractedData.occupancy_rate) propertyUpdate.percent_leased = extractedData.occupancy_rate;
-      if (extractedData.parking_spaces) propertyUpdate.parking_spaces = extractedData.parking_spaces;
-      if (extractedData.zoning) propertyUpdate.zoning = extractedData.zoning;
-      if (extractedData.subtype) propertyUpdate.property_subtype = extractedData.subtype;
-      if (extractedData.market) propertyUpdate.market = extractedData.market;
-      if (extractedData.submarket) propertyUpdate.submarket = extractedData.submarket;
-      if (extractedData.apn) propertyUpdate.apn = extractedData.apn;
-      if (extractedData.owner_name) propertyUpdate.owner_name = extractedData.owner_name;
-      if (extractedData.owner_address) propertyUpdate.owner_address = extractedData.owner_address;
+      // Find the master_properties record — by property_id if linked, otherwise by extracted address
+      let masterPropertyId: string | null = document.property_id || null;
 
-      if (Object.keys(propertyUpdate).length > 0) {
-        propertyUpdate.updated_at = new Date().toISOString();
-        const { error: propUpdateError } = await supabaseAdmin
+      if (!masterPropertyId && extractedData.address) {
+        const normalizedExtracted = extractedData.address
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .replace(/\.$/g, '')
+          .replace(/ street| st\.?| avenue| ave\.?| boulevard| blvd\.?| drive| dr\.?| road| rd\.?| lane| ln\.?| court| ct\.?| place| pl\.?| way/gi, '')
+          .replace(/ north| south| east| west| n\.?| s\.?| e\.?| w\.?/gi, '')
+          .replace(/[^a-z0-9]/g, '')
+          .trim();
+
+        console.log(`[DocumentController] Looking up master_properties by normalized address: "${normalizedExtracted}" city: "${extractedData.city}"`);
+
+        let lookupQuery = supabaseAdmin
           .from('master_properties')
-          .update(propertyUpdate)
-          .eq('id', document.property_id);
+          .select('id')
+          .eq('address_normalized', normalizedExtracted)
+          .eq('is_deleted', false);
 
-        if (propUpdateError) {
-          console.error('[DocumentController] Failed to update master_properties:', propUpdateError);
+        if (extractedData.city) {
+          lookupQuery = lookupQuery.ilike('city', extractedData.city.toLowerCase().trim());
+        }
+
+        const { data: matchedProperty } = await lookupQuery.limit(1).maybeSingle();
+
+        if (matchedProperty) {
+          masterPropertyId = matchedProperty.id;
+          console.log(`[DocumentController] Matched master_properties record: ${masterPropertyId}`);
         } else {
-          console.log(`[DocumentController] Updated master_properties ${document.property_id} with ${Object.keys(propertyUpdate).length - 1} fields`);
+          console.log(`[DocumentController] No master_properties match found for address: "${extractedData.address}"`);
+        }
+      }
+
+      if (masterPropertyId) {
+        // Map extracted fields to master_properties columns (only set non-null values)
+        const propertyUpdate: Record<string, any> = {};
+        if (extractedData.building_size) propertyUpdate.building_size = Math.round(extractedData.building_size);
+        if (extractedData.lot_size) propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
+        if (extractedData.year_built) propertyUpdate.year_built = extractedData.year_built;
+        if (extractedData.stories) propertyUpdate.number_of_floors = extractedData.stories;
+        if (extractedData.units) propertyUpdate.number_of_units = extractedData.units;
+        if (extractedData.occupancy_rate) propertyUpdate.percent_leased = extractedData.occupancy_rate;
+        if (extractedData.parking_spaces) propertyUpdate.parking_spaces = extractedData.parking_spaces;
+        if (extractedData.zoning) propertyUpdate.zoning = extractedData.zoning;
+        if (extractedData.subtype) propertyUpdate.property_subtype = extractedData.subtype;
+        if (extractedData.market) propertyUpdate.market = extractedData.market;
+        if (extractedData.submarket) propertyUpdate.submarket = extractedData.submarket;
+        if (extractedData.apn) propertyUpdate.apn = extractedData.apn;
+        if (extractedData.owner_name) propertyUpdate.owner_name = extractedData.owner_name;
+        if (extractedData.owner_address) propertyUpdate.owner_address = extractedData.owner_address;
+
+        if (Object.keys(propertyUpdate).length > 0) {
+          propertyUpdate.updated_at = new Date().toISOString();
+          const { error: propUpdateError } = await supabaseAdmin
+            .from('master_properties')
+            .update(propertyUpdate)
+            .eq('id', masterPropertyId);
+
+          if (propUpdateError) {
+            console.error('[DocumentController] Failed to update master_properties:', propUpdateError);
+          } else {
+            console.log(`[DocumentController] Updated master_properties ${masterPropertyId} with ${Object.keys(propertyUpdate).length - 1} fields from extraction`);
+          }
         }
       }
     }
