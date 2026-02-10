@@ -12,6 +12,7 @@ interface PropertyComparisonProps {
 
 export default function PropertyComparison({ properties, onClose }: PropertyComparisonProps) {
   const [selectedProperties, setSelectedProperties] = useState<Property[]>([]);
+  const [showComparison, setShowComparison] = useState(false);
 
   const formatCurrency = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
@@ -77,7 +78,9 @@ export default function PropertyComparison({ properties, onClose }: PropertyComp
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Compare Properties</h2>
-            <p className="text-sm text-gray-500">Select up to 4 properties to compare side-by-side</p>
+            <p className="text-sm text-gray-500">
+              {showComparison ? 'Side-by-side comparison' : 'Select up to 4 properties to compare side-by-side'}
+            </p>
           </div>
           <Button variant="ghost" onClick={onClose}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -88,7 +91,7 @@ export default function PropertyComparison({ properties, onClose }: PropertyComp
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
-          {selectedProperties.length === 0 ? (
+          {!showComparison ? (
             // Property Selection Grid
             <div className="p-6">
               <p className="text-gray-600 mb-4">Click on properties to add them to the comparison:</p>
@@ -132,7 +135,7 @@ export default function PropertyComparison({ properties, onClose }: PropertyComp
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setSelectedProperties([])}
+                  onClick={() => setShowComparison(false)}
                 >
                   Change Selection
                 </Button>
@@ -301,11 +304,38 @@ export default function PropertyComparison({ properties, onClose }: PropertyComp
           )}
         </div>
 
-        {/* Footer */}
-        {selectedProperties.length > 0 && selectedProperties.length < 4 && (
+        {/* Footer — selection mode: show counter + Compare Now button */}
+        {!showComparison && (
+          <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+              {selectedProperties.length} of 4 selected
+            </span>
+            <div className="flex items-center gap-2">
+              {selectedProperties.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedProperties([])}
+                >
+                  Clear
+                </Button>
+              )}
+              <Button
+                size="sm"
+                disabled={selectedProperties.length < 2}
+                onClick={() => setShowComparison(true)}
+              >
+                Compare Now
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Footer — comparison mode: add more */}
+        {showComparison && selectedProperties.length < 4 && (
           <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 text-center">
             <button
-              onClick={() => {}}
+              onClick={() => setShowComparison(false)}
               className="text-primary-600 hover:text-primary-700 text-sm font-medium"
             >
               + Add more properties to compare ({4 - selectedProperties.length} remaining)

@@ -199,18 +199,21 @@ function formatPropertyContext(property: PropertyData, transaction?: Transaction
 export async function generatePropertyDescription(
   property: PropertyData,
   userId: string,
-  transaction?: TransactionData
+  transaction?: TransactionData,
+  stylePrompt?: string
 ): Promise<GeneratedContentResult> {
   const contentType: ContentType = 'property_description';
-  const promptHash = buildPromptHash(property, contentType);
+  const promptHash = buildPromptHash(property, contentType, stylePrompt ? { stylePrompt } : undefined);
 
   // Check cache
   const cached = await getCachedContent(property.id, contentType, promptHash);
   if (cached) return { content: cached, cached: true };
 
   const context = formatPropertyContext(property, transaction);
+  const baseSystemPrompt = 'You are a commercial real estate marketing copywriter. Write professional, compelling property descriptions for marketing materials. Return only the text content, no JSON wrapping.';
+  const systemPrompt = stylePrompt ? `${stylePrompt}\n\nNow generate the following:\n${baseSystemPrompt}` : baseSystemPrompt;
   const response = await callClaude({
-    systemPrompt: 'You are a commercial real estate marketing copywriter. Write professional, compelling property descriptions for marketing materials. Return only the text content, no JSON wrapping.',
+    systemPrompt,
     prompt: `Write a 2-3 paragraph property description for the following commercial property. Focus on key selling points, building features, and location advantages. Use professional real estate marketing language.\n\n${context}`,
     maxTokens: 1024,
     temperature: 0.7,
@@ -226,17 +229,20 @@ export async function generatePropertyDescription(
 export async function generateExecutiveSummary(
   property: PropertyData,
   userId: string,
-  transaction?: TransactionData
+  transaction?: TransactionData,
+  stylePrompt?: string
 ): Promise<GeneratedContentResult> {
   const contentType: ContentType = 'executive_summary';
-  const promptHash = buildPromptHash(property, contentType);
+  const promptHash = buildPromptHash(property, contentType, stylePrompt ? { stylePrompt } : undefined);
 
   const cached = await getCachedContent(property.id, contentType, promptHash);
   if (cached) return { content: cached, cached: true };
 
   const context = formatPropertyContext(property, transaction);
+  const baseSystemPrompt = 'You are a commercial real estate investment analyst. Write professional executive summaries for offering memorandums. Return only the text content, no JSON wrapping.';
+  const systemPrompt = stylePrompt ? `${stylePrompt}\n\nNow generate the following:\n${baseSystemPrompt}` : baseSystemPrompt;
   const response = await callClaude({
-    systemPrompt: 'You are a commercial real estate investment analyst. Write professional executive summaries for offering memorandums. Return only the text content, no JSON wrapping.',
+    systemPrompt,
     prompt: `Write an executive summary (3-4 paragraphs) for an Offering Memorandum for this commercial property. Include investment highlights, property overview, financial summary, and market positioning. Use formal investment-grade language.\n\n${context}`,
     maxTokens: 1500,
     temperature: 0.6,
@@ -251,17 +257,20 @@ export async function generateExecutiveSummary(
 
 export async function generateLocationAnalysis(
   property: PropertyData,
-  userId: string
+  userId: string,
+  stylePrompt?: string
 ): Promise<GeneratedContentResult> {
   const contentType: ContentType = 'location_analysis';
-  const promptHash = buildPromptHash(property, contentType);
+  const promptHash = buildPromptHash(property, contentType, stylePrompt ? { stylePrompt } : undefined);
 
   const cached = await getCachedContent(property.id, contentType, promptHash);
   if (cached) return { content: cached, cached: true };
 
   const context = formatPropertyContext(property);
+  const baseSystemPrompt = 'You are a commercial real estate market analyst specializing in Southern California industrial markets. Write detailed location analyses. Return only the text content, no JSON wrapping.';
+  const systemPrompt = stylePrompt ? `${stylePrompt}\n\nNow generate the following:\n${baseSystemPrompt}` : baseSystemPrompt;
   const response = await callClaude({
-    systemPrompt: 'You are a commercial real estate market analyst specializing in Southern California industrial markets. Write detailed location analyses. Return only the text content, no JSON wrapping.',
+    systemPrompt,
     prompt: `Write a location analysis (2-3 paragraphs) for this property. Discuss the submarket, proximity to major transportation corridors (freeways, airports, ports), labor market, and growth trends in the area. Focus on factors relevant to industrial/commercial real estate.\n\n${context}`,
     maxTokens: 1200,
     temperature: 0.6,
@@ -277,17 +286,20 @@ export async function generateLocationAnalysis(
 export async function generatePropertyHighlights(
   property: PropertyData,
   userId: string,
-  transaction?: TransactionData
+  transaction?: TransactionData,
+  stylePrompt?: string
 ): Promise<GeneratedContentResult> {
   const contentType: ContentType = 'property_highlights';
-  const promptHash = buildPromptHash(property, contentType);
+  const promptHash = buildPromptHash(property, contentType, stylePrompt ? { stylePrompt } : undefined);
 
   const cached = await getCachedContent(property.id, contentType, promptHash);
   if (cached) return { content: cached, cached: true };
 
   const context = formatPropertyContext(property, transaction);
+  const baseSystemPrompt = 'You are a commercial real estate marketing specialist. Return only a JSON array of strings, no other text.';
+  const systemPrompt = stylePrompt ? `${stylePrompt}\n\nNow generate the following:\n${baseSystemPrompt}` : baseSystemPrompt;
   const response = await callClaude({
-    systemPrompt: 'You are a commercial real estate marketing specialist. Return only a JSON array of strings, no other text.',
+    systemPrompt,
     prompt: `Generate 5-8 concise property highlight bullet points for marketing materials. Each bullet should be a single compelling sentence. Return as a JSON array of strings.\n\nExample: ["Strategic location near I-10 and I-15 freeway interchange", "Modern 32-foot clear height warehouse"]\n\n${context}`,
     maxTokens: 800,
     temperature: 0.7,
@@ -313,17 +325,20 @@ export async function generatePropertyHighlights(
 
 export async function generateMarketAnalysis(
   property: PropertyData,
-  userId: string
+  userId: string,
+  stylePrompt?: string
 ): Promise<GeneratedContentResult> {
   const contentType: ContentType = 'market_analysis';
-  const promptHash = buildPromptHash(property, contentType);
+  const promptHash = buildPromptHash(property, contentType, stylePrompt ? { stylePrompt } : undefined);
 
   const cached = await getCachedContent(property.id, contentType, promptHash);
   if (cached) return { content: cached, cached: true };
 
   const context = formatPropertyContext(property);
+  const baseSystemPrompt = 'You are a commercial real estate market analyst specializing in Southern California. Write data-driven market analysis sections for proposals. Return only the text content, no JSON wrapping.';
+  const systemPrompt = stylePrompt ? `${stylePrompt}\n\nNow generate the following:\n${baseSystemPrompt}` : baseSystemPrompt;
   const response = await callClaude({
-    systemPrompt: 'You are a commercial real estate market analyst specializing in Southern California. Write data-driven market analysis sections for proposals. Return only the text content, no JSON wrapping.',
+    systemPrompt,
     prompt: `Write a market analysis (2-3 paragraphs) for a proposal involving this property. Discuss current market conditions, vacancy rates, rental trends, comparable sales trends, and investment outlook for this property type and submarket.\n\n${context}`,
     maxTokens: 1200,
     temperature: 0.6,
@@ -392,7 +407,8 @@ export async function generateContentBatch(
   contentTypes: ContentType[],
   userId: string,
   transaction?: TransactionData,
-  companyInfo?: CompanyInfo
+  companyInfo?: CompanyInfo,
+  stylePrompt?: string
 ): Promise<BatchGenerationResult> {
   const results: BatchGenerationResult = {};
 
@@ -401,19 +417,19 @@ export async function generateContentBatch(
     try {
       switch (ct) {
         case 'property_description':
-          results[ct] = await generatePropertyDescription(property, userId, transaction);
+          results[ct] = await generatePropertyDescription(property, userId, transaction, stylePrompt);
           break;
         case 'executive_summary':
-          results[ct] = await generateExecutiveSummary(property, userId, transaction);
+          results[ct] = await generateExecutiveSummary(property, userId, transaction, stylePrompt);
           break;
         case 'location_analysis':
-          results[ct] = await generateLocationAnalysis(property, userId);
+          results[ct] = await generateLocationAnalysis(property, userId, stylePrompt);
           break;
         case 'property_highlights':
-          results[ct] = await generatePropertyHighlights(property, userId, transaction);
+          results[ct] = await generatePropertyHighlights(property, userId, transaction, stylePrompt);
           break;
         case 'market_analysis':
-          results[ct] = await generateMarketAnalysis(property, userId);
+          results[ct] = await generateMarketAnalysis(property, userId, stylePrompt);
           break;
         case 'team_intro':
           results[ct] = await generateTeamIntro(companyInfo || {}, userId);

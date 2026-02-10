@@ -28,7 +28,7 @@ export const generateContent = async (req: Request, res: Response): Promise<void
       throw new AppError(401, 'Authentication required');
     }
 
-    const { master_property_id, content_types } = req.body;
+    const { master_property_id, content_types, style_prompt } = req.body;
 
     if (!master_property_id) {
       throw new AppError(400, 'master_property_id is required');
@@ -87,7 +87,8 @@ export const generateContent = async (req: Request, res: Response): Promise<void
       content_types as ContentType[],
       req.user.id,
       transaction,
-      companyInfo
+      companyInfo,
+      style_prompt || undefined
     );
 
     // Build response with property data included

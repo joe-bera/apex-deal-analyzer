@@ -517,10 +517,20 @@ export const api = {
   // =========================================================================
   // Document Generator (Phase 2)
   // =========================================================================
-  generateDocContent: (masterPropertyId: string, contentTypes: string[]) =>
+  generateDocContent: (masterPropertyId: string, contentTypes: string[], stylePrompt?: string) =>
     request<any>('/generate/content', {
       method: 'POST',
-      body: JSON.stringify({ master_property_id: masterPropertyId, content_types: contentTypes }),
+      body: JSON.stringify({
+        master_property_id: masterPropertyId,
+        content_types: contentTypes,
+        ...(stylePrompt && { style_prompt: stylePrompt }),
+      }),
+    }),
+
+  createMasterProperty: (data: Record<string, unknown>) =>
+    request<any>('/master-properties', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
   saveGeneratedDoc: (data: {

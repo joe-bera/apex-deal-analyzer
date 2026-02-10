@@ -2,10 +2,113 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // ============================================================================
-// Color Themes — inspired by reference brochure styles
+// Company Brands
 // ============================================================================
 
-export type ThemeStyle = 'apex' | 'modern' | 'corporate';
+export interface CompanyBrand {
+  key: string;
+  displayName: string;
+  primary: [number, number, number];
+  accent: [number, number, number];
+  description: string;
+  stylePrompt: string;
+}
+
+export const COMPANY_BRANDS: CompanyBrand[] = [
+  {
+    key: 'apex',
+    displayName: 'Apex Real Estate',
+    primary: [120, 0, 20],
+    accent: [178, 31, 36],
+    description: 'Deep maroon with red accents — Apex branding',
+    stylePrompt: '',
+  },
+  {
+    key: 'kw_commercial',
+    displayName: 'KW Commercial',
+    primary: [180, 0, 0],
+    accent: [51, 51, 51],
+    description: 'Keller Williams Commercial red with dark accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'keller_williams',
+    displayName: 'Keller Williams',
+    primary: [180, 0, 0],
+    accent: [100, 100, 100],
+    description: 'Classic KW red with gray accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'coldwell_banker',
+    displayName: 'Coldwell Banker',
+    primary: [0, 50, 120],
+    accent: [0, 100, 170],
+    description: 'Navy blue with bright blue accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'exp_realty',
+    displayName: 'eXp Realty',
+    primary: [0, 61, 121],
+    accent: [28, 117, 188],
+    description: 'Dark blue with sky blue accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'exp_commercial',
+    displayName: 'eXp Commercial',
+    primary: [0, 47, 95],
+    accent: [0, 90, 156],
+    description: 'Deep navy with medium blue accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'lee_associates',
+    displayName: 'Lee & Associates',
+    primary: [0, 51, 102],
+    accent: [204, 153, 0],
+    description: 'Navy blue with gold accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'jll',
+    displayName: 'JLL',
+    primary: [0, 51, 102],
+    accent: [218, 41, 28],
+    description: 'Navy blue with red accents',
+    stylePrompt: '',
+  },
+  {
+    key: 'custom',
+    displayName: 'Custom',
+    primary: [50, 50, 50],
+    accent: [100, 100, 100],
+    description: 'Choose your own brand colors',
+    stylePrompt: '',
+  },
+];
+
+export function getCompanyBrand(key: string): CompanyBrand | undefined {
+  return COMPANY_BRANDS.find(b => b.key === key);
+}
+
+// ============================================================================
+// Color Themes — built from company brands
+// ============================================================================
+
+export type ThemeStyle =
+  | 'apex'
+  | 'kw_commercial'
+  | 'keller_williams'
+  | 'coldwell_banker'
+  | 'exp_realty'
+  | 'exp_commercial'
+  | 'lee_associates'
+  | 'jll'
+  | 'custom'
+  | 'modern'
+  | 'corporate';
 
 interface Theme {
   primary: [number, number, number];
@@ -16,31 +119,37 @@ interface Theme {
   white: [number, number, number];
 }
 
-const THEMES: Record<ThemeStyle, Theme> = {
-  apex: {
-    primary: [120, 0, 20],
-    accent: [178, 31, 36],
+function buildThemeFromBrand(brand: CompanyBrand): Theme {
+  return {
+    primary: brand.primary,
+    accent: brand.accent,
     dark: [33, 33, 33],
     medium: [100, 100, 100],
     light: [220, 220, 220],
     white: [255, 255, 255],
-  },
-  modern: {
-    primary: [25, 25, 28],
-    accent: [190, 30, 45],
-    dark: [33, 33, 33],
-    medium: [100, 100, 100],
-    light: [220, 220, 220],
-    white: [255, 255, 255],
-  },
-  corporate: {
-    primary: [0, 51, 102],
-    accent: [0, 128, 155],
-    dark: [33, 33, 33],
-    medium: [100, 100, 100],
-    light: [220, 220, 220],
-    white: [255, 255, 255],
-  },
+  };
+}
+
+const THEMES: Record<string, Theme> = {};
+for (const brand of COMPANY_BRANDS) {
+  THEMES[brand.key] = buildThemeFromBrand(brand);
+}
+// Legacy themes kept for backward compatibility
+THEMES['modern'] = {
+  primary: [25, 25, 28],
+  accent: [190, 30, 45],
+  dark: [33, 33, 33],
+  medium: [100, 100, 100],
+  light: [220, 220, 220],
+  white: [255, 255, 255],
+};
+THEMES['corporate'] = {
+  primary: [0, 51, 102],
+  accent: [0, 128, 155],
+  dark: [33, 33, 33],
+  medium: [100, 100, 100],
+  light: [220, 220, 220],
+  white: [255, 255, 255],
 };
 
 // ============================================================================
@@ -107,14 +216,29 @@ export interface GeneratorOptions {
   companyEmail?: string;
   companyAddress?: string;
   style?: ThemeStyle;
+  logoBase64?: string;
+  customPrimary?: [number, number, number];
+  customAccent?: [number, number, number];
 }
 
 // ============================================================================
 // Utility Helpers
 // ============================================================================
 
-function getTheme(style?: ThemeStyle): Theme {
-  return THEMES[style || 'apex'];
+function getTheme(options?: { style?: ThemeStyle; customPrimary?: [number, number, number]; customAccent?: [number, number, number] }): Theme {
+  const style = options?.style || 'apex';
+  const base = THEMES[style] || THEMES['apex'];
+
+  // For 'custom' style, override primary/accent if provided
+  if (style === 'custom') {
+    return {
+      ...base,
+      primary: options?.customPrimary || base.primary,
+      accent: options?.customAccent || base.accent,
+    };
+  }
+
+  return base;
 }
 
 function fmt$(val?: number): string {
@@ -171,6 +295,29 @@ function buildSpecs(p: PropertyData): [string, string][] {
   return specs;
 }
 
+/**
+ * Safely embed a base64 logo image into the document.
+ * Returns true if the logo was successfully added.
+ */
+function addLogo(doc: jsPDF, logoBase64: string, x: number, y: number, w: number, h: number): boolean {
+  try {
+    // Determine image type from data URI or default to PNG
+    let format: 'PNG' | 'JPEG' = 'PNG';
+    let data = logoBase64;
+    if (logoBase64.startsWith('data:image/jpeg') || logoBase64.startsWith('data:image/jpg')) {
+      format = 'JPEG';
+    }
+    // Strip data URI prefix if present
+    if (data.includes(',')) {
+      data = data.split(',')[1];
+    }
+    doc.addImage(data, format, x, y, w, h);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // Drawing Primitives
 // ============================================================================
@@ -184,7 +331,7 @@ function drawCover(
   options: GeneratorOptions,
   theme: Theme
 ): void {
-  const { property, transaction, companyName } = options;
+  const { property, transaction, companyName, logoBase64 } = options;
   const company = companyName || 'Apex Real Estate Services';
 
   // Full page primary fill
@@ -203,8 +350,20 @@ function drawCover(
   doc.setFillColor(...theme.white);
   doc.roundedRect(cardX, cardY, cardW, cardH, 3, 3, 'F');
 
+  // Logo above company name label (inside card)
+  let y = cardY + 12;
+  if (logoBase64) {
+    const logoW = 30;
+    const logoH = 30;
+    const logoX = PW / 2 - logoW / 2;
+    const added = addLogo(doc, logoBase64, logoX, y - 6, logoW, logoH);
+    if (added) {
+      y += logoH - 2;
+    }
+  }
+
   // Document type label
-  let y = cardY + 20;
+  y += 8;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...theme.accent);
@@ -305,7 +464,7 @@ function drawCover(
  * Start a new interior page with colored header bar + sidebar accent
  * Returns the Y position where content should start
  */
-function startInteriorPage(doc: jsPDF, title: string, theme: Theme, companyName: string): number {
+function startInteriorPage(doc: jsPDF, title: string, theme: Theme, companyName: string, logoBase64?: string): number {
   doc.addPage();
 
   // Header bar
@@ -315,6 +474,11 @@ function startInteriorPage(doc: jsPDF, title: string, theme: Theme, companyName:
   // Accent stripe below header
   doc.setFillColor(...theme.accent);
   doc.rect(0, HEADER_H, PW, 2, 'F');
+
+  // Small logo right-aligned in header
+  if (logoBase64) {
+    addLogo(doc, logoBase64, PW - MARGIN - 10, 3, 10, 10);
+  }
 
   // Company name in header (small, top-left)
   doc.setFont('helvetica', 'normal');
@@ -556,7 +720,17 @@ function drawContactPage(doc: jsPDF, options: GeneratorOptions, theme: Theme): v
   doc.setFillColor(...theme.white);
   doc.roundedRect(cardX, cardY, cardW, cardH, 3, 3, 'F');
 
-  let y = cardY + 22;
+  let y = cardY + 16;
+
+  // Logo above company name
+  if (options.logoBase64) {
+    const logoW = 24;
+    const logoH = 24;
+    const added = addLogo(doc, options.logoBase64, PW / 2 - logoW / 2, y - 4, logoW, logoH);
+    if (added) {
+      y += logoH + 4;
+    }
+  }
 
   // "FOR MORE INFORMATION"
   doc.setFont('helvetica', 'normal');
@@ -657,16 +831,16 @@ function pageBreak(doc: jsPDF, y: number, needed: number, theme: Theme): number 
 // ============================================================================
 
 export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName } = options;
+  const { property, transaction, content, companyName, logoBase64 } = options;
   const doc = new jsPDF('p', 'mm', 'a4');
-  const theme = getTheme(options.style);
+  const theme = getTheme(options);
   const company = companyName || 'Apex Real Estate Services';
 
   // === PAGE 1: COVER ===
   drawCover(doc, 'PROPERTY BROCHURE', options, theme);
 
   // === PAGE 2: EXECUTIVE SUMMARY ===
-  let y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company);
+  let y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company, logoBase64);
 
   // Property address block
   doc.setFont('helvetica', 'bold');
@@ -696,7 +870,7 @@ export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
   }
 
   // === PAGE 3: PROPERTY DETAILS ===
-  y = startInteriorPage(doc, 'PROPERTY DETAILS', theme, company);
+  y = startInteriorPage(doc, 'PROPERTY DETAILS', theme, company, logoBase64);
 
   // Highlights
   const highlights = parseHighlights(content.property_highlights);
@@ -720,7 +894,7 @@ export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
 
   // === PAGE 4: LOCATION ANALYSIS (if available) ===
   if (content.location_analysis) {
-    y = startInteriorPage(doc, 'LOCATION OVERVIEW', theme, company);
+    y = startInteriorPage(doc, 'LOCATION OVERVIEW', theme, company, logoBase64);
     y = drawParagraph(doc, content.location_analysis, y, theme);
   }
 
@@ -738,16 +912,16 @@ export function generateBrochurePDF(options: GeneratorOptions): jsPDF {
 // ============================================================================
 
 export function generateOMPDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName } = options;
+  const { property, transaction, content, companyName, logoBase64 } = options;
   const doc = new jsPDF('p', 'mm', 'a4');
-  const theme = getTheme(options.style);
+  const theme = getTheme(options);
   const company = companyName || 'Apex Real Estate Services';
 
   // === PAGE 1: COVER ===
   drawCover(doc, 'OFFERING MEMORANDUM', options, theme);
 
   // === PAGE 2: TABLE OF CONTENTS ===
-  let y = startInteriorPage(doc, 'TABLE OF CONTENTS', theme, company);
+  let y = startInteriorPage(doc, 'TABLE OF CONTENTS', theme, company, logoBase64);
   y += 8;
 
   const tocItems: string[] = ['Executive Summary', 'Property Overview'];
@@ -782,7 +956,7 @@ export function generateOMPDF(options: GeneratorOptions): jsPDF {
   });
 
   // === PAGE 3: EXECUTIVE SUMMARY ===
-  y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company);
+  y = startInteriorPage(doc, 'EXECUTIVE SUMMARY', theme, company, logoBase64);
 
   if (content.executive_summary) {
     y = drawParagraph(doc, content.executive_summary, y, theme, 10);
@@ -796,7 +970,7 @@ export function generateOMPDF(options: GeneratorOptions): jsPDF {
   }
 
   // === PAGE 4: PROPERTY OVERVIEW ===
-  y = startInteriorPage(doc, 'PROPERTY OVERVIEW', theme, company);
+  y = startInteriorPage(doc, 'PROPERTY OVERVIEW', theme, company, logoBase64);
 
   if (content.property_description) {
     y = drawParagraph(doc, content.property_description, y, theme);
@@ -811,7 +985,7 @@ export function generateOMPDF(options: GeneratorOptions): jsPDF {
   }
 
   // === PAGE 5: BUILDING SPECS ===
-  y = startInteriorPage(doc, 'BUILDING SPECIFICATIONS', theme, company);
+  y = startInteriorPage(doc, 'BUILDING SPECIFICATIONS', theme, company, logoBase64);
 
   const specs = buildSpecs(property);
   if (specs.length > 0) {
@@ -820,7 +994,7 @@ export function generateOMPDF(options: GeneratorOptions): jsPDF {
 
   // === PAGE 6: FINANCIAL ANALYSIS (if data available) ===
   if (transaction && (transaction.sale_price || transaction.asking_price || transaction.noi)) {
-    y = startInteriorPage(doc, 'FINANCIAL ANALYSIS', theme, company);
+    y = startInteriorPage(doc, 'FINANCIAL ANALYSIS', theme, company, logoBase64);
 
     const finData: [string, string][] = [];
     if (transaction.asking_price) finData.push(['Asking Price', fmt$(transaction.asking_price)]);
@@ -836,12 +1010,12 @@ export function generateOMPDF(options: GeneratorOptions): jsPDF {
 
   // === PAGE 7: LOCATION ANALYSIS ===
   if (content.location_analysis) {
-    y = startInteriorPage(doc, 'LOCATION ANALYSIS', theme, company);
+    y = startInteriorPage(doc, 'LOCATION ANALYSIS', theme, company, logoBase64);
     y = drawParagraph(doc, content.location_analysis, y, theme);
   }
 
   // === PAGE 8: CONFIDENTIALITY NOTICE ===
-  y = startInteriorPage(doc, 'CONFIDENTIALITY NOTICE', theme, company);
+  y = startInteriorPage(doc, 'CONFIDENTIALITY NOTICE', theme, company, logoBase64);
 
   const confidText = `This Offering Memorandum has been prepared by ${company} for the exclusive use of authorized prospective purchasers. This document is confidential and proprietary and is not to be reproduced, distributed, or shared with any third party without the prior written consent of ${company}.
 
@@ -867,9 +1041,9 @@ By accepting this Offering Memorandum, you agree to maintain the confidentiality
 // ============================================================================
 
 export function generateProposalPDF(options: GeneratorOptions): jsPDF {
-  const { property, transaction, content, companyName, companyAddress } = options;
+  const { property, transaction, content, companyName, companyAddress, logoBase64 } = options;
   const doc = new jsPDF('p', 'mm', 'a4');
-  const theme = getTheme(options.style);
+  const theme = getTheme(options);
   const company = companyName || 'Apex Real Estate Services';
 
   // === PAGE 1: COVER ===
@@ -945,18 +1119,18 @@ export function generateProposalPDF(options: GeneratorOptions): jsPDF {
 
   // === PAGE 2: WHY [COMPANY] ===
   if (content.team_intro) {
-    y = startInteriorPage(doc, `WHY ${company.toUpperCase()}`, theme, company);
+    y = startInteriorPage(doc, `WHY ${company.toUpperCase()}`, theme, company, logoBase64);
     y = drawParagraph(doc, content.team_intro, y, theme, 10);
   }
 
   // === PAGE 3: MARKET ANALYSIS ===
   if (content.market_analysis) {
-    y = startInteriorPage(doc, 'MARKET ANALYSIS', theme, company);
+    y = startInteriorPage(doc, 'MARKET ANALYSIS', theme, company, logoBase64);
     y = drawParagraph(doc, content.market_analysis, y, theme, 10);
   }
 
   // === PAGE 4: PROPERTY RECOMMENDATION ===
-  y = startInteriorPage(doc, 'PROPERTY RECOMMENDATION', theme, company);
+  y = startInteriorPage(doc, 'PROPERTY RECOMMENDATION', theme, company, logoBase64);
 
   // Property header
   doc.setFont('helvetica', 'bold');

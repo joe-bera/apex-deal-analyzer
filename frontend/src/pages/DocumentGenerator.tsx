@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
@@ -9,7 +9,15 @@ import {
   GenerateContentResponse,
   MasterProperty,
 } from '../types';
-import { generateBrochurePDF, generateOMPDF, generateProposalPDF, ThemeStyle } from '../utils/pdfBuilder';
+import {
+  generateBrochurePDF,
+  generateOMPDF,
+  generateProposalPDF,
+  ThemeStyle,
+  COMPANY_BRANDS,
+  getCompanyBrand,
+  CompanyBrand,
+} from '../utils/pdfBuilder';
 
 // Content types required per template
 const TEMPLATE_CONTENT_TYPES: Record<TemplateType, ContentType[]> = {
@@ -18,42 +26,27 @@ const TEMPLATE_CONTENT_TYPES: Record<TemplateType, ContentType[]> = {
   proposal: ['property_description', 'property_highlights', 'market_analysis', 'team_intro'],
 };
 
-const TEMPLATE_INFO: { type: TemplateType; label: string; description: string; pages: string }[] = [
+const TEMPLATE_INFO: { type: TemplateType; label: string; description: string; pages: string; icon: string }[] = [
   {
     type: 'brochure',
     label: 'Property Brochure',
     description: 'Professional marketing brochure with cover page, executive summary, property details, location overview, and contact page.',
     pages: '4-6 pages',
+    icon: 'brochure',
   },
   {
     type: 'om',
     label: 'Offering Memorandum',
     description: 'Comprehensive investment package with cover, table of contents, executive summary, financials, location analysis, and confidentiality notice.',
     pages: '6-10 pages',
+    icon: 'om',
   },
   {
     type: 'proposal',
     label: 'Investment Proposal',
     description: 'Client-facing proposal with company intro, market analysis, property recommendation, next steps, and contact page.',
     pages: '4-6 pages',
-  },
-];
-
-const STYLE_INFO: { style: ThemeStyle; label: string; description: string }[] = [
-  {
-    style: 'apex',
-    label: 'Apex Maroon',
-    description: 'Deep maroon with red accents — classic Apex branding',
-  },
-  {
-    style: 'modern',
-    label: 'Modern Dark',
-    description: 'Charcoal black with red accents — sleek and contemporary',
-  },
-  {
-    style: 'corporate',
-    label: 'Corporate Blue',
-    description: 'Navy blue with teal accents — professional and corporate',
+    icon: 'proposal',
   },
 ];
 
@@ -79,7 +72,12 @@ interface SavedDoc {
 }
 
 type PageView = 'dashboard' | 'wizard';
-type WizardStep = 'select-property' | 'select-template' | 'generate-content' | 'export';
+type WizardStep = 'select-template' | 'select-company' | 'select-property' | 'generate-content' | 'export';
+type PropertyTab = 'search' | 'browse' | 'manual';
+
+const PROPERTY_TYPE_OPTIONS = [
+  'industrial', 'retail', 'office', 'multifamily', 'land', 'residential', 'special_purpose',
+] as const;
 
 export default function DocumentGenerator() {
   const { user } = useAuth();
@@ -93,17 +91,41 @@ export default function DocumentGenerator() {
   const [filterType, setFilterType] = useState<string>('');
 
   // Wizard state
-  const [step, setStep] = useState<WizardStep>('select-property');
+  const [step, setStep] = useState<WizardStep>('select-template');
+
+  // Template
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null);
+
+  // Company brand
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string>('apex');
+  const [selectedStyle, setSelectedStyle] = useState<ThemeStyle>('apex');
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [customPrimary, setCustomPrimary] = useState<string>('#323232');
+  const [customAccent, setCustomAccent] = useState<string>('#646464');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Property search
+  const [propertyTab, setPropertyTab] = useState<PropertyTab>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [properties, setProperties] = useState<MasterProperty[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<MasterProperty | null>(null);
 
-  // Template
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<ThemeStyle>('apex');
+  // Browse tab
+  const [browseProperties, setBrowseProperties] = useState<MasterProperty[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseOffset, setBrowseOffset] = useState(0);
+  const [browseHasMore, setBrowseHasMore] = useState(true);
+
+  // Manual entry
+  const [manualForm, setManualForm] = useState({
+    address: '', city: '', state: 'CA', zip: '', property_type: 'industrial',
+    building_size: '', year_built: '', sale_price: '', cap_rate: '',
+  });
+  const [manualSaving, setManualSaving] = useState(false);
 
   // Content generation
   const [generating, setGenerating] = useState(false);
@@ -114,6 +136,15 @@ export default function DocumentGenerator() {
 
   // Export
   const [saving, setSaving] = useState(false);
+
+  // Pre-fill contact info from user profile
+  useEffect(() => {
+    if (user) {
+      setContactName(user.full_name || '');
+      setContactPhone(user.company_phone || '');
+      setContactEmail(user.company_email || user.email || '');
+    }
+  }, [user]);
 
   // Load saved documents on mount
   useEffect(() => {
@@ -170,6 +201,92 @@ export default function DocumentGenerator() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProperties]);
 
+  // Browse all properties
+  const loadBrowseProperties = useCallback(async (offset: number, append: boolean) => {
+    setBrowseLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const apiBase = import.meta.env.VITE_API_URL || '/api';
+      const params = new URLSearchParams({ limit: '20', offset: String(offset) });
+      const res = await fetch(`${apiBase}/master-properties?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const props = data.properties || [];
+        setBrowseProperties(prev => append ? [...prev, ...props] : props);
+        setBrowseHasMore(props.length === 20);
+        setBrowseOffset(offset + props.length);
+      }
+    } catch (err) {
+      console.error('Failed to browse properties:', err);
+    } finally {
+      setBrowseLoading(false);
+    }
+  }, []);
+
+  // Load browse tab on first switch
+  useEffect(() => {
+    if (propertyTab === 'browse' && browseProperties.length === 0) {
+      loadBrowseProperties(0, false);
+    }
+  }, [propertyTab, browseProperties.length, loadBrowseProperties]);
+
+  // Handle logo upload
+  const handleLogoFile = (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Logo must be under 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogoBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle manual property creation
+  const handleManualCreate = async () => {
+    if (!manualForm.address.trim() || !manualForm.city.trim()) {
+      alert('Address and city are required');
+      return;
+    }
+    setManualSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        address: manualForm.address,
+        city: manualForm.city,
+        state: manualForm.state || 'CA',
+        zip: manualForm.zip || undefined,
+        property_type: manualForm.property_type,
+      };
+      if (manualForm.building_size) payload.building_size = Number(manualForm.building_size);
+      if (manualForm.year_built) payload.year_built = Number(manualForm.year_built);
+      if (manualForm.sale_price) payload.sale_price = Number(manualForm.sale_price);
+      if (manualForm.cap_rate) payload.cap_rate = Number(manualForm.cap_rate);
+
+      const result: any = await api.createMasterProperty(payload);
+      if (result.success && result.property) {
+        setSelectedProperty(result.property);
+        setStep('generate-content');
+      }
+    } catch (err: any) {
+      alert(`Failed to create property: ${err.message}`);
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  // Get current brand
+  const getSelectedBrand = (): CompanyBrand | undefined => getCompanyBrand(selectedCompanyKey);
+
+  // Get style prompt from selected brand
+  const getStylePrompt = (): string | undefined => {
+    const brand = getSelectedBrand();
+    return brand?.stylePrompt || undefined;
+  };
+
   // Generate content
   const handleGenerate = async () => {
     if (!selectedProperty || !selectedTemplate) return;
@@ -178,9 +295,11 @@ export default function DocumentGenerator() {
 
     try {
       const contentTypes = TEMPLATE_CONTENT_TYPES[selectedTemplate];
+      const stylePrompt = getStylePrompt();
       const response: GenerateContentResponse = await api.generateDocContent(
         selectedProperty.id,
-        contentTypes
+        contentTypes,
+        stylePrompt
       );
 
       const contentMap: Record<string, string> = {};
@@ -200,16 +319,24 @@ export default function DocumentGenerator() {
   };
 
   // Build PDF
-  const buildPdfOptions = () => ({
-    property: propertyData,
-    transaction: transactionData,
-    content: generatedContent,
-    companyName: user?.company_name || 'Apex Real Estate Services',
-    companyPhone: user?.company_phone,
-    companyEmail: user?.company_email,
-    companyAddress: user?.company_address,
-    style: selectedStyle,
-  });
+  const buildPdfOptions = () => {
+    const opts: any = {
+      property: propertyData,
+      transaction: transactionData,
+      content: generatedContent,
+      companyName: contactName || user?.company_name || 'Apex Real Estate Services',
+      companyPhone: contactPhone || user?.company_phone,
+      companyEmail: contactEmail || user?.company_email,
+      companyAddress: user?.company_address,
+      style: selectedStyle,
+    };
+    if (logoBase64) opts.logoBase64 = logoBase64;
+    if (selectedCompanyKey === 'custom') {
+      opts.customPrimary = hexToRgb(customPrimary);
+      opts.customAccent = hexToRgb(customAccent);
+    }
+    return opts;
+  };
 
   const buildPdf = () => {
     if (!selectedTemplate || !propertyData) return null;
@@ -247,7 +374,6 @@ export default function DocumentGenerator() {
         title,
         content_snapshot: { content: generatedContent, property: propertyData, transaction: transactionData },
       });
-      // Refresh the docs list and go back to dashboard
       await loadSavedDocs();
       handleReset();
     } catch (err: any) {
@@ -268,7 +394,6 @@ export default function DocumentGenerator() {
     setSelectedStyle('apex');
     setStep('export');
     setView('wizard');
-    // Set a minimal property object for save-record context
     if (doc.master_properties) {
       setSelectedProperty({
         id: doc.master_property_id!,
@@ -292,16 +417,23 @@ export default function DocumentGenerator() {
 
   const handleReset = () => {
     setView('dashboard');
-    setStep('select-property');
+    setStep('select-template');
     setSelectedProperty(null);
     setSelectedTemplate(null);
     setSelectedStyle('apex');
+    setSelectedCompanyKey('apex');
+    setLogoBase64(null);
     setGeneratedContent({});
     setPropertyData(null);
     setTransactionData(null);
     setContentError(null);
     setSearchQuery('');
     setProperties([]);
+    setPropertyTab('search');
+    setBrowseProperties([]);
+    setBrowseOffset(0);
+    setBrowseHasMore(true);
+    setManualForm({ address: '', city: '', state: 'CA', zip: '', property_type: 'industrial', building_size: '', year_built: '', sale_price: '', cap_rate: '' });
   };
 
   const formatCurrency = (v?: number) => {
@@ -319,6 +451,43 @@ export default function DocumentGenerator() {
     ? savedDocs.filter((d) => d.template_type === filterType)
     : savedDocs;
 
+  // Utility: hex to rgb tuple
+  function hexToRgb(hex: string): [number, number, number] {
+    const cleaned = hex.replace('#', '');
+    const r = parseInt(cleaned.substring(0, 2), 16) || 0;
+    const g = parseInt(cleaned.substring(2, 4), 16) || 0;
+    const b = parseInt(cleaned.substring(4, 6), 16) || 0;
+    return [r, g, b];
+  }
+
+  function rgbToHex(rgb: [number, number, number]): string {
+    return '#' + rgb.map(c => c.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Select property and advance
+  const handleSelectProperty = (prop: MasterProperty) => {
+    setSelectedProperty(prop);
+    setStep('generate-content');
+  };
+
+  // Select company and advance
+  const handleSelectCompany = (key: string) => {
+    setSelectedCompanyKey(key);
+    setSelectedStyle(key as ThemeStyle);
+    // Don't auto-advance — let user upload logo and fill contact info first
+  };
+
+  // Wizard step labels
+  const WIZARD_STEPS: { key: WizardStep; label: string }[] = [
+    { key: 'select-template', label: '1. Template' },
+    { key: 'select-company', label: '2. Company' },
+    { key: 'select-property', label: '3. Property' },
+    { key: 'generate-content', label: '4. Generate' },
+    { key: 'export', label: '5. Export' },
+  ];
+
+  const STEP_ORDER: WizardStep[] = ['select-template', 'select-company', 'select-property', 'generate-content', 'export'];
+
   // ─── Dashboard View ───
   if (view === 'dashboard') {
     return (
@@ -333,7 +502,7 @@ export default function DocumentGenerator() {
               </p>
             </div>
             <Button
-              onClick={() => { setView('wizard'); setStep('select-property'); }}
+              onClick={() => { setView('wizard'); setStep('select-template'); }}
               leftIcon={
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -415,7 +584,7 @@ export default function DocumentGenerator() {
               }
               action={savedDocs.length === 0 ? {
                 label: 'Create First Document',
-                onClick: () => { setView('wizard'); setStep('select-property'); },
+                onClick: () => { setView('wizard'); setStep('select-template'); },
               } : undefined}
               icon={
                 <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -532,21 +701,15 @@ export default function DocumentGenerator() {
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center gap-2 text-sm">
-          {[
-            { key: 'select-property', label: '1. Property' },
-            { key: 'select-template', label: '2. Template' },
-            { key: 'generate-content', label: '3. Generate' },
-            { key: 'export', label: '4. Export' },
-          ].map((s, i) => (
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          {WIZARD_STEPS.map((s, i) => (
             <div key={s.key} className="flex items-center gap-2">
               {i > 0 && <div className="w-6 h-px bg-gray-300" />}
               <span
                 className={`px-3 py-1 rounded-full text-xs font-medium ${
                   step === s.key
                     ? 'bg-primary-100 text-primary-700'
-                    : ['select-property', 'select-template', 'generate-content', 'export'].indexOf(step) >
-                      ['select-property', 'select-template', 'generate-content', 'export'].indexOf(s.key)
+                    : STEP_ORDER.indexOf(step) > STEP_ORDER.indexOf(s.key)
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-100 text-gray-500'
                 }`}
@@ -557,118 +720,40 @@ export default function DocumentGenerator() {
           ))}
         </div>
 
-        {/* Step 1: Select Property */}
-        {step === 'select-property' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Select a Property</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Search by address, city, or property name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-
-                {searchLoading && (
-                  <p className="text-sm text-gray-500">Searching...</p>
-                )}
-
-                {!searchLoading && properties.length === 0 && searchQuery.length >= 2 && (
-                  <p className="text-sm text-gray-500">No properties found. Try a different search.</p>
-                )}
-
-                {properties.length > 0 && (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {properties.map((prop) => (
-                      <button
-                        key={prop.id}
-                        onClick={() => {
-                          setSelectedProperty(prop);
-                          setStep('select-template');
-                        }}
-                        className="w-full text-left p-4 border border-gray-200 rounded-lg hover:border-primary-400 hover:bg-primary-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {prop.property_name || prop.address}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {prop.city}, {prop.state} {prop.zip}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant="default">
-                              {(prop.property_type || 'commercial').replace(/_/g, ' ')}
-                            </Badge>
-                            {prop.building_size && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                {prop.building_size.toLocaleString()} SF
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {!searchQuery && (
-                  <EmptyState
-                    title="Search for a Property"
-                    description="Enter an address or property name to get started"
-                    icon={
-                      <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    }
-                  />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 2: Select Template */}
-        {step === 'select-template' && selectedProperty && (
+        {/* Step 1: Select Template */}
+        {step === 'select-template' && (
           <div className="space-y-4">
-            <Card>
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-900">
-                      {selectedProperty.property_name || selectedProperty.address}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zip}
-                      {selectedProperty.building_size && ` | ${selectedProperty.building_size.toLocaleString()} SF`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setStep('select-property')}
-                    className="text-sm text-primary-600 hover:text-primary-700"
-                  >
-                    Change
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-
+            <h2 className="text-lg font-semibold text-gray-900">What do you want to create?</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {TEMPLATE_INFO.map((tmpl) => (
                 <button
                   key={tmpl.type}
-                  onClick={() => setSelectedTemplate(tmpl.type)}
-                  className="text-left"
+                  onClick={() => {
+                    setSelectedTemplate(tmpl.type);
+                    setStep('select-company');
+                  }}
+                  className="text-left group"
                 >
-                  <Card className={`h-full hover:border-primary-400 hover:shadow-md transition-all cursor-pointer ${
-                    selectedTemplate === tmpl.type ? 'border-primary-500 ring-2 ring-primary-200' : ''
-                  }`}>
-                    <CardContent className="p-6 space-y-3">
+                  <Card className="h-full hover:border-primary-400 hover:shadow-md transition-all cursor-pointer">
+                    <CardContent className="p-6 space-y-4">
+                      {/* Preview thumbnail */}
+                      <div className="w-full h-32 bg-gray-50 rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+                        <div className={`h-8 ${
+                          tmpl.type === 'brochure' ? 'bg-blue-600' :
+                          tmpl.type === 'om' ? 'bg-purple-600' : 'bg-green-600'
+                        }`} />
+                        <div className="flex-1 p-3 space-y-2">
+                          <div className="h-2 bg-gray-200 rounded w-3/4" />
+                          <div className="h-2 bg-gray-200 rounded w-full" />
+                          <div className="h-2 bg-gray-200 rounded w-5/6" />
+                          <div className="h-2 bg-gray-200 rounded w-2/3" />
+                          <div className="flex gap-2 mt-2">
+                            <div className="h-6 bg-gray-100 rounded flex-1" />
+                            <div className="h-6 bg-gray-100 rounded flex-1" />
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
                           {tmpl.type === 'brochure' && (
@@ -696,56 +781,373 @@ export default function DocumentGenerator() {
                 </button>
               ))}
             </div>
+          </div>
+        )}
 
-            {selectedTemplate && (
-              <>
-                <h3 className="text-sm font-medium text-gray-700 mt-6">Color Theme</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {STYLE_INFO.map((s) => (
+        {/* Step 2: Select Company Brand */}
+        {step === 'select-company' && selectedTemplate && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Company Branding</h2>
+              <button onClick={() => setStep('select-template')} className="text-sm text-primary-600 hover:text-primary-700">
+                Change Template
+              </button>
+            </div>
+
+            {/* Company cards grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {COMPANY_BRANDS.map((brand) => (
+                <button
+                  key={brand.key}
+                  onClick={() => handleSelectCompany(brand.key)}
+                  className={`text-left p-4 border-2 rounded-xl transition-all ${
+                    selectedCompanyKey === brand.key
+                      ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div
+                      className="w-5 h-5 rounded-full border border-gray-200"
+                      style={{ backgroundColor: rgbToHex(brand.primary) }}
+                    />
+                    <div
+                      className="w-5 h-5 rounded-full border border-gray-200"
+                      style={{ backgroundColor: rgbToHex(brand.accent) }}
+                    />
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900">{brand.displayName}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{brand.description}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Custom color pickers */}
+            {selectedCompanyKey === 'custom' && (
+              <div className="flex items-center gap-6 bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Primary Color</label>
+                  <input
+                    type="color"
+                    value={customPrimary}
+                    onChange={(e) => setCustomPrimary(e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer border border-gray-300"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Accent Color</label>
+                  <input
+                    type="color"
+                    value={customAccent}
+                    onChange={(e) => setCustomAccent(e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer border border-gray-300"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Logo upload */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Company Logo (optional)</h3>
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary-400 transition-colors"
+                onClick={() => logoInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && (file.type === 'image/png' || file.type === 'image/jpeg')) {
+                    handleLogoFile(file);
+                  }
+                }}
+              >
+                {logoBase64 ? (
+                  <div className="flex items-center justify-center gap-4">
+                    <img src={logoBase64} alt="Logo preview" className="h-12 object-contain" />
                     <button
-                      key={s.style}
-                      onClick={() => setSelectedStyle(s.style)}
-                      className={`text-left p-4 border rounded-lg transition-all ${
-                        selectedStyle === s.style
-                          ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      onClick={(e) => { e.stopPropagation(); setLogoBase64(null); }}
+                      className="text-sm text-red-600 hover:text-red-700"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex gap-1">
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{
-                              backgroundColor: s.style === 'apex' ? '#780014' : s.style === 'modern' ? '#19191C' : '#003366',
-                            }}
-                          />
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{
-                              backgroundColor: s.style === 'apex' ? '#B21F24' : s.style === 'modern' ? '#BE1E2D' : '#00809B',
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{s.label}</p>
-                          <p className="text-xs text-gray-500">{s.description}</p>
-                        </div>
-                      </div>
+                      Remove
                     </button>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div>
+                    <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm text-gray-500">Drop a PNG or JPG here, or click to browse</p>
+                    <p className="text-xs text-gray-400 mt-1">Max 2MB</p>
+                  </div>
+                )}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleLogoFile(file);
+                  }}
+                />
+              </div>
+            </div>
 
-                <div className="pt-2">
-                  <Button onClick={() => setStep('generate-content')}>
-                    Continue with {TEMPLATE_INFO.find(t => t.type === selectedTemplate)?.label}
+            {/* Contact info */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Contact Info (appears on documents)</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            </div>
+
+            <Button onClick={() => setStep('select-property')}>
+              Continue to Property Selection
+            </Button>
+          </div>
+        )}
+
+        {/* Step 3: Select Property */}
+        {step === 'select-property' && selectedTemplate && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Select a Property</h2>
+              <button onClick={() => setStep('select-company')} className="text-sm text-primary-600 hover:text-primary-700">
+                Change Company
+              </button>
+            </div>
+
+            {/* Tab bar */}
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              {([
+                { key: 'search' as PropertyTab, label: 'Search' },
+                { key: 'browse' as PropertyTab, label: 'Browse All' },
+                { key: 'manual' as PropertyTab, label: 'Enter Manually' },
+              ]).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setPropertyTab(tab.key)}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    propertyTab === tab.key
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search tab */}
+            {propertyTab === 'search' && (
+              <Card>
+                <CardContent className="space-y-4">
+                  <input
+                    type="text"
+                    placeholder="Search by address, city, or property name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+
+                  {searchLoading && (
+                    <p className="text-sm text-gray-500">Searching...</p>
+                  )}
+
+                  {!searchLoading && properties.length === 0 && searchQuery.length >= 2 && (
+                    <p className="text-sm text-gray-500">No properties found. Try a different search.</p>
+                  )}
+
+                  {properties.length > 0 && (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {properties.map((prop) => (
+                        <PropertyCard key={prop.id} property={prop} onSelect={handleSelectProperty} />
+                      ))}
+                    </div>
+                  )}
+
+                  {!searchQuery && (
+                    <EmptyState
+                      title="Search for a Property"
+                      description="Enter an address or property name to get started"
+                      icon={
+                        <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      }
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Browse tab */}
+            {propertyTab === 'browse' && (
+              <Card>
+                <CardContent className="space-y-4">
+                  {browseLoading && browseProperties.length === 0 ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-4 border-primary-600 border-t-transparent"></div>
+                    </div>
+                  ) : browseProperties.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-4">No properties in database. Use the "Enter Manually" tab to add one.</p>
+                  ) : (
+                    <>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {browseProperties.map((prop) => (
+                          <PropertyCard key={prop.id} property={prop} onSelect={handleSelectProperty} />
+                        ))}
+                      </div>
+                      {browseHasMore && (
+                        <div className="text-center pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => loadBrowseProperties(browseOffset, true)}
+                            disabled={browseLoading}
+                          >
+                            {browseLoading ? 'Loading...' : 'Load More'}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Manual entry tab */}
+            {propertyTab === 'manual' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create a New Property</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                      <input
+                        type="text"
+                        value={manualForm.address}
+                        onChange={(e) => setManualForm(f => ({ ...f, address: e.target.value }))}
+                        placeholder="123 Main St"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                      <input
+                        type="text"
+                        value={manualForm.city}
+                        onChange={(e) => setManualForm(f => ({ ...f, city: e.target.value }))}
+                        placeholder="Ontario"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <input
+                        type="text"
+                        value={manualForm.state}
+                        onChange={(e) => setManualForm(f => ({ ...f, state: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
+                      <input
+                        type="text"
+                        value={manualForm.zip}
+                        onChange={(e) => setManualForm(f => ({ ...f, zip: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Property Type</label>
+                      <select
+                        value={manualForm.property_type}
+                        onChange={(e) => setManualForm(f => ({ ...f, property_type: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        {PROPERTY_TYPE_OPTIONS.map(t => (
+                          <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Building Size (SF)</label>
+                      <input
+                        type="number"
+                        value={manualForm.building_size}
+                        onChange={(e) => setManualForm(f => ({ ...f, building_size: e.target.value }))}
+                        placeholder="50000"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Year Built</label>
+                      <input
+                        type="number"
+                        value={manualForm.year_built}
+                        onChange={(e) => setManualForm(f => ({ ...f, year_built: e.target.value }))}
+                        placeholder="2005"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price</label>
+                      <input
+                        type="number"
+                        value={manualForm.sale_price}
+                        onChange={(e) => setManualForm(f => ({ ...f, sale_price: e.target.value }))}
+                        placeholder="5000000"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CAP Rate (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={manualForm.cap_rate}
+                        onChange={(e) => setManualForm(f => ({ ...f, cap_rate: e.target.value }))}
+                        placeholder="5.5"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleManualCreate} disabled={manualSaving}>
+                    {manualSaving ? 'Creating...' : 'Create & Continue'}
                   </Button>
-                </div>
-              </>
+                </CardContent>
+              </Card>
             )}
           </div>
         )}
 
-        {/* Step 3: Generate Content */}
+        {/* Step 4: Generate Content */}
         {step === 'generate-content' && selectedProperty && selectedTemplate && (
           <Card>
             <CardHeader>
@@ -760,13 +1162,14 @@ export default function DocumentGenerator() {
                     </p>
                     <p className="text-sm text-gray-500">
                       Template: {TEMPLATE_INFO.find(t => t.type === selectedTemplate)?.label}
+                      {' | '}Company: {getSelectedBrand()?.displayName || selectedCompanyKey}
                     </p>
                   </div>
                   <button
-                    onClick={() => setStep('select-template')}
+                    onClick={() => setStep('select-property')}
                     className="text-sm text-primary-600 hover:text-primary-700"
                   >
-                    Change Template
+                    Change Property
                   </button>
                 </div>
               </div>
@@ -806,7 +1209,7 @@ export default function DocumentGenerator() {
           </Card>
         )}
 
-        {/* Step 4: Export */}
+        {/* Step 5: Export */}
         {step === 'export' && selectedTemplate && (
           <div className="space-y-4">
             <Card>
@@ -936,5 +1339,36 @@ export default function DocumentGenerator() {
         )}
       </div>
     </Layout>
+  );
+}
+
+// Reusable property card for search + browse
+function PropertyCard({ property, onSelect }: { property: MasterProperty; onSelect: (p: MasterProperty) => void }) {
+  return (
+    <button
+      onClick={() => onSelect(property)}
+      className="w-full text-left p-4 border border-gray-200 rounded-lg hover:border-primary-400 hover:bg-primary-50 transition-colors"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-gray-900">
+            {property.property_name || property.address}
+          </p>
+          <p className="text-sm text-gray-500">
+            {property.city}, {property.state} {property.zip}
+          </p>
+        </div>
+        <div className="text-right">
+          <Badge variant="default">
+            {(property.property_type || 'commercial').replace(/_/g, ' ')}
+          </Badge>
+          {property.building_size && (
+            <p className="text-xs text-gray-500 mt-1">
+              {property.building_size.toLocaleString()} SF
+            </p>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }
