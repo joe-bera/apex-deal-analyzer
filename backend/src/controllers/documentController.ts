@@ -535,25 +535,17 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       let masterPropertyId: string | null = document.property_id || null;
 
       if (!masterPropertyId && extractedData.address) {
-        const normalizedExtracted = extractedData.address
-          .toLowerCase()
-          .replace(/\s+/g, ' ')
-          .replace(/\.$/g, '')
-          .replace(/ street| st\.?| avenue| ave\.?| boulevard| blvd\.?| drive| dr\.?| road| rd\.?| lane| ln\.?| court| ct\.?| place| pl\.?| way/gi, '')
-          .replace(/ north| south| east| west| n\.?| s\.?| e\.?| w\.?/gi, '')
-          .replace(/[^a-z0-9]/g, '')
-          .trim();
-
-        console.log(`[DocumentController] Looking up master_properties by normalized address: "${normalizedExtracted}" city: "${extractedData.city}"`);
+        const extractedAddr = extractedData.address.trim();
+        console.log(`[DocumentController] Looking up master_properties by address: "${extractedAddr}" city: "${extractedData.city}"`);
 
         let lookupQuery = supabaseAdmin
           .from('master_properties')
           .select('id')
-          .eq('address_normalized', normalizedExtracted)
+          .ilike('address', extractedAddr)
           .eq('is_deleted', false);
 
         if (extractedData.city) {
-          lookupQuery = lookupQuery.ilike('city', extractedData.city.toLowerCase().trim());
+          lookupQuery = lookupQuery.ilike('city', extractedData.city.trim());
         }
 
         const { data: matchedProperty } = await lookupQuery.limit(1).maybeSingle();
@@ -562,7 +554,7 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
           masterPropertyId = matchedProperty.id;
           console.log(`[DocumentController] Matched master_properties record: ${masterPropertyId}`);
         } else {
-          console.log(`[DocumentController] No master_properties match found for address: "${extractedData.address}"`);
+          console.log(`[DocumentController] No master_properties match found for address: "${extractedAddr}"`);
         }
       }
 
