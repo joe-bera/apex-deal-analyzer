@@ -57,10 +57,40 @@ const STYLE_INFO: { style: ThemeStyle; label: string; description: string }[] = 
   },
 ];
 
+const TEMPLATE_LABELS: Record<string, string> = {
+  brochure: 'Brochure',
+  om: 'Offering Memorandum',
+  proposal: 'Proposal',
+};
+
+interface SavedDoc {
+  id: string;
+  master_property_id: string | null;
+  template_type: string;
+  title: string;
+  content_snapshot: any;
+  created_at: string;
+  master_properties?: {
+    address: string;
+    city: string;
+    state: string;
+    property_name: string | null;
+  } | null;
+}
+
+type PageView = 'dashboard' | 'wizard';
 type WizardStep = 'select-property' | 'select-template' | 'generate-content' | 'export';
 
 export default function DocumentGenerator() {
   const { user } = useAuth();
+
+  // Page view
+  const [view, setView] = useState<PageView>('dashboard');
+
+  // Dashboard state
+  const [savedDocs, setSavedDocs] = useState<SavedDoc[]>([]);
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [filterType, setFilterType] = useState<string>('');
 
   // Wizard state
   const [step, setStep] = useState<WizardStep>('select-property');
@@ -84,6 +114,23 @@ export default function DocumentGenerator() {
 
   // Export
   const [saving, setSaving] = useState(false);
+
+  // Load saved documents on mount
+  useEffect(() => {
+    loadSavedDocs();
+  }, []);
+
+  const loadSavedDocs = async () => {
+    setDocsLoading(true);
+    try {
+      const result: any = await api.listGeneratedDocs();
+      setSavedDocs(result.documents || []);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    } finally {
+      setDocsLoading(false);
+    }
+  };
 
   // Search properties
   const fetchProperties = useCallback(async (search: string) => {
@@ -136,7 +183,6 @@ export default function DocumentGenerator() {
         contentTypes
       );
 
-      // Extract content strings
       const contentMap: Record<string, string> = {};
       for (const [key, val] of Object.entries(response.content)) {
         contentMap[key] = val.content || '';
@@ -153,7 +199,7 @@ export default function DocumentGenerator() {
     }
   };
 
-  // Build PDF generation options
+  // Build PDF
   const buildPdfOptions = () => ({
     property: propertyData,
     transaction: transactionData,
@@ -175,7 +221,6 @@ export default function DocumentGenerator() {
     }
   };
 
-  // Generate and open PDF
   const handleExportPDF = () => {
     const doc = buildPdf();
     if (!doc) return;
@@ -184,7 +229,6 @@ export default function DocumentGenerator() {
     window.open(url, '_blank');
   };
 
-  // Download PDF
   const handleDownloadPDF = () => {
     const doc = buildPdf();
     if (!doc || !propertyData) return;
@@ -192,7 +236,6 @@ export default function DocumentGenerator() {
     doc.save(filename);
   };
 
-  // Save document record
   const handleSaveRecord = async () => {
     if (!selectedProperty || !selectedTemplate) return;
     setSaving(true);
@@ -204,7 +247,9 @@ export default function DocumentGenerator() {
         title,
         content_snapshot: { content: generatedContent, property: propertyData, transaction: transactionData },
       });
-      alert('Document saved successfully!');
+      // Refresh the docs list and go back to dashboard
+      await loadSavedDocs();
+      handleReset();
     } catch (err: any) {
       alert(`Failed to save: ${err.message}`);
     } finally {
@@ -212,8 +257,41 @@ export default function DocumentGenerator() {
     }
   };
 
-  // Reset wizard
+  // Re-open a saved document for export
+  const handleOpenSavedDoc = (doc: SavedDoc) => {
+    if (!doc.content_snapshot) return;
+    const snapshot = doc.content_snapshot as any;
+    setGeneratedContent(snapshot.content || {});
+    setPropertyData(snapshot.property || null);
+    setTransactionData(snapshot.transaction || null);
+    setSelectedTemplate(doc.template_type as TemplateType);
+    setSelectedStyle('apex');
+    setStep('export');
+    setView('wizard');
+    // Set a minimal property object for save-record context
+    if (doc.master_properties) {
+      setSelectedProperty({
+        id: doc.master_property_id!,
+        address: doc.master_properties.address,
+        city: doc.master_properties.city,
+        state: doc.master_properties.state,
+        property_name: doc.master_properties.property_name,
+      } as MasterProperty);
+    }
+  };
+
+  const handleDeleteDoc = async (docId: string) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.deleteGeneratedDoc(docId);
+      setSavedDocs((prev) => prev.filter((d) => d.id !== docId));
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`);
+    }
+  };
+
   const handleReset = () => {
+    setView('dashboard');
     setStep('select-property');
     setSelectedProperty(null);
     setSelectedTemplate(null);
@@ -231,31 +309,235 @@ export default function DocumentGenerator() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
   };
 
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  };
+
+  const filteredDocs = filterType
+    ? savedDocs.filter((d) => d.template_type === filterType)
+    : savedDocs;
+
+  // ─── Dashboard View ───
+  if (view === 'dashboard') {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Create and manage brochures, offering memorandums, and proposals
+              </p>
+            </div>
+            <Button
+              onClick={() => { setView('wizard'); setStep('select-property'); }}
+              leftIcon={
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              }
+            >
+              New Document
+            </Button>
+          </div>
+
+          {/* Stats */}
+          {savedDocs.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="py-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{savedDocs.length}</p>
+                  <p className="text-xs text-gray-500">Total Documents</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="py-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{savedDocs.filter(d => d.template_type === 'brochure').length}</p>
+                  <p className="text-xs text-gray-500">Brochures</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="py-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{savedDocs.filter(d => d.template_type === 'om').length}</p>
+                  <p className="text-xs text-gray-500">OMs</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="py-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{savedDocs.filter(d => d.template_type === 'proposal').length}</p>
+                  <p className="text-xs text-gray-500">Proposals</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Filter tabs */}
+          {savedDocs.length > 0 && (
+            <div className="flex gap-2">
+              {[
+                { value: '', label: 'All' },
+                { value: 'brochure', label: 'Brochures' },
+                { value: 'om', label: 'OMs' },
+                { value: 'proposal', label: 'Proposals' },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setFilterType(tab.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filterType === tab.value
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Documents list */}
+          {docsLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-600 border-t-transparent"></div>
+                <p className="mt-3 text-gray-500 text-sm">Loading documents...</p>
+              </div>
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <EmptyState
+              title={savedDocs.length === 0 ? 'No documents yet' : 'No matching documents'}
+              description={savedDocs.length === 0
+                ? 'Create your first brochure, OM, or proposal to get started'
+                : 'Try a different filter'
+              }
+              action={savedDocs.length === 0 ? {
+                label: 'Create First Document',
+                onClick: () => { setView('wizard'); setStep('select-property'); },
+              } : undefined}
+              icon={
+                <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            />
+          ) : (
+            <div className="space-y-3">
+              {filteredDocs.map((doc) => {
+                const propName = doc.master_properties
+                  ? (doc.master_properties.property_name || doc.master_properties.address)
+                  : (doc.content_snapshot?.property?.address || 'Unknown Property');
+                const propLocation = doc.master_properties
+                  ? `${doc.master_properties.city}, ${doc.master_properties.state}`
+                  : '';
+
+                return (
+                  <Card key={doc.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            doc.template_type === 'brochure' ? 'bg-blue-100' :
+                            doc.template_type === 'om' ? 'bg-purple-100' : 'bg-green-100'
+                          }`}>
+                            {doc.template_type === 'brochure' && (
+                              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                              </svg>
+                            )}
+                            {doc.template_type === 'om' && (
+                              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            )}
+                            {doc.template_type === 'proposal' && (
+                              <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{propName}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge variant={
+                                doc.template_type === 'brochure' ? 'info' :
+                                doc.template_type === 'om' ? 'primary' : 'success'
+                              } size="sm">
+                                {TEMPLATE_LABELS[doc.template_type] || doc.template_type}
+                              </Badge>
+                              {propLocation && (
+                                <span className="text-xs text-gray-500">{propLocation}</span>
+                              )}
+                              <span className="text-xs text-gray-400">{formatDate(doc.created_at)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {doc.content_snapshot && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenSavedDoc(doc)}
+                              title="Open & export"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteDoc(doc.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Layout>
+    );
+  }
+
+  // ─── Wizard View ───
   return (
     <Layout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Document Generator</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {step === 'export' ? 'Export Document' : 'New Document'}
+            </h1>
             <p className="text-sm text-gray-500 mt-1">
               Create professional brochures, offering memorandums, and proposals
             </p>
           </div>
-          {step !== 'select-property' && (
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              Start Over
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={handleReset}>
+            Back to Documents
+          </Button>
         </div>
 
         {/* Progress Steps */}
         <div className="flex items-center gap-2 text-sm">
           {[
-            { key: 'select-property', label: '1. Select Property' },
-            { key: 'select-template', label: '2. Choose Template' },
-            { key: 'generate-content', label: '3. Generate Content' },
-            { key: 'export', label: '4. Export PDF' },
+            { key: 'select-property', label: '1. Property' },
+            { key: 'select-template', label: '2. Template' },
+            { key: 'generate-content', label: '3. Generate' },
+            { key: 'export', label: '4. Export' },
           ].map((s, i) => (
             <div key={s.key} className="flex items-center gap-2">
               {i > 0 && <div className="w-6 h-px bg-gray-300" />}
@@ -354,7 +636,6 @@ export default function DocumentGenerator() {
         {/* Step 2: Select Template */}
         {step === 'select-template' && selectedProperty && (
           <div className="space-y-4">
-            {/* Selected property card */}
             <Card>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
@@ -377,14 +658,11 @@ export default function DocumentGenerator() {
               </CardContent>
             </Card>
 
-            {/* Template cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {TEMPLATE_INFO.map((tmpl) => (
                 <button
                   key={tmpl.type}
-                  onClick={() => {
-                    setSelectedTemplate(tmpl.type);
-                  }}
+                  onClick={() => setSelectedTemplate(tmpl.type)}
                   className="text-left"
                 >
                   <Card className={`h-full hover:border-primary-400 hover:shadow-md transition-all cursor-pointer ${
@@ -419,7 +697,6 @@ export default function DocumentGenerator() {
               ))}
             </div>
 
-            {/* Color Theme selector */}
             {selectedTemplate && (
               <>
                 <h3 className="text-sm font-medium text-gray-700 mt-6">Color Theme</h3>
@@ -530,9 +807,8 @@ export default function DocumentGenerator() {
         )}
 
         {/* Step 4: Export */}
-        {step === 'export' && selectedProperty && selectedTemplate && (
+        {step === 'export' && selectedTemplate && (
           <div className="space-y-4">
-            {/* Actions */}
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -558,9 +834,11 @@ export default function DocumentGenerator() {
                     </svg>
                     Download PDF
                   </Button>
-                  <Button variant="outline" onClick={handleSaveRecord} disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Record'}
-                  </Button>
+                  {selectedProperty && (
+                    <Button variant="outline" onClick={handleSaveRecord} disabled={saving}>
+                      {saving ? 'Saving...' : 'Save & Close'}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

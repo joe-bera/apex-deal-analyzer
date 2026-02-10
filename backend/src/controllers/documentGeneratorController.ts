@@ -201,7 +201,7 @@ export const listDocuments = async (req: Request, res: Response): Promise<void> 
 
     let query = supabaseAdmin
       .from('generated_documents')
-      .select('*')
+      .select('*, master_properties(address, city, state, property_name)')
       // .eq('created_by', req.user.id) // open access mode
       .order('created_at', { ascending: false });
 
