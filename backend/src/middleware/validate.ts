@@ -241,11 +241,20 @@ const propertyBaseFields = {
 };
 
 /**
+ * Property status enum
+ */
+export const propertyStatusEnum = z.enum([
+  'prospect', 'contacted', 'pitched', 'listed',
+  'under_contract', 'sold', 'dead', 'watch',
+]);
+
+/**
  * Schema for updating a property (all fields optional)
  */
 export const updatePropertySchema = z
   .object({
     ...propertyBaseFields,
+    status: propertyStatusEnum.optional(),
     additional_data: z.record(z.unknown()).optional(),
   })
   .strict();

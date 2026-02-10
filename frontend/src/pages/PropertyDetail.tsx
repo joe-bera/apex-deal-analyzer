@@ -108,7 +108,7 @@ export default function PropertyDetail() {
       setLoading(true);
       const [propData, compsData, photosData, analysisData, valuationData] = await Promise.all([
         api.getProperty(id!),
-        api.getComps(id!),
+        api.getComps(id!).catch(() => ({ comps: [] })),
         api.getPhotos(id!).catch(() => ({ photos: [] })),
         api.getDealAnalysis(id!).catch(() => ({ analysis: null })),
         api.getValuation(id!).catch(() => ({ valuation: null })),
