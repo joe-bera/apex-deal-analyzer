@@ -21,6 +21,7 @@ import type {
   DealAnalysisResponse,
 } from '../types';
 import CompDetailModal from '../components/CompDetailModal';
+import UploadDocumentModal from '../components/UploadDocumentModal';
 import InvestmentAnalysis from '../components/InvestmentAnalysis';
 import Breadcrumbs from '../components/Breadcrumbs';
 import {
@@ -65,6 +66,7 @@ export default function PropertyDetail() {
   const [analyzing, setAnalyzing] = useState(false);
   const [addingComp, setAddingComp] = useState(false);
   const [showAddComp, setShowAddComp] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showLOIForm, setShowLOIForm] = useState(false);
   const [generatingLOI, setGeneratingLOI] = useState(false);
   const [generatedLOI, setGeneratedLOI] = useState<LOI | null>(null);
@@ -495,7 +497,7 @@ export default function PropertyDetail() {
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="outline"
-                onClick={() => navigate(`/upload?property_id=${id}`)}
+                onClick={() => setShowUploadModal(true)}
                 leftIcon={
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -1258,6 +1260,14 @@ export default function PropertyDetail() {
           onUpdate={handleCompUpdate}
         />
       )}
+
+      {/* Upload Document Modal */}
+      <UploadDocumentModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        propertyId={id!}
+        onUploadComplete={loadPropertyData}
+      />
     </Layout>
   );
 }
