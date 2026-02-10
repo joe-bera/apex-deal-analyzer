@@ -5,11 +5,10 @@ import RentRollTable from '../components/RentRollTable';
 import OccupancyGauge from '../components/OccupancyGauge';
 import { api } from '../lib/api';
 import type {
-  MasterProperty, ManagementTier, Tenant, LeaseType, RentPayment,
+  MasterProperty, ManagementTier, Tenant, LeaseType,
   OperatingExpense, ExpenseCategory, WorkOrder, WorkOrderPriority, WorkOrderStatus,
-  Inspection, InspectionType, ConditionItem, ConditionSeverity, ConditionStatus,
-  ComplianceItem, ComplianceItemType, CamReconciliation, PropertyBudget,
-  Vendor, CapitalProject,
+  Inspection, InspectionType,
+  ComplianceItem, ComplianceItemType,
 } from '../types';
 
 type Tab = 'overview' | 'tenants' | 'expenses' | 'financials' | 'inspections' | 'work-orders' | 'compliance' | 'documents';
