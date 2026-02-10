@@ -561,6 +561,8 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       if (masterPropertyId) {
         // Map extracted fields to master_properties columns (only set non-null values)
         const propertyUpdate: Record<string, any> = {};
+        // Only write text/number fields — skip enum columns (property_subtype, property_type)
+        // to avoid AI-extracted values that don't match DB enum constraints
         if (extractedData.building_size) propertyUpdate.building_size = Math.round(extractedData.building_size);
         if (extractedData.lot_size) propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
         if (extractedData.year_built) propertyUpdate.year_built = extractedData.year_built;
@@ -569,7 +571,6 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
         if (extractedData.occupancy_rate) propertyUpdate.percent_leased = extractedData.occupancy_rate;
         if (extractedData.parking_spaces) propertyUpdate.parking_spaces = extractedData.parking_spaces;
         if (extractedData.zoning) propertyUpdate.zoning = extractedData.zoning;
-        if (extractedData.subtype) propertyUpdate.property_subtype = extractedData.subtype;
         if (extractedData.market) propertyUpdate.market = extractedData.market;
         if (extractedData.submarket) propertyUpdate.submarket = extractedData.submarket;
         if (extractedData.apn) propertyUpdate.apn = extractedData.apn;
