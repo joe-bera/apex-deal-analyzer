@@ -507,8 +507,54 @@ export const dealAnalysisSchema = z
 
     // Notes
     notes: z.string().max(5000).optional().nullable(),
-  })
-  .strict();
+
+    // Strategy
+    investment_strategy: z.string().max(50).optional().nullable(),
+
+    // Value-Add Attribution
+    va_below_market_rents: z.boolean().optional().nullable(),
+    va_below_market_rents_note: z.string().max(2000).optional().nullable(),
+    va_vacancy_leaseup: z.boolean().optional().nullable(),
+    va_vacancy_leaseup_note: z.string().max(2000).optional().nullable(),
+    va_expense_reduction: z.boolean().optional().nullable(),
+    va_expense_reduction_note: z.string().max(2000).optional().nullable(),
+    va_re_tenanting: z.boolean().optional().nullable(),
+    va_re_tenanting_note: z.string().max(2000).optional().nullable(),
+    va_physical_improvements: z.boolean().optional().nullable(),
+    va_physical_improvements_note: z.string().max(2000).optional().nullable(),
+
+    // As-Is vs Stabilized
+    as_is_rent_psf: z.number().optional().nullable(),
+    stabilized_rent_psf: z.number().optional().nullable(),
+    as_is_occupancy: z.number().min(0).max(100).optional().nullable(),
+    stabilized_occupancy: z.number().min(0).max(100).optional().nullable(),
+    as_is_other_income: z.number().optional().nullable(),
+    stabilized_other_income: z.number().optional().nullable(),
+    as_is_expense_ratio: z.number().min(0).max(100).optional().nullable(),
+    stabilized_expense_ratio: z.number().min(0).max(100).optional().nullable(),
+
+    // Value-Add Costs
+    va_capex: z.number().nonnegative().optional().nullable(),
+    va_ti_leasing: z.number().nonnegative().optional().nullable(),
+    va_carry_costs: z.number().nonnegative().optional().nullable(),
+    va_contingency: z.number().nonnegative().optional().nullable(),
+    va_total_cost: z.number().nonnegative().optional().nullable(),
+
+    // Proforma Settings
+    income_growth_rate: z.number().optional().nullable(),
+    expense_growth_rate: z.number().optional().nullable(),
+    holding_period: z.number().int().min(1).max(30).optional().nullable(),
+
+    // Exit Analysis
+    exit_cap_rate: z.number().min(0).max(100).optional().nullable(),
+    selling_costs_percent: z.number().min(0).max(20).optional().nullable(),
+
+    // Return Metrics
+    irr: z.number().optional().nullable(),
+    equity_multiple: z.number().optional().nullable(),
+    avg_cash_on_cash: z.number().optional().nullable(),
+    total_project_cost: z.number().optional().nullable(),
+  });
 
 // ============================================================================
 // CRM Validation Schemas
