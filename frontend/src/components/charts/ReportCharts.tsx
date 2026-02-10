@@ -45,6 +45,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 // Pipeline Forecast Charts
 // ============================================================================
 export function PipelineForecastCharts({ data }: { data: PipelineForecastData }) {
+  if (!data?.deals_by_stage) return <p className="text-gray-500 text-sm p-8 text-center">No pipeline data available</p>;
   const stageData = data.deals_by_stage.filter(s => s.count > 0 || s.total_value > 0);
 
   return (
@@ -84,7 +85,7 @@ export function PipelineForecastCharts({ data }: { data: PipelineForecastData })
         {/* Monthly Projections */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-900 mb-4">Monthly Projections</h3>
-          {data.monthly_projections.length > 0 ? (
+          {(data.monthly_projections || []).length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={data.monthly_projections} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -113,6 +114,7 @@ export function PipelineForecastCharts({ data }: { data: PipelineForecastData })
 // Broker Production Charts
 // ============================================================================
 export function BrokerProductionCharts({ data }: { data: BrokerProductionData }) {
+  if (!data?.totals || !data?.brokers) return <p className="text-gray-500 text-sm p-8 text-center">No broker production data available</p>;
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -157,6 +159,7 @@ export function BrokerProductionCharts({ data }: { data: BrokerProductionData })
 // Revenue Charts
 // ============================================================================
 export function RevenueCharts({ data }: { data: RevenueReportData }) {
+  if (!data?.totals || !data?.monthly) return <p className="text-gray-500 text-sm p-8 text-center">No revenue data available</p>;
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -228,6 +231,7 @@ export function RevenueCharts({ data }: { data: RevenueReportData }) {
 // Activity Summary Charts
 // ============================================================================
 export function ActivitySummaryCharts({ data }: { data: ActivitySummaryData }) {
+  if (!data?.task_completion || !data?.by_type) return <p className="text-gray-500 text-sm p-8 text-center">No activity data available</p>;
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -291,6 +295,7 @@ export function ActivitySummaryCharts({ data }: { data: ActivitySummaryData }) {
 // Property Analytics Charts
 // ============================================================================
 export function PropertyAnalyticsCharts({ data }: { data: PropertyAnalyticsData }) {
+  if (!data?.summary || !data?.by_type) return <p className="text-gray-500 text-sm p-8 text-center">No property analytics data available</p>;
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -400,6 +405,7 @@ export function PropertyAnalyticsCharts({ data }: { data: PropertyAnalyticsData 
 // Prospecting Report Charts
 // ============================================================================
 export function ProspectingReportCharts({ data }: { data: ProspectingReportData }) {
+  if (!data?.conversion_rates || !data?.status_distribution) return <p className="text-gray-500 text-sm p-8 text-center">No prospecting data available</p>;
   const statusColors: Record<string, string> = {
     pending: '#94A3B8',
     contacted: '#3B82F6',

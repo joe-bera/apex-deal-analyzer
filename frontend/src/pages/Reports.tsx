@@ -130,7 +130,10 @@ export default function Reports() {
             {TABS.map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  setData(null);
+                  setActiveTab(tab.key);
+                }}
                 className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'border-primary-600 text-primary-600'
