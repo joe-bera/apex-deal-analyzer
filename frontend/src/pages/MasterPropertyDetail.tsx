@@ -16,6 +16,9 @@ interface PropertyData {
   property_name?: string;
   building_park?: string;
   apn?: string;
+  costar_id?: string;
+  crexi_id?: string;
+  unit_suite?: string;
   property_type?: string;
   property_subtype?: string;
   building_class?: string;
@@ -26,27 +29,67 @@ interface PropertyData {
   building_size?: number;
   land_area_sf?: number;
   lot_size_acres?: number;
-  year_built?: number;
-  year_renovated?: number;
+  typical_floor_size?: number;
   number_of_floors?: number;
   number_of_units?: number;
+  number_of_buildings?: number;
+  number_of_addresses?: number;
+  year_built?: number;
+  month_built?: number;
+  year_renovated?: number;
+  month_renovated?: number;
+  construction_material?: string;
   clear_height_ft?: number;
   dock_doors?: number;
   grade_doors?: number;
   rail_served?: boolean;
+  column_spacing?: string;
+  sprinkler_type?: string;
+  number_of_cranes?: number;
+  power?: string;
+  office_percentage?: number;
+  office_space?: number;
+  number_of_elevators?: number;
   parking_spaces?: number;
   parking_ratio?: number;
   percent_leased?: number;
   vacancy_percent?: number;
   days_on_market?: number;
+  rent_per_sf?: number;
+  avg_weighted_rent?: number;
+  cross_street?: string;
+  opportunity_zone?: boolean;
+  latitude?: number;
+  longitude?: number;
   owner_name?: string;
+  owner_contact?: string;
   owner_address?: string;
   owner_phone?: string;
-  source?: string;
+  mailing_city?: string;
+  mailing_state?: string;
+  mailing_zip?: string;
+  mailing_care_of?: string;
+  parent_company?: string;
+  fund_name?: string;
+  property_manager_name?: string;
+  property_manager_phone?: string;
+  leasing_company_name?: string;
+  leasing_company_contact?: string;
+  leasing_company_phone?: string;
+  developer_name?: string;
+  architect_name?: string;
   improvement_value?: number;
   land_value?: number;
   total_parcel_value?: number;
+  parcel_value_type?: string;
+  tax_year?: number;
   annual_tax_bill?: number;
+  water?: string;
+  sewer?: string;
+  gas?: string;
+  amenities?: string;
+  features?: string;
+  source?: string;
   created_at?: string;
   updated_at?: string;
   [key: string]: unknown;
@@ -95,6 +138,14 @@ function Field({ label, value }: { label: string; value: string | number | boole
       <dd className="text-sm font-medium text-gray-900">{display}</dd>
     </div>
   );
+}
+
+// Returns true if the property has at least one non-empty value for any of the given keys
+function hasAnyValue(obj: PropertyData, keys: (keyof PropertyData)[]) {
+  return keys.some((k) => {
+    const v = obj[k];
+    return v != null && v !== '' && v !== false;
+  });
 }
 
 const ENTITY_TYPE_LABELS: Record<OwnerEntityType, string> = {
@@ -552,6 +603,31 @@ export default function MasterPropertyDetail() {
     );
   }
 
+  const latestTx = transactions[0] || null;
+
+  // Section visibility checks
+  const showIdentification = hasAnyValue(property, ['property_name', 'building_park', 'apn', 'costar_id', 'crexi_id', 'unit_suite']);
+  const showClassification = hasAnyValue(property, ['building_class', 'building_status', 'zoning', 'property_subtype', 'submarket', 'market']);
+  const showSizeStructure = hasAnyValue(property, ['building_size', 'land_area_sf', 'lot_size_acres', 'typical_floor_size', 'number_of_floors', 'number_of_units', 'number_of_buildings']);
+  const showConstruction = hasAnyValue(property, ['year_built', 'month_built', 'year_renovated', 'month_renovated', 'construction_material']);
+  const showIndustrial = hasAnyValue(property, ['clear_height_ft', 'dock_doors', 'grade_doors', 'rail_served', 'column_spacing', 'sprinkler_type', 'number_of_cranes', 'power', 'office_percentage', 'office_space', 'number_of_elevators']);
+  const showParking = hasAnyValue(property, ['parking_spaces', 'parking_ratio']);
+  const showLeasing = hasAnyValue(property, ['percent_leased', 'vacancy_percent', 'days_on_market', 'rent_per_sf', 'avg_weighted_rent']);
+  const showLocation = hasAnyValue(property, ['cross_street', 'opportunity_zone', 'latitude', 'longitude']);
+  const showPropertyDetails = showIdentification || showClassification || showSizeStructure || showConstruction || showIndustrial || showParking || showLeasing || showLocation;
+
+  const ownerKeys: (keyof PropertyData)[] = ['owner_name', 'owner_contact', 'owner_address', 'owner_phone', 'mailing_city', 'mailing_state', 'mailing_zip', 'mailing_care_of', 'parent_company', 'fund_name'];
+  const showOwner = hasAnyValue(property, ownerKeys);
+
+  const mgmtKeys: (keyof PropertyData)[] = ['property_manager_name', 'property_manager_phone', 'leasing_company_name', 'leasing_company_contact', 'leasing_company_phone', 'developer_name', 'architect_name'];
+  const showMgmt = hasAnyValue(property, mgmtKeys);
+
+  const taxKeys: (keyof PropertyData)[] = ['improvement_value', 'land_value', 'total_parcel_value', 'parcel_value_type', 'tax_year', 'annual_tax_bill'];
+  const showTax = hasAnyValue(property, taxKeys);
+
+  const utilityKeys: (keyof PropertyData)[] = ['water', 'sewer', 'gas', 'amenities', 'features'];
+  const showUtilities = hasAnyValue(property, utilityKeys);
+
   return (
     <Layout>
       {/* Header */}
@@ -579,79 +655,232 @@ export default function MasterPropertyDetail() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Key Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Key Metrics — 6 cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card>
             <CardContent className="py-4 text-center">
               <p className="text-xs text-gray-500">Building Size</p>
-              <p className="text-xl font-bold text-gray-900">{formatNumber(property.building_size)} SF</p>
+              <p className="text-lg font-bold text-gray-900">
+                {property.building_size ? `${formatNumber(property.building_size)} SF` : '-'}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4 text-center">
+              <p className="text-xs text-gray-500">Land / Lot Size</p>
+              <p className="text-lg font-bold text-gray-900">
+                {property.lot_size_acres != null
+                  ? `${property.lot_size_acres} ac`
+                  : property.land_area_sf
+                    ? `${formatNumber(property.land_area_sf)} SF`
+                    : '-'}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-4 text-center">
               <p className="text-xs text-gray-500">Year Built</p>
-              <p className="text-xl font-bold text-gray-900">{property.year_built || '-'}</p>
+              <p className="text-lg font-bold text-gray-900">{property.year_built || '-'}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-4 text-center">
               <p className="text-xs text-gray-500">Leased</p>
-              <p className="text-xl font-bold text-gray-900">
+              <p className="text-lg font-bold text-gray-900">
                 {property.percent_leased != null ? `${property.percent_leased}%` : '-'}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="py-4 text-center">
-              <p className="text-xs text-gray-500">Source</p>
-              <p className="text-xl font-bold text-gray-900 capitalize">{property.source || 'manual'}</p>
+              <p className="text-xs text-gray-500">Latest Sale Price</p>
+              <p className="text-lg font-bold text-gray-900">
+                {latestTx?.sale_price ? formatCurrency(latestTx.sale_price) : '-'}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4 text-center">
+              <p className="text-xs text-gray-500">
+                {latestTx?.cap_rate ? 'Cap Rate' : '$/SF'}
+              </p>
+              <p className="text-lg font-bold text-gray-900">
+                {latestTx?.cap_rate
+                  ? `${latestTx.cap_rate.toFixed(2)}%`
+                  : latestTx?.price_per_sf
+                    ? `$${latestTx.price_per_sf.toFixed(0)}`
+                    : '-'}
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Property Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Property Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
-              <Field label="Property Name" value={property.property_name} />
-              <Field label="Building Park" value={property.building_park} />
-              <Field label="APN" value={property.apn} />
-              <Field label="Submarket" value={property.submarket || property.market} />
-              <Field label="Building Class" value={property.building_class} />
-              <Field label="Building Status" value={property.building_status} />
-              <Field label="Zoning" value={property.zoning} />
-              <Field label="Property Subtype" value={property.property_subtype} />
-              <Field label="Land Area (SF)" value={formatNumber(property.land_area_sf)} />
-              <Field label="Lot Size (Acres)" value={property.lot_size_acres} />
-              <Field label="Floors" value={property.number_of_floors} />
-              <Field label="Units" value={property.number_of_units} />
-              <Field label="Year Renovated" value={property.year_renovated} />
-              <Field label="Clear Height" value={property.clear_height_ft ? `${property.clear_height_ft} ft` : undefined} />
-              <Field label="Dock Doors" value={property.dock_doors} />
-              <Field label="Grade Doors" value={property.grade_doors} />
-              <Field label="Rail Served" value={property.rail_served} />
-              <Field label="Parking Spaces" value={property.parking_spaces} />
-              <Field label="Parking Ratio" value={property.parking_ratio} />
-              <Field label="Vacancy %" value={property.vacancy_percent} />
-              <Field label="Days on Market" value={property.days_on_market} />
-            </dl>
-          </CardContent>
-        </Card>
+        {/* Property Details — organized sub-sections */}
+        {showPropertyDetails && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Property Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Identification */}
+              {showIdentification && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Identification</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Property Name" value={property.property_name} />
+                    <Field label="Building Park" value={property.building_park} />
+                    <Field label="APN" value={property.apn} />
+                    <Field label="CoStar ID" value={property.costar_id} />
+                    <Field label="Crexi ID" value={property.crexi_id} />
+                    <Field label="Unit / Suite" value={property.unit_suite} />
+                  </dl>
+                </div>
+              )}
 
-        {/* Owner / Contacts */}
-        {(property.owner_name || property.owner_address || property.owner_phone) && (
+              {/* Classification */}
+              {showClassification && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Classification</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Building Class" value={property.building_class} />
+                    <Field label="Building Status" value={property.building_status} />
+                    <Field label="Zoning" value={property.zoning} />
+                    <Field label="Property Subtype" value={property.property_subtype} />
+                    <Field label="Submarket" value={property.submarket} />
+                    <Field label="Market" value={property.market} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Size & Structure */}
+              {showSizeStructure && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Size & Structure</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Building Size (SF)" value={property.building_size ? formatNumber(property.building_size) : undefined} />
+                    <Field label="Land Area (SF)" value={property.land_area_sf ? formatNumber(property.land_area_sf) : undefined} />
+                    <Field label="Lot Size (Acres)" value={property.lot_size_acres} />
+                    <Field label="Typical Floor Size" value={property.typical_floor_size ? formatNumber(property.typical_floor_size) : undefined} />
+                    <Field label="Floors" value={property.number_of_floors} />
+                    <Field label="Units" value={property.number_of_units} />
+                    <Field label="# Buildings" value={property.number_of_buildings} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Construction */}
+              {showConstruction && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Construction</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Year Built" value={property.year_built} />
+                    <Field label="Month Built" value={property.month_built} />
+                    <Field label="Year Renovated" value={property.year_renovated} />
+                    <Field label="Month Renovated" value={property.month_renovated} />
+                    <Field label="Construction Material" value={property.construction_material} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Industrial Features */}
+              {showIndustrial && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Industrial Features</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Clear Height" value={property.clear_height_ft ? `${property.clear_height_ft} ft` : undefined} />
+                    <Field label="Dock Doors" value={property.dock_doors} />
+                    <Field label="Grade Doors" value={property.grade_doors} />
+                    <Field label="Rail Served" value={property.rail_served} />
+                    <Field label="Column Spacing" value={property.column_spacing} />
+                    <Field label="Sprinkler Type" value={property.sprinkler_type} />
+                    <Field label="# Cranes" value={property.number_of_cranes} />
+                    <Field label="Power" value={property.power} />
+                    <Field label="Office %" value={property.office_percentage != null ? `${property.office_percentage}%` : undefined} />
+                    <Field label="Office Space (SF)" value={property.office_space ? formatNumber(property.office_space) : undefined} />
+                    <Field label="# Elevators" value={property.number_of_elevators} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Parking */}
+              {showParking && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Parking</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Parking Spaces" value={property.parking_spaces} />
+                    <Field label="Parking Ratio" value={property.parking_ratio} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Leasing */}
+              {showLeasing && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Leasing</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Percent Leased" value={property.percent_leased != null ? `${property.percent_leased}%` : undefined} />
+                    <Field label="Vacancy %" value={property.vacancy_percent != null ? `${property.vacancy_percent}%` : undefined} />
+                    <Field label="Days on Market" value={property.days_on_market} />
+                    <Field label="Rent / SF" value={property.rent_per_sf != null ? `$${property.rent_per_sf.toFixed(2)}` : undefined} />
+                    <Field label="Avg Weighted Rent" value={property.avg_weighted_rent != null ? `$${property.avg_weighted_rent.toFixed(2)}` : undefined} />
+                  </dl>
+                </div>
+              )}
+
+              {/* Location */}
+              {showLocation && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Location</h4>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <Field label="Cross Street" value={property.cross_street} />
+                    <Field label="Opportunity Zone" value={property.opportunity_zone} />
+                    <Field label="Latitude" value={property.latitude} />
+                    <Field label="Longitude" value={property.longitude} />
+                  </dl>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Owner & Contacts */}
+        {showOwner && (
           <Card>
             <CardHeader>
               <CardTitle>Owner & Contacts</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+              <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
                 <Field label="Owner Name" value={property.owner_name} />
-                <Field label="Owner Address" value={property.owner_address} />
+                <Field label="Owner Contact" value={property.owner_contact} />
                 <Field label="Owner Phone" value={property.owner_phone} />
+                <Field label="Owner Address" value={property.owner_address} />
+                <Field label="Mailing City" value={property.mailing_city} />
+                <Field label="Mailing State" value={property.mailing_state} />
+                <Field label="Mailing Zip" value={property.mailing_zip} />
+                <Field label="Care Of" value={property.mailing_care_of} />
+                <Field label="Parent Company" value={property.parent_company} />
+                <Field label="Fund Name" value={property.fund_name} />
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Property Management & Leasing */}
+        {showMgmt && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Property Management & Leasing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                <Field label="Property Manager" value={property.property_manager_name} />
+                <Field label="Property Manager Phone" value={property.property_manager_phone} />
+                <Field label="Leasing Company" value={property.leasing_company_name} />
+                <Field label="Leasing Contact" value={property.leasing_company_contact} />
+                <Field label="Leasing Phone" value={property.leasing_company_phone} />
+                <Field label="Developer" value={property.developer_name} />
+                <Field label="Architect" value={property.architect_name} />
               </dl>
             </CardContent>
           </Card>
@@ -660,18 +889,38 @@ export default function MasterPropertyDetail() {
         {/* Owner Research Panel */}
         <OwnerResearchPanel propertyId={property.id} />
 
-        {/* Tax / Valuation */}
-        {(property.improvement_value || property.land_value || property.total_parcel_value || property.annual_tax_bill) && (
+        {/* Tax & Valuation */}
+        {showTax && (
           <Card>
             <CardHeader>
               <CardTitle>Tax & Valuation</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+              <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
                 <Field label="Improvement Value" value={formatCurrency(property.improvement_value)} />
                 <Field label="Land Value" value={formatCurrency(property.land_value)} />
                 <Field label="Total Parcel Value" value={formatCurrency(property.total_parcel_value)} />
+                <Field label="Parcel Value Type" value={property.parcel_value_type} />
+                <Field label="Tax Year" value={property.tax_year} />
                 <Field label="Annual Tax Bill" value={formatCurrency(property.annual_tax_bill)} />
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Utilities & Amenities */}
+        {showUtilities && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Utilities & Amenities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                <Field label="Water" value={property.water} />
+                <Field label="Sewer" value={property.sewer} />
+                <Field label="Gas" value={property.gas} />
+                <Field label="Amenities" value={property.amenities} />
+                <Field label="Features" value={property.features} />
               </dl>
             </CardContent>
           </Card>
@@ -731,6 +980,7 @@ export default function MasterPropertyDetail() {
         {/* Metadata */}
         <div className="text-xs text-gray-400 text-right">
           Created {formatDate(property.created_at)} | Updated {formatDate(property.updated_at)}
+          {property.source ? ` | Source: ${property.source}` : ''}
         </div>
       </div>
     </Layout>
