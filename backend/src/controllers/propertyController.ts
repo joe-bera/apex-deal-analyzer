@@ -422,6 +422,38 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
       throw new AppError(500, `Failed to fetch properties: ${error.message}`);
     }
 
+    // Attach primary photo URL to each property
+    if (properties && properties.length > 0) {
+      const propertyIds = properties.map((p: any) => p.id);
+
+      // Fetch all photos for these properties (sorted so primary comes first, then by sort_order)
+      const { data: allPhotos } = await supabaseAdmin
+        .from('property_photos')
+        .select('property_id, file_path, is_primary')
+        .in('property_id', propertyIds)
+        .order('is_primary', { ascending: false })
+        .order('sort_order', { ascending: true });
+
+      if (allPhotos && allPhotos.length > 0) {
+        // Pick the best photo per property: primary first, otherwise first by sort_order
+        const photoMap = new Map<string, string>();
+        for (const photo of allPhotos) {
+          if (!photoMap.has(photo.property_id)) {
+            photoMap.set(photo.property_id, photo.file_path);
+          }
+        }
+        for (const prop of properties as any[]) {
+          const filePath = photoMap.get(prop.id);
+          if (filePath) {
+            const { data: { publicUrl } } = supabaseAdmin.storage
+              .from('property-photos')
+              .getPublicUrl(filePath);
+            prop.primary_photo_url = publicUrl;
+          }
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       properties: properties || [],

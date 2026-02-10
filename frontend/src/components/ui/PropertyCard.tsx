@@ -48,24 +48,34 @@ export const PropertyCard = ({ property }: PropertyCardProps) => {
   return (
     <Link to={`/properties/${property.id}`}>
       <Card hover padding="none" className="h-full overflow-hidden group">
-        {/* Property Image Placeholder */}
+        {/* Property Image */}
         <div className="h-40 bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-50">
-            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg className="w-16 h-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
+          {property.primary_photo_url ? (
+            <img
+              src={property.primary_photo_url}
+              alt={property.address || 'Property'}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <>
+              {/* Background Pattern */}
+              <div className="absolute inset-0 opacity-50">
+                <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <pattern id={`grid-${property.id}`} width="20" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill={`url(#grid-${property.id})`} />
+                </svg>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-16 h-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+            </>
+          )}
 
           {/* Top Left Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-2">

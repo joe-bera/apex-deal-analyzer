@@ -60,6 +60,7 @@ export interface Property {
   zoning?: string;
   parking_spaces?: number;
   additional_data?: Record<string, unknown>;
+  primary_photo_url?: string;
   created_at: string;
   updated_at: string;
   is_archived?: boolean;
