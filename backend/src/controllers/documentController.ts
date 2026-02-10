@@ -526,6 +526,44 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       }
     }
 
+    // Write extracted fields back to master_properties for property profiles and OMs
+    if (
+      ['property_profile', 'offering_memorandum'].includes(document.document_type) &&
+      document.property_id &&
+      extractedData
+    ) {
+      // Map extracted fields to master_properties columns (only set non-null values)
+      const propertyUpdate: Record<string, any> = {};
+      if (extractedData.building_size) propertyUpdate.building_size = Math.round(extractedData.building_size);
+      if (extractedData.lot_size) propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
+      if (extractedData.year_built) propertyUpdate.year_built = extractedData.year_built;
+      if (extractedData.stories) propertyUpdate.number_of_floors = extractedData.stories;
+      if (extractedData.units) propertyUpdate.number_of_units = extractedData.units;
+      if (extractedData.occupancy_rate) propertyUpdate.percent_leased = extractedData.occupancy_rate;
+      if (extractedData.parking_spaces) propertyUpdate.parking_spaces = extractedData.parking_spaces;
+      if (extractedData.zoning) propertyUpdate.zoning = extractedData.zoning;
+      if (extractedData.subtype) propertyUpdate.property_subtype = extractedData.subtype;
+      if (extractedData.market) propertyUpdate.market = extractedData.market;
+      if (extractedData.submarket) propertyUpdate.submarket = extractedData.submarket;
+      if (extractedData.apn) propertyUpdate.apn = extractedData.apn;
+      if (extractedData.owner_name) propertyUpdate.owner_name = extractedData.owner_name;
+      if (extractedData.owner_address) propertyUpdate.owner_address = extractedData.owner_address;
+
+      if (Object.keys(propertyUpdate).length > 0) {
+        propertyUpdate.updated_at = new Date().toISOString();
+        const { error: propUpdateError } = await supabaseAdmin
+          .from('master_properties')
+          .update(propertyUpdate)
+          .eq('id', document.property_id);
+
+        if (propUpdateError) {
+          console.error('[DocumentController] Failed to update master_properties:', propUpdateError);
+        } else {
+          console.log(`[DocumentController] Updated master_properties ${document.property_id} with ${Object.keys(propertyUpdate).length - 1} fields`);
+        }
+      }
+    }
+
     // Store historical transaction data from title reports and OMs
     let transactionHistoryResult = { stored: 0, errors: [] as string[] };
     if (
