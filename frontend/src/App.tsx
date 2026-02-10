@@ -23,6 +23,9 @@ import Reports from './pages/Reports';
 import PublicDealRoom from './pages/PublicDealRoom';
 import Playbooks from './pages/Playbooks';
 import Syndication from './pages/Syndication';
+import AssetServices from './pages/AssetServices';
+import VendorDirectory from './pages/VendorDirectory';
+import ManagedPropertyDetailPage from './pages/ManagedPropertyDetail';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +60,9 @@ function AppRoutes() {
       <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
       <Route path="/playbooks" element={<PrivateRoute><Playbooks /></PrivateRoute>} />
       <Route path="/syndication" element={<PrivateRoute><Syndication /></PrivateRoute>} />
+      <Route path="/asset-services" element={<PrivateRoute><AssetServices /></PrivateRoute>} />
+      <Route path="/asset-services/vendors" element={<PrivateRoute><VendorDirectory /></PrivateRoute>} />
+      <Route path="/asset-services/:id" element={<PrivateRoute><ManagedPropertyDetailPage /></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

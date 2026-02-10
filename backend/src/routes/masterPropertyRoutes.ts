@@ -8,6 +8,7 @@ import {
   getVerificationQueue,
   verifyProperty,
 } from '../controllers/masterPropertyController';
+import { updateManagement, listManagedProperties } from '../controllers/managedPropertyController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -20,6 +21,9 @@ router.post('/', createProperty);
 
 // List properties
 router.get('/', getMasterProperties);
+
+// Managed properties
+router.get('/managed', listManagedProperties);
 
 // Get verification queue
 router.get('/verification-queue', getVerificationQueue);
@@ -35,5 +39,8 @@ router.post('/import', importProperties);
 
 // Verify property
 router.post('/:id/verify', verifyProperty);
+
+// Management settings
+router.patch('/:id/management', updateManagement);
 
 export default router;

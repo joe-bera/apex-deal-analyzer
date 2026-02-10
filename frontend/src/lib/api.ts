@@ -943,6 +943,234 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // =========================================================================
+  // Asset Services: Vendors (Phase 11A)
+  // =========================================================================
+  listVendors: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/vendors${query}`);
+  },
+
+  getVendor: (id: string) => request<any>(`/vendors/${id}`),
+
+  createVendor: (data: Record<string, any>) =>
+    request<any>('/vendors', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateVendor: (id: string, data: Record<string, any>) =>
+    request<any>(`/vendors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteVendor: (id: string) =>
+    request<any>(`/vendors/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Asset Services: Managed Properties (Phase 11A)
+  // =========================================================================
+  listManagedProperties: () =>
+    request<any>('/master-properties/managed'),
+
+  updatePropertyManagement: (id: string, data: Record<string, any>) =>
+    request<any>(`/master-properties/${id}/management`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // =========================================================================
+  // Asset Services: Tenants (Phase 11B)
+  // =========================================================================
+  listTenants: (propertyId: string) =>
+    request<any>(`/tenants/property/${propertyId}`),
+
+  getTenant: (id: string) => request<any>(`/tenants/${id}`),
+
+  createTenant: (data: Record<string, any>) =>
+    request<any>('/tenants', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateTenant: (id: string, data: Record<string, any>) =>
+    request<any>(`/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteTenant: (id: string) =>
+    request<any>(`/tenants/${id}`, { method: 'DELETE' }),
+
+  getRentRoll: (propertyId: string) =>
+    request<any>(`/tenants/property/${propertyId}/rent-roll`),
+
+  // =========================================================================
+  // Asset Services: Rent Payments (Phase 11B)
+  // =========================================================================
+  listRentPayments: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/rent-payments${query}`);
+  },
+
+  createRentPayment: (data: Record<string, any>) =>
+    request<any>('/rent-payments', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateRentPayment: (id: string, data: Record<string, any>) =>
+    request<any>(`/rent-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  bulkCreateRentPayments: (data: { property_id: string; period_start: string; period_end: string }) =>
+    request<any>('/rent-payments/bulk', { method: 'POST', body: JSON.stringify(data) }),
+
+  // =========================================================================
+  // Asset Services: Operating Expenses (Phase 11C)
+  // =========================================================================
+  listExpenses: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/expenses${query}`);
+  },
+
+  createExpense: (data: Record<string, any>) =>
+    request<any>('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateExpense: (id: string, data: Record<string, any>) =>
+    request<any>(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteExpense: (id: string) =>
+    request<any>(`/expenses/${id}`, { method: 'DELETE' }),
+
+  bulkCreateExpenses: (data: { property_id: string; expenses: Record<string, any>[] }) =>
+    request<any>('/expenses/bulk', { method: 'POST', body: JSON.stringify(data) }),
+
+  categorizeExpenses: (data: { expenses: Array<{ description: string; amount: number; vendor_name?: string }> }) =>
+    request<any>('/expenses/categorize', { method: 'POST', body: JSON.stringify(data) }),
+
+  // =========================================================================
+  // Asset Services: CAM Reconciliation (Phase 11D)
+  // =========================================================================
+  listCamReconciliations: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/cam-reconciliations${query}`);
+  },
+
+  getCamReconciliation: (id: string) => request<any>(`/cam-reconciliations/${id}`),
+
+  createCamReconciliation: (data: Record<string, any>) =>
+    request<any>('/cam-reconciliations', { method: 'POST', body: JSON.stringify(data) }),
+
+  calculateCamReconciliation: (id: string) =>
+    request<any>(`/cam-reconciliations/${id}/calculate`, { method: 'POST' }),
+
+  updateCamReconciliation: (id: string, data: Record<string, any>) =>
+    request<any>(`/cam-reconciliations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  finalizeCamReconciliation: (id: string) =>
+    request<any>(`/cam-reconciliations/${id}/finalize`, { method: 'POST' }),
+
+  // =========================================================================
+  // Asset Services: Financial Reports (Phase 11D)
+  // =========================================================================
+  getOwnerStatement: (params: { property_id: string; month: string }) => {
+    const query = '?' + new URLSearchParams(params).toString();
+    return request<any>(`/financial-reports/owner-statement${query}`);
+  },
+
+  getYearEndReport: (params: { property_id: string; year: string }) => {
+    const query = '?' + new URLSearchParams(params).toString();
+    return request<any>(`/financial-reports/year-end${query}`);
+  },
+
+  getBudgetVsActual: (params: { property_id: string; year: string }) => {
+    const query = '?' + new URLSearchParams(params).toString();
+    return request<any>(`/financial-reports/budget-vs-actual${query}`);
+  },
+
+  // =========================================================================
+  // Asset Services: Budgets (Phase 11D)
+  // =========================================================================
+  listBudgets: (propertyId: string) =>
+    request<any>(`/budgets?property_id=${propertyId}`),
+
+  getBudget: (id: string) => request<any>(`/budgets/${id}`),
+
+  createBudget: (data: Record<string, any>) =>
+    request<any>('/budgets', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateBudget: (id: string, data: Record<string, any>) =>
+    request<any>(`/budgets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteBudget: (id: string) =>
+    request<any>(`/budgets/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Asset Services: Inspections (Phase 11E)
+  // =========================================================================
+  listInspections: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/inspections${query}`);
+  },
+
+  getInspection: (id: string) => request<any>(`/inspections/${id}`),
+
+  createInspection: (data: Record<string, any>) =>
+    request<any>('/inspections', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateInspection: (id: string, data: Record<string, any>) =>
+    request<any>(`/inspections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteInspection: (id: string) =>
+    request<any>(`/inspections/${id}`, { method: 'DELETE' }),
+
+  createConditionItem: (inspectionId: string, data: Record<string, any>) =>
+    request<any>(`/inspections/${inspectionId}/conditions`, { method: 'POST', body: JSON.stringify(data) }),
+
+  updateConditionItem: (inspectionId: string, itemId: string, data: Record<string, any>) =>
+    request<any>(`/inspections/${inspectionId}/conditions/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // =========================================================================
+  // Asset Services: Work Orders (Phase 11E)
+  // =========================================================================
+  listWorkOrders: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/work-orders${query}`);
+  },
+
+  getWorkOrder: (id: string) => request<any>(`/work-orders/${id}`),
+
+  createWorkOrder: (data: Record<string, any>) =>
+    request<any>('/work-orders', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateWorkOrder: (id: string, data: Record<string, any>) =>
+    request<any>(`/work-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteWorkOrder: (id: string) =>
+    request<any>(`/work-orders/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Asset Services: Capital Projects (Phase 11E)
+  // =========================================================================
+  listCapitalProjects: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/capital-projects${query}`);
+  },
+
+  createCapitalProject: (data: Record<string, any>) =>
+    request<any>('/capital-projects', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateCapitalProject: (id: string, data: Record<string, any>) =>
+    request<any>(`/capital-projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteCapitalProject: (id: string) =>
+    request<any>(`/capital-projects/${id}`, { method: 'DELETE' }),
+
+  // =========================================================================
+  // Asset Services: Compliance (Phase 11F)
+  // =========================================================================
+  listComplianceItems: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<any>(`/compliance${query}`);
+  },
+
+  getComplianceItem: (id: string) => request<any>(`/compliance/${id}`),
+
+  createComplianceItem: (data: Record<string, any>) =>
+    request<any>('/compliance', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateComplianceItem: (id: string, data: Record<string, any>) =>
+    request<any>(`/compliance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteComplianceItem: (id: string) =>
+    request<any>(`/compliance/${id}`, { method: 'DELETE' }),
+
+  getUpcomingCompliance: (days: number = 30) =>
+    request<any>(`/compliance/upcoming?days=${days}`),
+
   exportReportCSV: async (type: string, params?: { start?: string; end?: string }) => {
     const token = localStorage.getItem('token');
     const base = import.meta.env.VITE_API_URL || '/api';

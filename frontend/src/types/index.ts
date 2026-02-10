@@ -1507,3 +1507,284 @@ export interface PublicListingResponse {
   success: boolean;
   listing: PublicListingData;
 }
+
+// ============================================================================
+// Asset Services / Property Management Types (Phase 11)
+// ============================================================================
+
+export type ManagementTier = 'asset_management' | 'asset_oversight' | 'asset_monitoring';
+
+export type LeaseType = 'gross' | 'modified_gross' | 'nnn' | 'nn' | 'percentage' | 'month_to_month' | 'ground';
+
+export type ExpenseCategory =
+  | 'property_tax' | 'insurance' | 'utilities_water' | 'utilities_electric'
+  | 'utilities_gas' | 'utilities_trash' | 'maintenance_repair' | 'landscaping'
+  | 'janitorial' | 'security' | 'management_fee' | 'legal' | 'accounting'
+  | 'marketing' | 'capital_improvement' | 'pest_control' | 'hvac'
+  | 'roof_repair' | 'parking_lot' | 'signage' | 'other';
+
+export type CamAllocationMethod = 'pro_rata_sf' | 'equal_share' | 'fixed_amount' | 'custom_percentage';
+
+export type InspectionType = 'routine' | 'move_in' | 'move_out' | 'annual' | 'emergency' | 'insurance';
+export type ConditionSeverity = 'cosmetic' | 'minor' | 'moderate' | 'major' | 'critical';
+export type ConditionStatus = 'identified' | 'scheduled' | 'in_progress' | 'completed' | 'deferred';
+
+export type WorkOrderStatus = 'open' | 'assigned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+export type WorkOrderPriority = 'low' | 'medium' | 'high' | 'emergency';
+
+export type CapitalProjectStatus = 'proposed' | 'approved' | 'in_progress' | 'completed' | 'cancelled';
+
+export type ComplianceItemType =
+  | 'fire_inspection' | 'elevator_cert' | 'backflow_test' | 'roof_warranty'
+  | 'insurance_renewal' | 'tax_filing' | 'business_license' | 'ada_compliance'
+  | 'environmental' | 'hvac_service' | 'pest_control_service' | 'other';
+
+export type PaymentStatus = 'expected' | 'received' | 'late' | 'partial' | 'waived';
+export type ReconciliationPeriod = 'monthly' | 'quarterly' | 'annual';
+
+export interface Vendor {
+  id: string;
+  name: string;
+  company_name?: string;
+  trade?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  license_number?: string;
+  insurance_expiry?: string;
+  w9_on_file: boolean;
+  rating?: number;
+  is_preferred: boolean;
+  notes?: string;
+  is_deleted: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Tenant {
+  id: string;
+  master_property_id: string;
+  contact_id?: string;
+  unit_number?: string;
+  tenant_name: string;
+  lease_type?: LeaseType;
+  lease_start?: string;
+  lease_end?: string;
+  monthly_base_rent?: number;
+  rent_per_sf?: number;
+  leased_sf?: number;
+  security_deposit?: number;
+  cam_share_percent?: number;
+  cam_share_sf?: number;
+  is_active: boolean;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RentPayment {
+  id: string;
+  tenant_id: string;
+  period_start?: string;
+  period_end?: string;
+  amount_due?: number;
+  amount_paid?: number;
+  payment_date?: string;
+  payment_status: PaymentStatus;
+  payment_method?: string;
+  reference_number?: string;
+  late_fee?: number;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperatingExpense {
+  id: string;
+  master_property_id: string;
+  category?: ExpenseCategory;
+  description?: string;
+  amount?: number;
+  expense_date?: string;
+  vendor_id?: string;
+  is_cam_recoverable: boolean;
+  receipt_url?: string;
+  receipt_file_name?: string;
+  ai_categorized: boolean;
+  ai_confidence?: number;
+  batch_upload_id?: string;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+}
+
+export interface CamReconciliation {
+  id: string;
+  master_property_id: string;
+  period?: ReconciliationPeriod;
+  period_start?: string;
+  period_end?: string;
+  total_cam_expenses?: number;
+  total_collected?: number;
+  variance?: number;
+  allocation_method: CamAllocationMethod;
+  is_finalized: boolean;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  items?: CamReconciliationItem[];
+}
+
+export interface CamReconciliationItem {
+  id: string;
+  reconciliation_id: string;
+  tenant_id: string;
+  share_percent?: number;
+  allocated_amount?: number;
+  amount_paid?: number;
+  balance_due?: number;
+  notes?: string;
+  tenant?: Tenant;
+}
+
+export interface PropertyBudget {
+  id: string;
+  master_property_id: string;
+  fiscal_year: number;
+  total_budget?: number;
+  is_approved: boolean;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  line_items?: BudgetLineItem[];
+}
+
+export interface BudgetLineItem {
+  id: string;
+  budget_id: string;
+  category?: ExpenseCategory;
+  budgeted_amount?: number;
+  actual_amount?: number;
+  notes?: string;
+}
+
+export interface Inspection {
+  id: string;
+  master_property_id: string;
+  inspection_type?: InspectionType;
+  inspection_date?: string;
+  inspector_name?: string;
+  overall_rating?: number;
+  summary?: string;
+  photos_url?: string[];
+  report_url?: string;
+  next_inspection_date?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  condition_items?: ConditionItem[];
+}
+
+export interface ConditionItem {
+  id: string;
+  inspection_id: string;
+  location?: string;
+  description?: string;
+  severity?: ConditionSeverity;
+  status: ConditionStatus;
+  photo_urls?: string[];
+  estimated_cost?: number;
+  work_order_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkOrder {
+  id: string;
+  master_property_id: string;
+  tenant_id?: string;
+  vendor_id?: string;
+  condition_item_id?: string;
+  title: string;
+  description?: string;
+  priority: WorkOrderPriority;
+  status: WorkOrderStatus;
+  category?: ExpenseCategory;
+  estimated_cost?: number;
+  actual_cost?: number;
+  scheduled_date?: string;
+  completed_date?: string;
+  completed_by?: string;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+  tenant?: Tenant;
+}
+
+export interface CapitalProject {
+  id: string;
+  master_property_id: string;
+  title: string;
+  description?: string;
+  status: CapitalProjectStatus;
+  estimated_cost?: number;
+  actual_cost?: number;
+  start_date?: string;
+  target_completion?: string;
+  actual_completion?: string;
+  vendor_id?: string;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+}
+
+export interface ComplianceItem {
+  id: string;
+  master_property_id: string;
+  item_type?: ComplianceItemType;
+  title: string;
+  description?: string;
+  due_date?: string;
+  completed_date?: string;
+  is_recurring: boolean;
+  recurrence_months?: number;
+  vendor_id?: string;
+  document_url?: string;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+}
+
+export interface ManagedPropertySummary {
+  id: string;
+  address: string;
+  city?: string;
+  state?: string;
+  property_type?: string;
+  building_size?: number;
+  management_tier?: ManagementTier;
+  management_fee_percent?: number;
+  management_start_date?: string;
+  active_tenants: number;
+  total_leased_sf: number;
+  occupancy_percent: number;
+  monthly_rent_income: number;
+  total_expenses_ytd: number;
+}
