@@ -7,29 +7,29 @@
 -- STEP 1: Create Enums
 -- ============================================================================
 
-CREATE TYPE management_tier AS ENUM ('asset_management', 'asset_oversight', 'asset_monitoring');
-CREATE TYPE lease_type AS ENUM ('gross', 'modified_gross', 'nnn', 'nn', 'percentage', 'month_to_month', 'ground');
-CREATE TYPE expense_category AS ENUM (
+DO $$ BEGIN CREATE TYPE management_tier AS ENUM ('asset_management', 'asset_oversight', 'asset_monitoring'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE lease_type AS ENUM ('gross', 'modified_gross', 'nnn', 'nn', 'percentage', 'month_to_month', 'ground'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE expense_category AS ENUM (
   'property_tax', 'insurance', 'utilities_water', 'utilities_electric',
   'utilities_gas', 'utilities_trash', 'maintenance_repair', 'landscaping',
   'janitorial', 'security', 'management_fee', 'legal', 'accounting',
   'marketing', 'capital_improvement', 'pest_control', 'hvac',
   'roof_repair', 'parking_lot', 'signage', 'other'
-);
-CREATE TYPE cam_allocation_method AS ENUM ('pro_rata_sf', 'equal_share', 'fixed_amount', 'custom_percentage');
-CREATE TYPE inspection_type AS ENUM ('routine', 'move_in', 'move_out', 'annual', 'emergency', 'insurance');
-CREATE TYPE condition_severity AS ENUM ('cosmetic', 'minor', 'moderate', 'major', 'critical');
-CREATE TYPE condition_status AS ENUM ('identified', 'scheduled', 'in_progress', 'completed', 'deferred');
-CREATE TYPE work_order_status AS ENUM ('open', 'assigned', 'in_progress', 'on_hold', 'completed', 'cancelled');
-CREATE TYPE work_order_priority AS ENUM ('low', 'medium', 'high', 'emergency');
-CREATE TYPE capital_project_status AS ENUM ('proposed', 'approved', 'in_progress', 'completed', 'cancelled');
-CREATE TYPE compliance_item_type AS ENUM (
+); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE cam_allocation_method AS ENUM ('pro_rata_sf', 'equal_share', 'fixed_amount', 'custom_percentage'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE inspection_type AS ENUM ('routine', 'move_in', 'move_out', 'annual', 'emergency', 'insurance'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE condition_severity AS ENUM ('cosmetic', 'minor', 'moderate', 'major', 'critical'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE condition_status AS ENUM ('identified', 'scheduled', 'in_progress', 'completed', 'deferred'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE work_order_status AS ENUM ('open', 'assigned', 'in_progress', 'on_hold', 'completed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE work_order_priority AS ENUM ('low', 'medium', 'high', 'emergency'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE capital_project_status AS ENUM ('proposed', 'approved', 'in_progress', 'completed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE compliance_item_type AS ENUM (
   'fire_inspection', 'elevator_cert', 'backflow_test', 'roof_warranty',
   'insurance_renewal', 'tax_filing', 'business_license', 'ada_compliance',
   'environmental', 'hvac_service', 'pest_control_service', 'other'
-);
-CREATE TYPE payment_status AS ENUM ('expected', 'received', 'late', 'partial', 'waived');
-CREATE TYPE reconciliation_period AS ENUM ('monthly', 'quarterly', 'annual');
+); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE payment_status AS ENUM ('expected', 'received', 'late', 'partial', 'waived'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE reconciliation_period AS ENUM ('monthly', 'quarterly', 'annual'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================================
 -- STEP 2: Add management columns to master_properties
@@ -71,16 +71,26 @@ WHERE mp.is_deleted = false;
 -- STEP 4: Expand role constraint on profiles
 -- ============================================================================
 
-ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('admin', 'broker', 'owner', 'investor', 'tenant', 'member'));
+-- The role column uses the user_role enum type. Add new values if they don't exist.
+DO $$ BEGIN
+  ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'owner';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'investor';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'tenant';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================================
 -- STEP 5: Create new tables
 -- ============================================================================
 
 -- 1. Vendors
-CREATE TABLE vendors (
+CREATE TABLE IF NOT EXISTS vendors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   company_name TEXT,
@@ -104,7 +114,7 @@ CREATE TABLE vendors (
 );
 
 -- 2. Tenants
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id),
@@ -127,7 +137,7 @@ CREATE TABLE tenants (
 );
 
 -- 3. Rent Payments
-CREATE TABLE rent_payments (
+CREATE TABLE IF NOT EXISTS rent_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   period_start DATE,
@@ -146,7 +156,7 @@ CREATE TABLE rent_payments (
 );
 
 -- 4. Operating Expenses
-CREATE TABLE operating_expenses (
+CREATE TABLE IF NOT EXISTS operating_expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   category expense_category,
@@ -167,7 +177,7 @@ CREATE TABLE operating_expenses (
 );
 
 -- 5. CAM Reconciliations
-CREATE TABLE cam_reconciliations (
+CREATE TABLE IF NOT EXISTS cam_reconciliations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   period reconciliation_period,
@@ -185,7 +195,7 @@ CREATE TABLE cam_reconciliations (
 );
 
 -- 6. CAM Reconciliation Items
-CREATE TABLE cam_reconciliation_items (
+CREATE TABLE IF NOT EXISTS cam_reconciliation_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   reconciliation_id UUID NOT NULL REFERENCES cam_reconciliations(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -197,7 +207,7 @@ CREATE TABLE cam_reconciliation_items (
 );
 
 -- 7. Property Budgets
-CREATE TABLE property_budgets (
+CREATE TABLE IF NOT EXISTS property_budgets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   fiscal_year INTEGER NOT NULL,
@@ -210,7 +220,7 @@ CREATE TABLE property_budgets (
 );
 
 -- 8. Budget Line Items
-CREATE TABLE budget_line_items (
+CREATE TABLE IF NOT EXISTS budget_line_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   budget_id UUID NOT NULL REFERENCES property_budgets(id) ON DELETE CASCADE,
   category expense_category,
@@ -220,7 +230,7 @@ CREATE TABLE budget_line_items (
 );
 
 -- 9. Inspections
-CREATE TABLE inspections (
+CREATE TABLE IF NOT EXISTS inspections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   inspection_type inspection_type,
@@ -237,7 +247,7 @@ CREATE TABLE inspections (
 );
 
 -- 10. Condition Items
-CREATE TABLE condition_items (
+CREATE TABLE IF NOT EXISTS condition_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   inspection_id UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   location TEXT,
@@ -252,7 +262,7 @@ CREATE TABLE condition_items (
 );
 
 -- 11. Work Orders
-CREATE TABLE work_orders (
+CREATE TABLE IF NOT EXISTS work_orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   tenant_id UUID REFERENCES tenants(id),
@@ -275,10 +285,10 @@ CREATE TABLE work_orders (
 );
 
 -- Add work_order_id FK to condition_items now that work_orders exists
-ALTER TABLE condition_items ADD COLUMN work_order_id UUID REFERENCES work_orders(id);
+ALTER TABLE condition_items ADD COLUMN IF NOT EXISTS work_order_id UUID REFERENCES work_orders(id);
 
 -- 12. Capital Projects
-CREATE TABLE capital_projects (
+CREATE TABLE IF NOT EXISTS capital_projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -297,7 +307,7 @@ CREATE TABLE capital_projects (
 );
 
 -- 13. Compliance Items
-CREATE TABLE compliance_items (
+CREATE TABLE IF NOT EXISTS compliance_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   master_property_id UUID NOT NULL REFERENCES master_properties(id) ON DELETE CASCADE,
   item_type compliance_item_type,
@@ -320,7 +330,7 @@ CREATE TABLE compliance_items (
 -- ============================================================================
 
 -- Rent Roll view
-CREATE VIEW rent_roll AS
+CREATE OR REPLACE VIEW rent_roll AS
 SELECT
   t.id AS tenant_id,
   t.master_property_id,
@@ -349,7 +359,7 @@ JOIN master_properties mp ON mp.id = t.master_property_id
 WHERE t.is_active = true;
 
 -- Managed Properties Summary view
-CREATE VIEW managed_properties_summary AS
+CREATE OR REPLACE VIEW managed_properties_summary AS
 SELECT
   mp.id,
   mp.address,
@@ -381,52 +391,52 @@ GROUP BY mp.id, mp.address, mp.city, mp.state, mp.property_type, mp.building_siz
 -- ============================================================================
 
 -- Vendors
-CREATE INDEX idx_vendors_created_by ON vendors(created_by);
-CREATE INDEX idx_vendors_trade ON vendors(trade);
+CREATE INDEX IF NOT EXISTS idx_vendors_created_by ON vendors(created_by);
+CREATE INDEX IF NOT EXISTS idx_vendors_trade ON vendors(trade);
 
 -- Tenants
-CREATE INDEX idx_tenants_master_property_id ON tenants(master_property_id);
-CREATE INDEX idx_tenants_contact_id ON tenants(contact_id);
+CREATE INDEX IF NOT EXISTS idx_tenants_master_property_id ON tenants(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_tenants_contact_id ON tenants(contact_id);
 
 -- Rent Payments
-CREATE INDEX idx_rent_payments_tenant_id ON rent_payments(tenant_id);
-CREATE INDEX idx_rent_payments_tenant_period ON rent_payments(tenant_id, period_start);
+CREATE INDEX IF NOT EXISTS idx_rent_payments_tenant_id ON rent_payments(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_rent_payments_tenant_period ON rent_payments(tenant_id, period_start);
 
 -- Operating Expenses
-CREATE INDEX idx_operating_expenses_property_id ON operating_expenses(master_property_id);
-CREATE INDEX idx_operating_expenses_property_date ON operating_expenses(master_property_id, expense_date);
-CREATE INDEX idx_operating_expenses_vendor_id ON operating_expenses(vendor_id);
-CREATE INDEX idx_operating_expenses_category ON operating_expenses(category);
+CREATE INDEX IF NOT EXISTS idx_operating_expenses_property_id ON operating_expenses(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_operating_expenses_property_date ON operating_expenses(master_property_id, expense_date);
+CREATE INDEX IF NOT EXISTS idx_operating_expenses_vendor_id ON operating_expenses(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_operating_expenses_category ON operating_expenses(category);
 
 -- CAM Reconciliations
-CREATE INDEX idx_cam_reconciliations_property_id ON cam_reconciliations(master_property_id);
-CREATE INDEX idx_cam_reconciliation_items_reconciliation_id ON cam_reconciliation_items(reconciliation_id);
-CREATE INDEX idx_cam_reconciliation_items_tenant_id ON cam_reconciliation_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_cam_reconciliations_property_id ON cam_reconciliations(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_cam_reconciliation_items_reconciliation_id ON cam_reconciliation_items(reconciliation_id);
+CREATE INDEX IF NOT EXISTS idx_cam_reconciliation_items_tenant_id ON cam_reconciliation_items(tenant_id);
 
 -- Budgets
-CREATE INDEX idx_property_budgets_property_id ON property_budgets(master_property_id);
-CREATE INDEX idx_budget_line_items_budget_id ON budget_line_items(budget_id);
+CREATE INDEX IF NOT EXISTS idx_property_budgets_property_id ON property_budgets(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_budget_line_items_budget_id ON budget_line_items(budget_id);
 
 -- Inspections
-CREATE INDEX idx_inspections_property_id ON inspections(master_property_id);
-CREATE INDEX idx_condition_items_inspection_id ON condition_items(inspection_id);
+CREATE INDEX IF NOT EXISTS idx_inspections_property_id ON inspections(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_condition_items_inspection_id ON condition_items(inspection_id);
 
 -- Work Orders
-CREATE INDEX idx_work_orders_property_id ON work_orders(master_property_id);
-CREATE INDEX idx_work_orders_vendor_id ON work_orders(vendor_id);
-CREATE INDEX idx_work_orders_status ON work_orders(status);
+CREATE INDEX IF NOT EXISTS idx_work_orders_property_id ON work_orders(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_vendor_id ON work_orders(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
 
 -- Capital Projects
-CREATE INDEX idx_capital_projects_property_id ON capital_projects(master_property_id);
-CREATE INDEX idx_capital_projects_vendor_id ON capital_projects(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_capital_projects_property_id ON capital_projects(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_capital_projects_vendor_id ON capital_projects(vendor_id);
 
 -- Compliance Items
-CREATE INDEX idx_compliance_items_property_id ON compliance_items(master_property_id);
-CREATE INDEX idx_compliance_items_due_date ON compliance_items(master_property_id, due_date);
-CREATE INDEX idx_compliance_items_vendor_id ON compliance_items(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_items_property_id ON compliance_items(master_property_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_items_due_date ON compliance_items(master_property_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_compliance_items_vendor_id ON compliance_items(vendor_id);
 
 -- Master Properties managed flag
-CREATE INDEX idx_master_properties_is_managed ON master_properties(is_managed) WHERE is_managed = true;
+CREATE INDEX IF NOT EXISTS idx_master_properties_is_managed ON master_properties(is_managed) WHERE is_managed = true;
 
 -- ============================================================================
 -- STEP 8: Enable RLS on all new tables
@@ -450,18 +460,31 @@ ALTER TABLE compliance_items ENABLE ROW LEVEL SECURITY;
 -- STEP 9: RLS Policies — service_role full access (backend uses supabaseAdmin)
 -- ============================================================================
 
+DROP POLICY IF EXISTS "Service role full access to vendors" ON vendors;
 CREATE POLICY "Service role full access to vendors" ON vendors FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to tenants" ON tenants;
 CREATE POLICY "Service role full access to tenants" ON tenants FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to rent_payments" ON rent_payments;
 CREATE POLICY "Service role full access to rent_payments" ON rent_payments FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to operating_expenses" ON operating_expenses;
 CREATE POLICY "Service role full access to operating_expenses" ON operating_expenses FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to cam_reconciliations" ON cam_reconciliations;
 CREATE POLICY "Service role full access to cam_reconciliations" ON cam_reconciliations FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to cam_reconciliation_items" ON cam_reconciliation_items;
 CREATE POLICY "Service role full access to cam_reconciliation_items" ON cam_reconciliation_items FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to property_budgets" ON property_budgets;
 CREATE POLICY "Service role full access to property_budgets" ON property_budgets FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to budget_line_items" ON budget_line_items;
 CREATE POLICY "Service role full access to budget_line_items" ON budget_line_items FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to inspections" ON inspections;
 CREATE POLICY "Service role full access to inspections" ON inspections FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to condition_items" ON condition_items;
 CREATE POLICY "Service role full access to condition_items" ON condition_items FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to work_orders" ON work_orders;
 CREATE POLICY "Service role full access to work_orders" ON work_orders FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to capital_projects" ON capital_projects;
 CREATE POLICY "Service role full access to capital_projects" ON capital_projects FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service role full access to compliance_items" ON compliance_items;
 CREATE POLICY "Service role full access to compliance_items" ON compliance_items FOR ALL USING (auth.role() = 'service_role');
 
 -- ============================================================================
@@ -476,16 +499,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_vendors_updated_at ON vendors;
 CREATE TRIGGER update_vendors_updated_at BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_tenants_updated_at ON tenants;
 CREATE TRIGGER update_tenants_updated_at BEFORE UPDATE ON tenants FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_rent_payments_updated_at ON rent_payments;
 CREATE TRIGGER update_rent_payments_updated_at BEFORE UPDATE ON rent_payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_operating_expenses_updated_at ON operating_expenses;
 CREATE TRIGGER update_operating_expenses_updated_at BEFORE UPDATE ON operating_expenses FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_cam_reconciliations_updated_at ON cam_reconciliations;
 CREATE TRIGGER update_cam_reconciliations_updated_at BEFORE UPDATE ON cam_reconciliations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_property_budgets_updated_at ON property_budgets;
 CREATE TRIGGER update_property_budgets_updated_at BEFORE UPDATE ON property_budgets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_inspections_updated_at ON inspections;
 CREATE TRIGGER update_inspections_updated_at BEFORE UPDATE ON inspections FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_condition_items_updated_at ON condition_items;
 CREATE TRIGGER update_condition_items_updated_at BEFORE UPDATE ON condition_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_work_orders_updated_at ON work_orders;
 CREATE TRIGGER update_work_orders_updated_at BEFORE UPDATE ON work_orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_capital_projects_updated_at ON capital_projects;
 CREATE TRIGGER update_capital_projects_updated_at BEFORE UPDATE ON capital_projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_compliance_items_updated_at ON compliance_items;
 CREATE TRIGGER update_compliance_items_updated_at BEFORE UPDATE ON compliance_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
