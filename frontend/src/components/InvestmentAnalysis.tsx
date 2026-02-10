@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select } from './ui';
 import type { Property, Comp, DealAnalysis } from '../types';
 import {
@@ -128,9 +128,11 @@ export default function InvestmentAnalysis({
     notes: initialData?.notes ?? '',
   }));
 
-  // Update when initialData changes
+  // Only sync initialData on first load (not after save responses, which would cause a loop)
+  const hasSyncedRef = useRef(false);
   useEffect(() => {
-    if (initialData) {
+    if (initialData && !hasSyncedRef.current) {
+      hasSyncedRef.current = true;
       setData(prev => ({
         ...prev,
         potential_gross_income: initialData.potential_gross_income ?? prev.potential_gross_income,
