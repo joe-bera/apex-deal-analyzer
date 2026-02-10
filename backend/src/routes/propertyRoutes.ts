@@ -57,7 +57,6 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  validate(uuidParamSchema, 'params'),
   getProperty
 );
 
@@ -82,7 +81,6 @@ router.delete(
 router.get(
   '/:id/valuation',
   authenticate,
-  validate(uuidParamSchema, 'params'),
   getPropertyValuation
 );
 

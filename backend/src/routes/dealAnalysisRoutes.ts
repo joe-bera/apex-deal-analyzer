@@ -19,7 +19,6 @@ const router = Router();
 router.get(
   '/properties/:propertyId/analysis',
   authenticate,
-  validate(propertyIdParamSchema, 'params'),
   getDealAnalysis
 );
 

@@ -25,7 +25,6 @@ const router = Router();
 router.get(
   '/properties/:propertyId/comps',
   authenticate,
-  validate(propertyIdParamSchema, 'params'),
   getCompsForProperty
 );
 
