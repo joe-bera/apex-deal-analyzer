@@ -148,13 +148,19 @@ export default function UploadDocument() {
       const documentId = result.document.id;
 
       // Extract data from document
-      await api.extractDocument(documentId);
+      const extractResult: any = await api.extractDocument(documentId);
 
       if (documentType === 'comp' && propertyId) {
         navigate(`/properties/${propertyId}`);
       } else {
-        const propertyResult: any = await api.createPropertyFromDocument(documentId);
-        navigate(`/properties/${propertyResult.property.id}`);
+        // Navigate to the extracted property's page in the data hub
+        // The extraction write-back updates master_properties automatically
+        const addr = extractResult?.extracted_data?.address;
+        if (addr) {
+          navigate('/data-hub');
+        } else {
+          navigate('/data-hub');
+        }
       }
     } catch (err: any) {
       console.error('[Upload] Error:', err);
