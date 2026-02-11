@@ -61,7 +61,7 @@ export default function ManagedPropertyDetailPage() {
     if (!id) return;
     (async () => {
       try {
-        const res = await api.getProperty(id) as any;
+        const res = await api.getMasterProperty(id) as any;
         setProperty(res.property || res);
       } catch (err) {
         console.error('Failed to load property:', err);

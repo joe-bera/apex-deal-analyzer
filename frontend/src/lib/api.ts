@@ -968,6 +968,9 @@ export const api = {
   listManagedProperties: () =>
     request<any>('/master-properties/managed'),
 
+  getMasterProperty: (id: string) =>
+    request<any>(`/master-properties/${id}`),
+
   updatePropertyManagement: (id: string, data: Record<string, any>) =>
     request<any>(`/master-properties/${id}/management`, { method: 'PATCH', body: JSON.stringify(data) }),
 
