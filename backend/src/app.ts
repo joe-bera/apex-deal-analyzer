@@ -27,6 +27,7 @@ import playbooksRoutes, { dealTasksRouter } from './routes/playbooksRoutes';
 import syndicationRoutes from './routes/syndicationRoutes';
 import vendorRoutes from './routes/vendorRoutes';
 import tenantRoutes from './routes/tenantRoutes';
+import leaseTermsRoutes from './routes/leaseTermsRoutes';
 import rentPaymentRoutes from './routes/rentPaymentRoutes';
 import expenseRoutes from './routes/expenseRoutes';
 import camReconciliationRoutes from './routes/camReconciliationRoutes';
@@ -134,6 +135,7 @@ export const createApp = (): Application => {
   app.use('/api/syndication', syndicationRoutes);
   app.use('/api/vendors', vendorRoutes);
   app.use('/api/tenants', tenantRoutes);
+  app.use('/api/tenants', leaseTermsRoutes);
   app.use('/api/rent-payments', rentPaymentRoutes);
   app.use('/api/expenses', expenseRoutes);
   app.use('/api/cam-reconciliations', camReconciliationRoutes);

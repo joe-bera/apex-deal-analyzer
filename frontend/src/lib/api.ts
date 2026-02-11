@@ -1053,6 +1053,24 @@ export const api = {
   finalizeCamReconciliation: (id: string) =>
     request<any>(`/cam-reconciliations/${id}/finalize`, { method: 'POST' }),
 
+  getCamExpenseBreakdown: (id: string) =>
+    request<any>(`/cam-reconciliations/${id}/expense-breakdown`),
+
+  extractLeaseTerms: (data: { tenant_id: string; document_text: string }) =>
+    request<any>('/cam-reconciliations/extract-lease-terms', { method: 'POST', body: JSON.stringify(data) }),
+
+  getCamReport: (id: string) =>
+    request<any>(`/cam-reconciliations/${id}/report`),
+
+  getLeaseTerms: (tenantId: string) =>
+    request<any>(`/tenants/${tenantId}/lease-terms`),
+
+  upsertLeaseTerms: (tenantId: string, data: Record<string, any>) =>
+    request<any>(`/tenants/${tenantId}/lease-terms`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteLeaseTerms: (tenantId: string) =>
+    request<any>(`/tenants/${tenantId}/lease-terms`, { method: 'DELETE' }),
+
   // =========================================================================
   // Asset Services: Financial Reports (Phase 11D)
   // =========================================================================

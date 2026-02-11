@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import RentRollTable from '../components/RentRollTable';
 import OccupancyGauge from '../components/OccupancyGauge';
+import CamReconciliationTab from '../components/CamReconciliationTab';
 import { api } from '../lib/api';
 import type {
   MasterProperty, ManagementTier, Tenant, LeaseType,
@@ -11,12 +12,13 @@ import type {
   ComplianceItem, ComplianceItemType,
 } from '../types';
 
-type Tab = 'overview' | 'tenants' | 'expenses' | 'financials' | 'inspections' | 'work-orders' | 'compliance' | 'documents';
+type Tab = 'overview' | 'tenants' | 'expenses' | 'cam' | 'financials' | 'inspections' | 'work-orders' | 'compliance' | 'documents';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'tenants', label: 'Tenants' },
   { key: 'expenses', label: 'Expenses' },
+  { key: 'cam', label: 'CAM Reconciliation' },
   { key: 'financials', label: 'Financials' },
   { key: 'inspections', label: 'Inspections' },
   { key: 'work-orders', label: 'Work Orders' },
@@ -132,6 +134,7 @@ export default function ManagedPropertyDetailPage() {
         {activeTab === 'overview' && <OverviewTab property={property} />}
         {activeTab === 'tenants' && id && <TenantsTab propertyId={id} buildingSize={property.building_size} />}
         {activeTab === 'expenses' && id && <ExpensesTab propertyId={id} />}
+        {activeTab === 'cam' && id && <CamReconciliationTab propertyId={id} buildingSize={property.building_size} />}
         {activeTab === 'financials' && id && <FinancialsTab propertyId={id} />}
         {activeTab === 'inspections' && id && <InspectionsTab propertyId={id} />}
         {activeTab === 'work-orders' && id && <WorkOrdersTab propertyId={id} />}

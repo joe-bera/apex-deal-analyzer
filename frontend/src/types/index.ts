@@ -1627,6 +1627,8 @@ export interface OperatingExpense {
   vendor?: Vendor;
 }
 
+export type CamCapType = 'none' | 'cumulative' | 'compounded';
+
 export interface CamReconciliation {
   id: string;
   master_property_id: string;
@@ -1639,10 +1641,14 @@ export interface CamReconciliation {
   allocation_method: CamAllocationMethod;
   is_finalized: boolean;
   notes?: string;
+  total_gross_up?: number;
+  grossed_up_total?: number;
+  building_total_sf?: number;
   created_by?: string;
   created_at: string;
   updated_at: string;
   items?: CamReconciliationItem[];
+  cam_reconciliation_items?: CamReconciliationItem[];
 }
 
 export interface CamReconciliationItem {
@@ -1653,8 +1659,39 @@ export interface CamReconciliationItem {
   allocated_amount?: number;
   amount_paid?: number;
   balance_due?: number;
+  pre_cap_amount?: number;
+  cam_cap_applied?: number;
+  base_year_credit?: number;
+  expense_stop_credit?: number;
+  gross_up_amount?: number;
+  admin_fee?: number;
+  proration_factor?: number;
+  excluded_amount?: number;
   notes?: string;
   tenant?: Tenant;
+  tenants?: { tenant_name: string; unit_number?: string; leased_sf?: number };
+}
+
+export interface TenantLeaseTerms {
+  id?: string;
+  tenant_id: string;
+  cam_cap_type: CamCapType;
+  cam_cap_percent?: number;
+  cam_cap_base_amount?: number;
+  base_year?: number;
+  base_year_amount?: number;
+  expense_stop_amount?: number;
+  expense_stop_per_sf: boolean;
+  has_gross_up: boolean;
+  gross_up_occupancy_threshold?: number;
+  admin_fee_percent?: number;
+  excluded_categories: string[];
+  proration_start?: string;
+  proration_end?: string;
+  notes?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PropertyBudget {
