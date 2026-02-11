@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import type {
   CamReconciliation, CamReconciliationItem, CamAllocationMethod,
-  ReconciliationPeriod, TenantLeaseTerms, CamCapType, Tenant,
+  ReconciliationPeriod, TenantLeaseTerms, CamCapType,
 } from '../types';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -29,7 +29,7 @@ interface Props {
   buildingSize?: number;
 }
 
-export default function CamReconciliationTab({ propertyId, buildingSize }: Props) {
+export default function CamReconciliationTab({ propertyId }: Props) {
   const [reconciliations, setReconciliations] = useState<CamReconciliation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<CamReconciliation | null>(null);
