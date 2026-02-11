@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import Layout from '../components/Layout';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { api } from '../lib/api';
-import type { OwnerResearch, OwnerEntityType, ResearchSource } from '../types';
+import type { OwnerResearch, OwnerEntityType, ResearchSource, ManagementTier } from '../types';
 
 interface PropertyData {
   id: string;
@@ -545,6 +545,14 @@ export default function MasterPropertyDetail() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showMgmtModal, setShowMgmtModal] = useState(false);
+  const [mgmtSaving, setMgmtSaving] = useState(false);
+  const [mgmtForm, setMgmtForm] = useState({
+    management_tier: 'asset_management' as ManagementTier,
+    management_fee_percent: '',
+    management_start_date: new Date().toISOString().split('T')[0],
+    management_notes: '',
+  });
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -644,11 +652,34 @@ export default function MasterPropertyDetail() {
                 {property.property_type && (
                   <Badge variant="info" className="capitalize">{property.property_type}</Badge>
                 )}
+                {(property as any).is_managed && (
+                  <Badge variant="success">Managed</Badge>
+                )}
               </div>
               <p className="text-gray-500">
                 {[property.city, property.state, property.zip].filter(Boolean).join(', ')}
                 {property.county ? ` | ${property.county} County` : ''}
               </p>
+            </div>
+            <div className="flex gap-2">
+              {(property as any).is_managed ? (
+                <>
+                  <Link to={`/asset-services/${id}`}>
+                    <Button variant="outline">View in Asset Services</Button>
+                  </Link>
+                  <Button variant="outline" onClick={async () => {
+                    if (!confirm('Disable management for this property?')) return;
+                    try {
+                      await api.updatePropertyManagement(id!, { is_managed: false, management_tier: null });
+                      setProperty(prev => prev ? { ...prev, is_managed: false, management_tier: null } as any : null);
+                    } catch (err) { console.error(err); }
+                  }}>
+                    Disable Management
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => setShowMgmtModal(true)}>Enable Management</Button>
+              )}
             </div>
           </div>
         </div>
@@ -983,6 +1014,58 @@ export default function MasterPropertyDetail() {
           {property.source ? ` | Source: ${property.source}` : ''}
         </div>
       </div>
+
+      {/* Enable Management Modal */}
+      {showMgmtModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowMgmtModal(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Enable Asset Management</h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setMgmtSaving(true);
+              try {
+                const res = await api.updatePropertyManagement(id!, {
+                  is_managed: true,
+                  management_tier: mgmtForm.management_tier,
+                  management_fee_percent: mgmtForm.management_fee_percent ? Number(mgmtForm.management_fee_percent) : null,
+                  management_start_date: mgmtForm.management_start_date || null,
+                  management_notes: mgmtForm.management_notes || null,
+                });
+                setProperty(prev => prev ? { ...prev, ...res.property } : null);
+                setShowMgmtModal(false);
+              } catch (err) { console.error(err); } finally { setMgmtSaving(false); }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Management Tier *</label>
+                <select value={mgmtForm.management_tier} onChange={e => setMgmtForm(f => ({ ...f, management_tier: e.target.value as ManagementTier }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="asset_management">Asset Management (Full Service)</option>
+                  <option value="asset_oversight">Asset Oversight</option>
+                  <option value="asset_monitoring">Asset Monitoring</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Management Fee %</label>
+                  <input type="number" step="0.01" placeholder="e.g. 5.00" value={mgmtForm.management_fee_percent} onChange={e => setMgmtForm(f => ({ ...f, management_fee_percent: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <input type="date" value={mgmtForm.management_start_date} onChange={e => setMgmtForm(f => ({ ...f, management_start_date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea rows={2} value={mgmtForm.management_notes} onChange={e => setMgmtForm(f => ({ ...f, management_notes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes about the management agreement" />
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button type="button" onClick={() => setShowMgmtModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={mgmtSaving} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">{mgmtSaving ? 'Enabling...' : 'Enable Management'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
