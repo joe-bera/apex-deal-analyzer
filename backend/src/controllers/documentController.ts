@@ -6,6 +6,31 @@ import { parsePDF, parsePDFFromURL, cleanPDFText } from '../services/pdfService'
 import { extractPropertyData, DocumentType, HistoricalTransaction } from '../services/extractionService';
 
 /**
+ * Verify a property_id exists in either the old properties table or master_properties.
+ * Returns true if found in either.
+ */
+const verifyPropertyExists = async (propertyId: string): Promise<boolean> => {
+  // Check old properties table first
+  const { data: oldProp } = await supabaseAdmin
+    .from('properties')
+    .select('id')
+    .eq('id', propertyId)
+    .maybeSingle();
+
+  if (oldProp) return true;
+
+  // Fall back to master_properties
+  const { data: masterProp } = await supabaseAdmin
+    .from('master_properties')
+    .select('id')
+    .eq('id', propertyId)
+    .eq('is_deleted', false)
+    .maybeSingle();
+
+  return !!masterProp;
+};
+
+/**
  * Store extracted historical transactions in the transactions table
  * Links to master_properties table for property history tracking
  */
@@ -27,23 +52,19 @@ const storeTransactionHistory = async (
   // First, try to find or create a master_property for this address
   let masterPropertyId: string | null = null;
 
-  // Normalize address for matching
-  const normalizeAddr = (addr: string) =>
-    addr.toLowerCase()
-      .replace(/\s+/g, ' ')
-      .replace(/\./g, '')
-      .replace(/ street| st| avenue| ave| boulevard| blvd| drive| dr| road| rd| lane| ln| court| ct| place| pl| way/gi, '')
-      .replace(/ north| south| east| west| n| s| e| w/gi, '')
-      .replace(/[^a-z0-9]/g, '');
-
   try {
-    // Check if property exists in master_properties
-    const { data: existingProperty } = await supabaseAdmin
+    // Check if property exists in master_properties using ilike on raw address
+    let lookupQuery = supabaseAdmin
       .from('master_properties')
       .select('id')
-      .eq('address_normalized', normalizeAddr(propertyAddress))
-      .eq('city', propertyCity?.toLowerCase() || '')
-      .maybeSingle();
+      .ilike('address', propertyAddress.trim())
+      .eq('is_deleted', false);
+
+    if (propertyCity) {
+      lookupQuery = lookupQuery.ilike('city', propertyCity.trim());
+    }
+
+    const { data: existingProperty } = await lookupQuery.limit(1).maybeSingle();
 
     if (existingProperty) {
       masterPropertyId = existingProperty.id;
@@ -168,18 +189,12 @@ export const uploadDocument = async (req: Request, res: Response): Promise<void>
       throw new AppError(400, 'File upload failed - no file data received');
     }
 
-    // If property_id provided, verify it exists and user has access
+    // If property_id provided, verify it exists in either table
     if (property_id) {
-      const { data: property, error } = await supabaseAdmin
-        .from('properties')
-        .select('id, created_by')
-        .eq('id', property_id)
-        .single();
-
-      if (error || !property) {
+      const exists = await verifyPropertyExists(property_id);
+      if (!exists) {
         throw new AppError(404, 'Property not found');
       }
-
     }
 
     // Extract text from PDF before uploading
@@ -729,15 +744,10 @@ export const uploadFromUrl = async (req: Request, res: Response): Promise<void> 
     const resolvedName = file_name ||
       decodeURIComponent(downloadUrl.split('/').pop()?.split('?')[0] || 'document.pdf');
 
-    // If property_id provided, verify access
+    // If property_id provided, verify it exists in either table
     if (property_id) {
-      const { data: property, error } = await supabaseAdmin
-        .from('properties')
-        .select('id, created_by')
-        .eq('id', property_id)
-        .single();
-
-      if (error || !property) {
+      const exists = await verifyPropertyExists(property_id);
+      if (!exists) {
         throw new AppError(404, 'Property not found');
       }
     }
@@ -892,18 +902,12 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
       throw new AppError(400, `Invalid document_type. Must be one of: ${validTypes.join(', ')}`);
     }
 
-    // If property_id provided, verify it exists and user has access
+    // If property_id provided, verify it exists in either table
     if (property_id) {
-      const { data: property, error } = await supabaseAdmin
-        .from('properties')
-        .select('id, created_by')
-        .eq('id', property_id)
-        .single();
-
-      if (error || !property) {
+      const exists = await verifyPropertyExists(property_id);
+      if (!exists) {
         throw new AppError(404, 'Property not found');
       }
-
     }
 
     // Get URLs for the uploaded file

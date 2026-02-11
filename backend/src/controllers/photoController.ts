@@ -8,6 +8,26 @@ const PHOTO_BUCKET = 'property-photos';
 const VALID_PHOTO_TYPES = ['exterior', 'interior', 'aerial', 'loading_dock', 'parking', 'other'];
 
 /**
+ * Verify a property exists in either the old properties table or master_properties.
+ */
+const verifyPropertyExists = async (propertyId: string): Promise<boolean> => {
+  const { data: oldProp } = await supabaseAdmin
+    .from('properties')
+    .select('id')
+    .eq('id', propertyId)
+    .maybeSingle();
+  if (oldProp) return true;
+
+  const { data: masterProp } = await supabaseAdmin
+    .from('master_properties')
+    .select('id')
+    .eq('id', propertyId)
+    .eq('is_deleted', false)
+    .maybeSingle();
+  return !!masterProp;
+};
+
+/**
  * Get signed URL for direct photo upload
  * POST /api/properties/:propertyId/photos/upload-url
  */
@@ -30,14 +50,9 @@ export const getPhotoUploadUrl = async (req: Request, res: Response): Promise<vo
       throw new AppError(400, 'Photo too large. Maximum size is 10MB.');
     }
 
-    // Verify property exists and user has access
-    const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
-      .select('id, created_by')
-      .eq('id', propertyId)
-      .single();
-
-    if (propError || !property) {
+    // Verify property exists in either table
+    const propExists = await verifyPropertyExists(propertyId);
+    if (!propExists) {
       throw new AppError(404, 'Property not found');
     }
 
@@ -93,14 +108,9 @@ export const createPhoto = async (req: Request, res: Response): Promise<void> =>
       throw new AppError(400, `Invalid photo_type. Must be one of: ${VALID_PHOTO_TYPES.join(', ')}`);
     }
 
-    // Verify property exists and user has access
-    const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
-      .select('id, created_by')
-      .eq('id', propertyId)
-      .single();
-
-    if (propError || !property) {
+    // Verify property exists in either table
+    const propExists = await verifyPropertyExists(propertyId);
+    if (!propExists) {
       throw new AppError(404, 'Property not found');
     }
 
@@ -181,14 +191,9 @@ export const listPhotos = async (req: Request, res: Response): Promise<void> => 
 
     const { propertyId } = req.params;
 
-    // Verify property exists and user has access
-    const { data: property, error: propError } = await supabaseAdmin
-      .from('properties')
-      .select('id, created_by')
-      .eq('id', propertyId)
-      .single();
-
-    if (propError || !property) {
+    // Verify property exists in either table
+    const propExists = await verifyPropertyExists(propertyId);
+    if (!propExists) {
       throw new AppError(404, 'Property not found');
     }
 
@@ -238,20 +243,15 @@ export const updatePhoto = async (req: Request, res: Response): Promise<void> =>
     const { id } = req.params;
     const { photo_type, caption, sort_order, is_primary } = req.body;
 
-    // Get the photo to verify ownership
+    // Get the photo
     const { data: photo, error: fetchError } = await supabaseAdmin
       .from('property_photos')
-      .select('*, properties!inner(created_by)')
+      .select('*')
       .eq('id', id)
       .single();
 
     if (fetchError || !photo) {
       throw new AppError(404, 'Photo not found');
-    }
-
-    // Check if user owns the property
-    if (false && (photo as any).properties.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to update this photo');
     }
 
     // If setting as primary, unset other primary photos
@@ -377,20 +377,15 @@ export const setPrimaryPhoto = async (req: Request, res: Response): Promise<void
 
     const { id } = req.params;
 
-    // Get the photo to verify ownership
+    // Get the photo
     const { data: photo, error: fetchError } = await supabaseAdmin
       .from('property_photos')
-      .select('*, properties!inner(created_by)')
+      .select('*')
       .eq('id', id)
       .single();
 
     if (fetchError || !photo) {
       throw new AppError(404, 'Photo not found');
-    }
-
-    // Check if user owns the property
-    if (false && (photo as any).properties.created_by !== req.user.id) {
-      throw new AppError(403, 'You do not have permission to update this photo');
     }
 
     // Unset other primary photos for this property

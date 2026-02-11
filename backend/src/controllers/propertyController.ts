@@ -108,6 +108,46 @@ export const createProperty = async (req: Request, res: Response): Promise<void>
       throw new AppError(500, 'Failed to create property');
     }
 
+    // Also create in master_properties so property appears in Property Database
+    const masterPropertyType = (() => {
+      const t = (data.property_type || '').toLowerCase();
+      if (['warehouse', 'distribution_center', 'manufacturing', 'flex_space', 'cold_storage'].includes(t)) return 'industrial';
+      if (t === 'office') return 'office';
+      if (t === 'retail') return 'retail';
+      if (t === 'multifamily') return 'multifamily';
+      if (t === 'land') return 'land';
+      if (t === 'residential') return 'residential';
+      return 'industrial'; // default for CRE brokerage
+    })();
+
+    try {
+      await supabaseAdmin
+        .from('master_properties')
+        .insert({
+          address: data.address,
+          city: data.city,
+          state: data.state || 'CA',
+          zip: data.zip_code,
+          property_type: masterPropertyType,
+          building_size: data.building_size ? Number(data.building_size) : null,
+          lot_size_acres: data.lot_size ? Number(data.lot_size) : null,
+          year_built: data.year_built ? Number(data.year_built) : null,
+          number_of_floors: data.stories ? Number(data.stories) : null,
+          number_of_units: data.units ? Number(data.units) : null,
+          percent_leased: data.occupancy_rate ? Number(data.occupancy_rate) : null,
+          parking_spaces: data.parking_spaces ? Number(data.parking_spaces) : null,
+          zoning: data.zoning,
+          market: data.market,
+          submarket: data.submarket,
+          apn: data.apn,
+          source: 'manual',
+          created_by: req.user!.id,
+        });
+    } catch (mpErr) {
+      // Don't fail the response if master_properties insert fails (e.g., duplicate)
+      console.error('master_properties mirror insert failed (non-fatal):', mpErr);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Property created successfully',
