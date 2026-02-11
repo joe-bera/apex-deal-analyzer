@@ -397,6 +397,10 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
   const [expenses, setExpenses] = useState<OperatingExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [csvRows, setCsvRows] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<string | null>(null);
   const [form, setForm] = useState({ category: '', description: '', amount: '', expense_date: '', is_cam_recoverable: false, notes: '' });
   const [saving, setSaving] = useState(false);
 
@@ -413,6 +417,8 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
     { value: 'parking_lot', label: 'Parking Lot' }, { value: 'signage', label: 'Signage' },
     { value: 'other', label: 'Other' },
   ];
+
+  const CATEGORY_VALUES = CATEGORIES.map(c => c.value);
 
   const fetchExpenses = useCallback(async () => {
     try {
@@ -443,6 +449,68 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
+  // Parse CSV file into rows for preview
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) { setUploadResult('CSV must have a header row and at least one data row.'); return; }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+      const rows = lines.slice(1).map(line => {
+        // Handle quoted CSV fields
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (const ch of line) {
+          if (ch === '"') { inQuotes = !inQuotes; continue; }
+          if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; continue; }
+          current += ch;
+        }
+        values.push(current.trim());
+
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => { row[h] = values[i] || ''; });
+        return row;
+      });
+
+      // Map CSV columns to expense fields
+      const mapped = rows.map(row => {
+        const rawCat = (row.category || row.type || row.expense_category || '').toLowerCase().replace(/[\s&]+/g, '_').replace(/[^a-z_]/g, '');
+        const category = CATEGORY_VALUES.includes(rawCat as ExpenseCategory) ? rawCat : 'other';
+        const amount = parseFloat(row.amount || row.total || row.cost || '0') || 0;
+        const dateVal = row.date || row.expense_date || row.payment_date || '';
+        const desc = row.description || row.desc || row.memo || row.vendor || '';
+        const cam = (row.cam || row.cam_recoverable || row.is_cam_recoverable || '').toLowerCase();
+        const isCam = ['true', 'yes', '1', 'y', 'cam'].includes(cam);
+        return { category, description: desc, amount, expense_date: dateVal || null, is_cam_recoverable: isCam, notes: row.notes || null };
+      }).filter(r => r.amount > 0);
+
+      setCsvRows(mapped);
+      setUploadResult(null);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleBulkUpload = async () => {
+    if (csvRows.length === 0) return;
+    setUploading(true);
+    try {
+      const res = await api.bulkCreateExpenses({ property_id: propertyId, expenses: csvRows });
+      setUploadResult(`Uploaded ${res.count} expenses.`);
+      setCsvRows([]);
+      setShowUpload(false);
+      fetchExpenses();
+    } catch (err) {
+      console.error(err);
+      setUploadResult('Upload failed. Check the CSV format and try again.');
+    } finally { setUploading(false); }
+  };
+
   const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const camRecoverable = expenses.filter(e => e.is_cam_recoverable).reduce((s, e) => s + (e.amount || 0), 0);
 
@@ -461,10 +529,16 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
             <p className="text-lg font-bold text-green-600">{fmt(camRecoverable)}</p>
           </div>
         </div>
-        <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Add Expense
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowUpload(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            Upload CSV
+          </button>
+          <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-[#B21F24] text-white rounded-lg hover:bg-[#991b1f] text-sm font-medium">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -500,6 +574,7 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
         )}
       </div>
 
+      {/* Add Expense Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowModal(false)} />
@@ -528,10 +603,69 @@ function ExpensesTab({ propertyId }: { propertyId: string }) {
                 CAM Recoverable
               </label>
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">{saving ? 'Saving...' : 'Add'}</button>
+                <button type="button" onClick={() => setShowModal(false)} className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={saving} className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm bg-[#B21F24] text-white hover:bg-[#991b1f] disabled:opacity-50">{saving ? 'Saving...' : 'Add Expense'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Upload Modal */}
+      {showUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => { setShowUpload(false); setCsvRows([]); setUploadResult(null); }} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Upload Expenses from CSV</h2>
+            <p className="text-sm text-gray-500 mb-4">CSV should have columns: <span className="font-mono text-xs">date, category, description, amount, cam_recoverable</span></p>
+
+            {csvRows.length === 0 ? (
+              <div className="space-y-4">
+                <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                  <svg className="w-10 h-10 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  <span className="text-sm text-gray-600">Click to select CSV file</span>
+                  <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
+                </label>
+                {uploadResult && <p className="text-sm text-red-600">{uploadResult}</p>}
+                <div className="flex justify-end">
+                  <button onClick={() => { setShowUpload(false); setUploadResult(null); }} className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700 font-medium">{csvRows.length} expense{csvRows.length !== 1 ? 's' : ''} parsed — {fmt(csvRows.reduce((s: number, r: any) => s + r.amount, 0))} total</p>
+                <div className="overflow-x-auto max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Date</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Category</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Description</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500">Amount</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500">CAM</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {csvRows.slice(0, 50).map((row: any, i: number) => (
+                        <tr key={i}>
+                          <td className="px-3 py-1.5 text-gray-600">{row.expense_date || '-'}</td>
+                          <td className="px-3 py-1.5 text-gray-600">{CATEGORIES.find(c => c.value === row.category)?.label || row.category}</td>
+                          <td className="px-3 py-1.5 text-gray-900">{row.description || '-'}</td>
+                          <td className="px-3 py-1.5 text-right font-medium">{fmt(row.amount)}</td>
+                          <td className="px-3 py-1.5 text-center">{row.is_cam_recoverable ? <span className="text-green-600 text-xs font-medium">Yes</span> : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {csvRows.length > 50 && <p className="text-xs text-gray-500 text-center py-2">Showing first 50 of {csvRows.length} rows</p>}
+                </div>
+                {uploadResult && <p className="text-sm text-green-600">{uploadResult}</p>}
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => { setCsvRows([]); setUploadResult(null); }} className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50">Clear</button>
+                  <button onClick={handleBulkUpload} disabled={uploading} className="inline-flex items-center justify-center font-medium rounded-lg px-4 py-2 text-sm bg-[#B21F24] text-white hover:bg-[#991b1f] disabled:opacity-50">{uploading ? 'Uploading...' : `Upload ${csvRows.length} Expenses`}</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
