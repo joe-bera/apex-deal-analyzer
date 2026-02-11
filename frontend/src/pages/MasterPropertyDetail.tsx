@@ -1019,7 +1019,7 @@ export default function MasterPropertyDetail() {
       {showMgmtModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowMgmtModal(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Enable Asset Management</h2>
             <form onSubmit={async (e) => {
               e.preventDefault();
