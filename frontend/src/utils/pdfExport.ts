@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable, { FontStyle } from 'jspdf-autotable';
-import type { Property, Comp, ValuationResult, LOI } from '../types';
+import type { Property, Comp, ValuationResult, LOI, DealAnalysis } from '../types';
 import type { DealAnalysisData } from '../components/DealAnalysisWorksheet';
 import {
   calculateVacancyAmount,
@@ -9,6 +9,7 @@ import {
   calculateTotalExpenses,
   calculateNOI,
   calculateCapRate,
+  calculatePricePerSqft,
   calculateLoanAmount,
   calculateDownPayment,
   calculateMonthlyPayment,
@@ -18,7 +19,20 @@ import {
   calculateTotalCashRequired,
   calculateBeforeTaxCashFlow,
   calculateCashOnCash,
+  calculateSaleProceeds,
+  calculateIRR,
+  calculateEquityMultiple,
+  calculateAvgCashOnCash,
+  buildIRRCashFlows,
+  generateProjections,
+  STRATEGY_THRESHOLDS,
+  solveMaxPurchasePrice,
+  solveRequiredNOILift,
+  solveRequiredRentPSF,
+  solveCapexCeiling,
+  solveTargetExitCap,
 } from './financialCalculations';
+import type { InvestmentStrategy } from './financialCalculations';
 import {
   CompanyBranding,
   renderBrandedHeader,
@@ -553,5 +567,545 @@ export function generateLOIPDF(options: LOIPDFOptions): void {
   renderBrandedFooter(doc, branding);
 
   const fileName = `LOI_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(fileName);
+}
+
+// ============================================================================
+// Investment Analysis PDF
+// ============================================================================
+
+interface InvestmentAnalysisPDFOptions {
+  property: Property;
+  data: Partial<DealAnalysis>;
+  comps?: Comp[];
+  branding?: CompanyBranding;
+  logoBase64?: string | null;
+}
+
+export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOptions): void {
+  const { property, data, comps = [], branding, logoBase64 } = options;
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const contentWidth = pageWidth - (margin * 2);
+  const boldStyle: FontStyle = 'bold';
+
+  const n = (v: number | null | undefined) => v ?? 0;
+
+  // ── Derived calculations (mirrors InvestmentAnalysis.tsx) ──
+  const strategy = (data.investment_strategy ?? 'value_add') as InvestmentStrategy;
+  const thresholds = STRATEGY_THRESHOLDS[strategy];
+
+  const pgi = n(data.potential_gross_income);
+  const vacancyAmount = calculateVacancyAmount(pgi, n(data.vacancy_rate));
+  const egi = calculateEffectiveGrossIncome(pgi, vacancyAmount, n(data.other_income));
+  const managementFee = calculateManagementFee(egi, n(data.management_fee_percent));
+  const totalExpenses = calculateTotalExpenses({
+    propertyTaxes: n(data.property_taxes),
+    insurance: n(data.insurance),
+    utilities: n(data.utilities),
+    managementFee,
+    repairsMaintenance: n(data.repairs_maintenance),
+    reservesCapex: n(data.reserves_capex),
+    otherExpenses: n(data.other_expenses),
+  });
+  const noi = calculateNOI(egi, totalExpenses);
+
+  const purchasePrice = n(data.purchase_price);
+  const loanAmount = calculateLoanAmount(purchasePrice, n(data.ltv_percent));
+  const downPayment = calculateDownPayment(purchasePrice, loanAmount);
+  const monthlyPmt = calculateMonthlyPayment(loanAmount, n(data.interest_rate), n(data.amortization_years));
+  const annualDS = calculateAnnualDebtService(monthlyPmt);
+  const closingCosts = calculateClosingCosts(purchasePrice, n(data.closing_costs_percent));
+  const totalCashRequired = calculateTotalCashRequired(downPayment, closingCosts);
+  const beforeTaxCF = calculateBeforeTaxCashFlow(noi, annualDS);
+  const capRate = calculateCapRate(noi, purchasePrice);
+  const pricePerSqft = calculatePricePerSqft(purchasePrice, property.building_size || 0);
+  const dscr = calculateDSCR(noi, annualDS);
+
+  const vaTotalCost = n(data.va_capex) + n(data.va_ti_leasing) + n(data.va_carry_costs) + n(data.va_contingency);
+  const totalProjectCost = purchasePrice + closingCosts + vaTotalCost;
+  const holdingPeriod = n(data.holding_period) || 5;
+  const exitCapRate = n(data.exit_cap_rate) || 6;
+  const sellingCostsPercent = n(data.selling_costs_percent) || 2;
+
+  const projections = generateProjections({
+    initialIncome: egi,
+    initialExpenses: totalExpenses,
+    incomeGrowthRate: n(data.income_growth_rate),
+    expenseGrowthRate: n(data.expense_growth_rate),
+    purchasePrice,
+    loanAmount,
+    interestRate: n(data.interest_rate),
+    amortizationYears: n(data.amortization_years),
+    holdingPeriod,
+    exitCapRate,
+    sellingCosts: sellingCostsPercent,
+  });
+
+  const lastYear = projections.length > 0 ? projections[projections.length - 1] : null;
+  const exitNOI = lastYear?.noi ?? noi;
+  const saleProceeds = calculateSaleProceeds(exitNOI, exitCapRate, lastYear?.loanBalance ?? loanAmount, sellingCostsPercent);
+  const totalCashInvested = totalCashRequired + vaTotalCost;
+  const irrCashFlows = buildIRRCashFlows(totalCashInvested, projections, saleProceeds.netToSeller);
+  const irrValue = calculateIRR(irrCashFlows);
+  const totalCashFlowsSum = projections.reduce((s, p) => s + p.cashFlow, 0);
+  const equityMultiple = calculateEquityMultiple(totalCashInvested, totalCashFlowsSum, saleProceeds.netToSeller);
+  const avgCashOnCash = calculateAvgCashOnCash(projections, totalCashInvested);
+
+  // Value-Add
+  const sqft = property.building_size || 0;
+  const stabilizedIncome = sqft * n(data.stabilized_rent_psf) * (n(data.stabilized_occupancy) / 100) + n(data.stabilized_other_income);
+  const asIsIncome = sqft * n(data.as_is_rent_psf) * (n(data.as_is_occupancy) / 100) + n(data.as_is_other_income);
+  const stabilizedExpenses = stabilizedIncome * (n(data.stabilized_expense_ratio) / 100);
+  const asIsExpenses = asIsIncome * (n(data.as_is_expense_ratio) / 100);
+  const stabilizedNOI = stabilizedIncome - stabilizedExpenses;
+  const asIsNOI = asIsIncome - asIsExpenses;
+  const noiLift = stabilizedNOI - asIsNOI;
+
+  // Decision
+  const decisionMetrics = [
+    { label: 'Going-In Cap Rate', actual: capRate, required: thresholds.cap_rate, format: 'percent' as const, pass: thresholds.cap_rate === null || capRate >= (thresholds.cap_rate ?? 0) },
+    { label: 'Avg Cash-on-Cash', actual: avgCashOnCash, required: thresholds.cash_on_cash, format: 'percent' as const, pass: avgCashOnCash >= thresholds.cash_on_cash },
+    { label: 'IRR', actual: irrValue, required: thresholds.irr, format: 'percent' as const, pass: irrValue >= thresholds.irr },
+    { label: 'Equity Multiple', actual: equityMultiple, required: thresholds.equity_multiple, format: 'ratio' as const, pass: equityMultiple >= thresholds.equity_multiple },
+    { label: 'DSCR', actual: dscr, required: thresholds.dscr, format: 'ratio' as const, pass: dscr >= thresholds.dscr },
+  ];
+  const passCount = decisionMetrics.filter(m => m.pass).length;
+  const verdict: 'GO' | 'NO-GO' | 'REVIEW' = passCount === decisionMetrics.length ? 'GO' : passCount >= 3 ? 'REVIEW' : 'NO-GO';
+
+  // Helper to add section headers
+  const sectionHeader = (title: string, yPos: number): number => {
+    if (yPos > 250) { doc.addPage(); yPos = 20; }
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, margin, yPos);
+    yPos += 3;
+    doc.setDrawColor(...COLORS.primary);
+    doc.setLineWidth(0.8);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    return yPos + 5;
+  };
+
+  const fmtMetric = (val: number, format: 'percent' | 'ratio' | 'currency') => {
+    if (format === 'percent') return formatPercent(val);
+    if (format === 'ratio') return `${val.toFixed(2)}x`;
+    return formatCurrency(val);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 1: Cover + Deal Summary + Verdict
+  // ══════════════════════════════════════════════════════════════
+
+  let yPos = renderBrandedHeader(doc, branding, logoBase64);
+
+  // Title
+  doc.setTextColor(...COLORS.dark);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INVESTMENT ANALYSIS', margin, yPos);
+  yPos += 3;
+  doc.setDrawColor(...COLORS.primary);
+  doc.setLineWidth(1);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 10;
+
+  // Property info
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...COLORS.dark);
+  doc.text(property.address || 'Address Not Available', margin, yPos);
+  yPos += 5;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...COLORS.gray);
+  const locationLine = [property.city, property.state, property.zip_code].filter(Boolean).join(', ');
+  const typeLine = [property.property_type?.replace(/_/g, ' ').toUpperCase(), sqft ? `${formatNumber(sqft)} SF` : null].filter(Boolean).join(' | ');
+  doc.text(locationLine, margin, yPos);
+  yPos += 4;
+  doc.text(typeLine, margin, yPos);
+  yPos += 8;
+
+  // Verdict badge row
+  const verdictColor = verdict === 'GO' ? COLORS.success : verdict === 'REVIEW' ? COLORS.warning : COLORS.danger;
+  doc.setFillColor(...verdictColor);
+  doc.roundedRect(margin, yPos - 4, 50, 14, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(verdict, margin + 25, yPos + 5, { align: 'center' });
+
+  doc.setTextColor(...COLORS.gray);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const strategyLabel = strategy === 'core' ? 'Core' : strategy === 'value_add' ? 'Value-Add' : 'Opportunistic';
+  doc.text(`${strategyLabel} Strategy | ${passCount}/${decisionMetrics.length} metrics pass`, margin + 55, yPos + 4);
+  yPos += 18;
+
+  // Key Metrics cards row
+  const metricCards = [
+    { label: 'Purchase Price', value: formatCurrency(purchasePrice) },
+    { label: 'Total Project Cost', value: formatCurrency(totalProjectCost) },
+    { label: 'Year 1 NOI', value: formatCurrency(noi) },
+    { label: 'Going-In Cap', value: formatPercent(capRate) },
+    { label: 'IRR', value: formatPercent(irrValue) },
+  ];
+  const cardWidth = contentWidth / metricCards.length;
+  metricCards.forEach((card, i) => {
+    const cx = margin + i * cardWidth;
+    doc.setFillColor(...COLORS.lightGray);
+    doc.roundedRect(cx + 1, yPos, cardWidth - 2, 18, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.gray);
+    doc.text(card.label.toUpperCase(), cx + cardWidth / 2, yPos + 5, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setTextColor(...COLORS.dark);
+    doc.setFont('helvetica', 'bold');
+    doc.text(card.value, cx + cardWidth / 2, yPos + 13, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+  });
+  yPos += 25;
+
+  // ── Income & Expense Summary ──
+  yPos = sectionHeader('INCOME & EXPENSE SUMMARY', yPos);
+
+  const incExpData = [
+    [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    ['Potential Gross Income (PGI)', formatCurrency(pgi)],
+    [`Less: Vacancy (${n(data.vacancy_rate)}%)`, `(${formatCurrency(vacancyAmount)})`],
+    ['Plus: Other Income', formatCurrency(n(data.other_income))],
+    [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: boldStyle } }, { content: formatCurrency(egi), styles: { fontStyle: boldStyle } }],
+    [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    ['Property Taxes', formatCurrency(n(data.property_taxes))],
+    ['Insurance', formatCurrency(n(data.insurance))],
+    ['Utilities', formatCurrency(n(data.utilities))],
+    [`Management Fee (${n(data.management_fee_percent)}%)`, formatCurrency(managementFee)],
+    ['Repairs & Maintenance', formatCurrency(n(data.repairs_maintenance))],
+    ['Reserves / CapEx', formatCurrency(n(data.reserves_capex))],
+    ['Other Expenses', formatCurrency(n(data.other_expenses))],
+    [{ content: 'Total Operating Expenses', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: boldStyle } }],
+    [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }, { content: formatCurrency(noi), styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }],
+  ];
+
+  autoTable(doc, {
+    startY: yPos,
+    body: incExpData,
+    theme: 'striped',
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.65 },
+      1: { cellWidth: contentWidth * 0.35, halign: 'right' },
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 10;
+
+  // ── Financing ──
+  yPos = sectionHeader('FINANCING & CASH REQUIRED', yPos);
+
+  const financingData = [
+    [{ content: 'INVESTMENT SUMMARY', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    ['Purchase Price', formatCurrency(purchasePrice)],
+    [`Loan Amount (${n(data.ltv_percent)}% LTV)`, formatCurrency(loanAmount)],
+    ['Down Payment', formatCurrency(downPayment)],
+    [`Closing Costs (${n(data.closing_costs_percent)}%)`, formatCurrency(closingCosts)],
+    ['Value-Add Costs', formatCurrency(vaTotalCost)],
+    [{ content: 'Total Cash Required', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalCashInvested), styles: { fontStyle: boldStyle } }],
+    [{ content: 'DEBT SERVICE', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    ['Interest Rate', `${n(data.interest_rate)}%`],
+    ['Amortization', `${n(data.amortization_years)} years`],
+    ['Annual Debt Service', formatCurrency(annualDS)],
+    ['Before-Tax Cash Flow', formatCurrency(beforeTaxCF)],
+    [{ content: `DSCR: ${dscr.toFixed(2)}x`, styles: { fontStyle: boldStyle } }, { content: `Cash-on-Cash: ${formatPercent(calculateCashOnCash(beforeTaxCF, totalCashInvested))}`, styles: { fontStyle: boldStyle } }],
+  ];
+
+  autoTable(doc, {
+    startY: yPos,
+    body: financingData,
+    theme: 'striped',
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.65 },
+      1: { cellWidth: contentWidth * 0.35, halign: 'right' },
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 10;
+
+  // ══════════════════════════════════════════════════════════════
+  // PAGE 2: Proforma Projections + Exit Waterfall
+  // ══════════════════════════════════════════════════════════════
+
+  doc.addPage();
+  yPos = 20;
+
+  yPos = sectionHeader(`${holdingPeriod}-YEAR PROFORMA PROJECTIONS`, yPos);
+
+  const projHead = [['Year', 'Income', 'Expenses', 'NOI', 'Debt Service', 'Cash Flow', 'CoC']];
+  const projBody = projections.map(yr => [
+    `Year ${yr.year}`,
+    formatCurrency(yr.income),
+    formatCurrency(yr.expenses),
+    formatCurrency(yr.noi),
+    formatCurrency(yr.debtService),
+    formatCurrency(yr.cashFlow),
+    formatPercent(calculateCashOnCash(yr.cashFlow, totalCashInvested)),
+  ]);
+
+  autoTable(doc, {
+    startY: yPos,
+    head: projHead,
+    body: projBody,
+    theme: 'striped',
+    headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number], fontSize: 8, fontStyle: boldStyle },
+    styles: { fontSize: 8, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right', fontStyle: 'bold' },
+      4: { halign: 'right' },
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 12;
+
+  // ── Exit Waterfall ──
+  yPos = sectionHeader(`EXIT ANALYSIS (YEAR ${holdingPeriod})`, yPos);
+
+  const exitData = [
+    [`Exit NOI (Year ${holdingPeriod})`, formatCurrency(exitNOI)],
+    ['Exit Cap Rate', formatPercent(exitCapRate)],
+    [{ content: 'Gross Sale Price', styles: { fontStyle: boldStyle } }, { content: formatCurrency(saleProceeds.salePrice), styles: { fontStyle: boldStyle } }],
+    [`Less: Selling Costs (${formatPercent(sellingCostsPercent)})`, `(${formatCurrency(saleProceeds.sellingCosts)})`],
+    ['Less: Loan Payoff', `(${formatCurrency(saleProceeds.loanPayoff)})`],
+    [{ content: 'Net Sale Proceeds', styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }, { content: formatCurrency(saleProceeds.netToSeller), styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+  ];
+
+  autoTable(doc, {
+    startY: yPos,
+    body: exitData,
+    theme: 'plain',
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.65 },
+      1: { cellWidth: contentWidth * 0.35, halign: 'right' },
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 8;
+
+  // Return metrics row
+  const returnMetrics = [
+    ['IRR', formatPercent(irrValue), `Target: ${formatPercent(thresholds.irr)}`],
+    ['Equity Multiple', `${equityMultiple.toFixed(2)}x`, `Target: ${thresholds.equity_multiple.toFixed(2)}x`],
+    ['Avg Cash-on-Cash', formatPercent(avgCashOnCash), `Target: ${formatPercent(thresholds.cash_on_cash)}`],
+    ['Price/SF', `$${pricePerSqft.toFixed(0)}`, sqft > 0 ? `${formatNumber(sqft)} SF` : 'N/A'],
+  ];
+
+  autoTable(doc, {
+    startY: yPos,
+    head: [['Metric', 'Actual', 'Benchmark']],
+    body: returnMetrics,
+    theme: 'grid',
+    headStyles: { fillColor: COLORS.dark, textColor: [255, 255, 255] as [number, number, number], fontSize: 9, fontStyle: boldStyle },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: contentWidth * 0.35 },
+      1: { halign: 'right', cellWidth: contentWidth * 0.35 },
+      2: { halign: 'right', textColor: COLORS.gray },
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 12;
+
+  // ── Value-Add Summary (if any VA costs) ──
+  if (vaTotalCost > 0 || noiLift > 0) {
+    yPos = sectionHeader('VALUE-ADD ANALYSIS', yPos);
+
+    // As-Is vs Stabilized
+    const vaCompData = [
+      ['Metric', 'As-Is', 'Stabilized', 'Delta'],
+      ['Rent PSF', `$${n(data.as_is_rent_psf).toFixed(2)}`, `$${n(data.stabilized_rent_psf).toFixed(2)}`, `+$${(n(data.stabilized_rent_psf) - n(data.as_is_rent_psf)).toFixed(2)}`],
+      ['Occupancy', `${n(data.as_is_occupancy).toFixed(1)}%`, `${n(data.stabilized_occupancy).toFixed(1)}%`, `+${(n(data.stabilized_occupancy) - n(data.as_is_occupancy)).toFixed(1)}%`],
+      ['NOI', formatCurrency(asIsNOI), formatCurrency(stabilizedNOI), `+${formatCurrency(noiLift)}`],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [vaCompData[0]],
+      body: vaCompData.slice(1),
+      theme: 'striped',
+      headStyles: { fillColor: COLORS.warning, textColor: [255, 255, 255] as [number, number, number], fontSize: 8, fontStyle: boldStyle },
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: { 3: { textColor: COLORS.success } },
+      margin: { left: margin, right: margin },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 6;
+
+    // VA Costs
+    const vaCostData = [
+      ['CapEx', formatCurrency(n(data.va_capex))],
+      ['TI / Leasing', formatCurrency(n(data.va_ti_leasing))],
+      ['Carry Costs', formatCurrency(n(data.va_carry_costs))],
+      ['Contingency', formatCurrency(n(data.va_contingency))],
+      [{ content: 'Total Value-Add Costs', styles: { fontStyle: boldStyle } }, { content: formatCurrency(vaTotalCost), styles: { fontStyle: boldStyle } }],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      body: vaCostData,
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      columnStyles: {
+        0: { cellWidth: contentWidth * 0.65 },
+        1: { cellWidth: contentWidth * 0.35, halign: 'right' },
+      },
+      margin: { left: margin, right: margin },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 12;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Decision Scorecard + Optimization
+  // ══════════════════════════════════════════════════════════════
+
+  if (yPos > 180) { doc.addPage(); yPos = 20; }
+
+  yPos = sectionHeader(`DECISION SCORECARD — ${strategyLabel.toUpperCase()} STRATEGY`, yPos);
+
+  // Big verdict
+  const verdictBgColor = verdict === 'GO' ? [220, 252, 231] as [number, number, number] : verdict === 'REVIEW' ? [254, 249, 195] as [number, number, number] : [254, 226, 226] as [number, number, number];
+  const verdictTextColor = verdict === 'GO' ? COLORS.success : verdict === 'REVIEW' ? [180, 130, 0] as [number, number, number] : COLORS.danger;
+  doc.setFillColor(...verdictBgColor);
+  doc.roundedRect(margin, yPos, contentWidth, 16, 3, 3, 'F');
+  doc.setTextColor(...verdictTextColor);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(verdict, pageWidth / 2, yPos + 11, { align: 'center' });
+  yPos += 22;
+
+  // Scorecard table
+  const scorecardBody = decisionMetrics.map(m => [
+    m.label,
+    fmtMetric(m.actual, m.format),
+    m.required === null ? 'N/A' : fmtMetric(m.required, m.format),
+    m.pass ? 'PASS' : 'FAIL',
+  ]);
+
+  autoTable(doc, {
+    startY: yPos,
+    head: [['Metric', 'Actual', 'Required', 'Status']],
+    body: scorecardBody,
+    theme: 'grid',
+    headStyles: { fillColor: COLORS.dark, textColor: [255, 255, 255] as [number, number, number], fontSize: 9, fontStyle: boldStyle },
+    styles: { fontSize: 9, cellPadding: 3.5 },
+    columnStyles: {
+      0: { fontStyle: 'bold' },
+      1: { halign: 'right' },
+      2: { halign: 'right', textColor: COLORS.gray },
+      3: { halign: 'center' },
+    },
+    didParseCell: (hookData: any) => {
+      if (hookData.column.index === 3 && hookData.section === 'body') {
+        const val = hookData.cell.raw;
+        hookData.cell.styles.textColor = val === 'PASS' ? COLORS.success : COLORS.danger;
+        hookData.cell.styles.fontStyle = 'bold';
+      }
+    },
+    margin: { left: margin, right: margin },
+  });
+  yPos = (doc as any).lastAutoTable.finalY + 12;
+
+  // ── Optimization (Goal-Seek) ──
+  if (purchasePrice > 0 && egi > 0) {
+    if (yPos > 210) { doc.addPage(); yPos = 20; }
+
+    yPos = sectionHeader('OPTIMIZATION — WHAT MAKES THIS A GO?', yPos);
+
+    const goalSeekInputs = {
+      purchasePrice,
+      initialNOI: noi,
+      incomeGrowthRate: n(data.income_growth_rate),
+      expenseGrowthRate: n(data.expense_growth_rate),
+      initialIncome: egi,
+      initialExpenses: totalExpenses,
+      loanAmount,
+      interestRate: n(data.interest_rate),
+      amortizationYears: n(data.amortization_years),
+      holdingPeriod,
+      exitCapRate,
+      sellingCostsPercent,
+      totalCashInvested,
+      closingCostsPercent: n(data.closing_costs_percent),
+      ltvPercent: n(data.ltv_percent),
+      buildingSqft: sqft,
+      expenseRatio: totalExpenses / (egi || 1) * 100,
+    };
+
+    const targetIRR = thresholds.irr;
+    const optimization = {
+      maxPurchasePrice: solveMaxPurchasePrice(targetIRR, goalSeekInputs),
+      requiredNOI: solveRequiredNOILift(targetIRR, goalSeekInputs),
+      requiredRentPSF: solveRequiredRentPSF(noi, sqft, totalExpenses / (egi || 1) * 100),
+      capexCeiling: solveCapexCeiling(targetIRR, goalSeekInputs),
+      targetExitCap: solveTargetExitCap(targetIRR, goalSeekInputs),
+    };
+
+    const optRows: string[][] = [
+      ['Max Purchase Price', formatCurrency(purchasePrice), formatCurrency(optimization.maxPurchasePrice), formatCurrency(optimization.maxPurchasePrice - purchasePrice)],
+      ['Required NOI', formatCurrency(noi), formatCurrency(optimization.requiredNOI), formatCurrency(optimization.requiredNOI - noi)],
+    ];
+    if (sqft > 0) {
+      optRows.push(['Required Rent PSF', `$${(pgi / sqft).toFixed(2)}/SF`, `$${optimization.requiredRentPSF.toFixed(2)}/SF`, `$${(optimization.requiredRentPSF - (pgi / sqft)).toFixed(2)}/SF`]);
+    }
+    optRows.push(
+      ['CapEx Ceiling', formatCurrency(vaTotalCost), formatCurrency(optimization.capexCeiling), formatCurrency(optimization.capexCeiling - vaTotalCost)],
+      ['Target Exit Cap', formatPercent(exitCapRate), formatPercent(optimization.targetExitCap), `${(optimization.targetExitCap - exitCapRate).toFixed(2)}%`],
+    );
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Lever', 'Current', 'Required for Target IRR', 'Gap']],
+      body: optRows,
+      theme: 'striped',
+      headStyles: { fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number], fontSize: 8, fontStyle: boldStyle },
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        1: { halign: 'right' },
+        2: { halign: 'right', fontStyle: 'bold' },
+        3: { halign: 'right' },
+      },
+      margin: { left: margin, right: margin },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 6;
+
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.gray);
+    doc.text(`Target IRR: ${formatPercent(targetIRR)} (${strategyLabel} Strategy)`, margin, yPos + 4);
+  }
+
+  // Notes
+  if (data.notes) {
+    yPos = (doc as any).lastAutoTable?.finalY ?? yPos;
+    yPos += 10;
+    if (yPos > 250) { doc.addPage(); yPos = 20; }
+    yPos = sectionHeader('NOTES', yPos);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.dark);
+    const noteLines = doc.splitTextToSize(data.notes, contentWidth);
+    doc.text(noteLines, margin, yPos);
+  }
+
+  // ── Footer on all pages ──
+  renderBrandedFooter(doc, branding);
+
+  const fileName = `Investment_Analysis_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 }
