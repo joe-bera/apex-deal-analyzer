@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select } from './ui';
 import type { Property, Comp, DealAnalysis } from '../types';
 import { generateInvestmentAnalysisPDF } from '../utils/pdfExport';
+import { loadLogoImage } from '../utils/pdfBranding';
+import { useAuth } from '../contexts/AuthContext';
 import {
   calculateVacancyAmount,
   calculateEffectiveGrossIncome,
@@ -67,8 +69,17 @@ export default function InvestmentAnalysis({
   onSave,
   saving = false,
 }: InvestmentAnalysisProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [expanded, setExpanded] = useState(true);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+
+  // Pre-load logo for PDF export
+  useEffect(() => {
+    if (user?.company_logo_url) {
+      loadLogoImage(user.company_logo_url).then(setLogoBase64);
+    }
+  }, [user?.company_logo_url]);
 
   // ─── Form State ────────────────────────────────────────────────
   const [data, setData] = useState<Partial<DealAnalysis>>(() => ({
@@ -437,7 +448,19 @@ export default function InvestmentAnalysis({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => generateInvestmentAnalysisPDF({ property, data, comps })}
+              onClick={() => generateInvestmentAnalysisPDF({
+                property,
+                data,
+                comps,
+                branding: user ? {
+                  company_name: user.company_name || undefined,
+                  company_logo_url: user.company_logo_url || undefined,
+                  company_phone: user.company_phone || undefined,
+                  company_email: user.company_email || undefined,
+                  company_address: user.company_address || undefined,
+                } : undefined,
+                logoBase64,
+              })}
             >
               <svg className="w-4 h-4 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

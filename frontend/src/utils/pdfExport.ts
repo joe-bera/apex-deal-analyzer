@@ -48,7 +48,7 @@ interface ExportOptions {
 }
 
 const COLORS = {
-  primary: [0, 102, 204] as [number, number, number],
+  primary: [178, 31, 36] as [number, number, number],
   dark: [31, 41, 55] as [number, number, number],
   gray: [107, 114, 128] as [number, number, number],
   lightGray: [243, 244, 246] as [number, number, number],

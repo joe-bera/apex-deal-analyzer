@@ -44,8 +44,8 @@ export function renderBrandedHeader(
   const margin = 14;
   const headerHeight = 35;
 
-  // Blue header bar
-  doc.setFillColor(0, 102, 204);
+  // Red header bar (Apex/KW brand #B21F24)
+  doc.setFillColor(178, 31, 36);
   doc.rect(0, 0, pageWidth, headerHeight, 'F');
 
   let textX = margin;
