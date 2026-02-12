@@ -583,7 +583,7 @@ interface InvestmentAnalysisPDFOptions {
 }
 
 export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOptions): void {
-  const { property, data, comps = [], branding, logoBase64 } = options;
+  const { property, data, branding, logoBase64 } = options;
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
