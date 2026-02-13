@@ -870,6 +870,7 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
     [{ content: 'PRIMARY LOAN', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
     ['Interest Rate', `${n(data.interest_rate)}%`],
     ['Amortization', `${n(data.amortization_years)} years`],
+    ['Monthly Payment', formatCurrency(monthlyPmt)],
     ['Bank Annual DS', formatCurrency(bankAnnualDS)],
   );
   if (sellerCarrybackAmt > 0) {
@@ -878,10 +879,12 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
       ['Carryback Amount', formatCurrency(sellerCarrybackAmt)],
       ['Interest Rate', `${sellerCarrybackRate}%`],
       ['Term', `${sellerCarrybackTerm} years`],
+      ['Monthly Payment', formatCurrency(sellerMonthlyPmt)],
       ['Seller Annual DS', formatCurrency(sellerAnnualDS)],
     );
   }
   financingData.push(
+    [{ content: 'Total Monthly Debt Service', styles: { fontStyle: boldStyle } }, { content: formatCurrency(annualDS / 12), styles: { fontStyle: boldStyle } }],
     [{ content: 'Total Annual Debt Service', styles: { fontStyle: boldStyle } }, { content: formatCurrency(annualDS), styles: { fontStyle: boldStyle } }],
     ['Before-Tax Cash Flow', formatCurrency(beforeTaxCF)],
     [{ content: `DSCR: ${dscr.toFixed(2)}x`, styles: { fontStyle: boldStyle } }, { content: `Cash-on-Cash: ${formatPercent(calculateCashOnCash(beforeTaxCF, totalCashInvested))}`, styles: { fontStyle: boldStyle } }],
