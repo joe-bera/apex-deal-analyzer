@@ -597,6 +597,7 @@ export default function PropertyDetail() {
             initialData={dealAnalysis || undefined}
             onSave={handleSaveDealAnalysis}
             saving={savingAnalysis}
+            photoUrl={(photos.find(p => p.is_primary) || photos.find(p => p.photo_type === 'exterior') || photos[0])?.url}
           />
         )}
 

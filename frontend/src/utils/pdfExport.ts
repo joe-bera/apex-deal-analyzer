@@ -580,10 +580,11 @@ interface InvestmentAnalysisPDFOptions {
   comps?: Comp[];
   branding?: CompanyBranding;
   logoBase64?: string | null;
+  photoBase64?: string | null;
 }
 
 export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOptions): void {
-  const { property, data, branding, logoBase64 } = options;
+  const { property, data, branding, logoBase64, photoBase64 } = options;
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -712,7 +713,21 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   doc.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 10;
 
-  // Property info
+  // Exterior photo (right side) + property info (left side)
+  const photoWidth = 65;
+  const photoHeight = 45;
+  let hasPhoto = false;
+
+  if (photoBase64) {
+    try {
+      doc.addImage(photoBase64, 'AUTO', pageWidth - margin - photoWidth, yPos - 2, photoWidth, photoHeight);
+      hasPhoto = true;
+    } catch {
+      // Photo failed, continue without it
+    }
+  }
+
+  // Property info (left side, next to photo)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.dark);
@@ -726,7 +741,7 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   doc.text(locationLine, margin, yPos);
   yPos += 4;
   doc.text(typeLine, margin, yPos);
-  yPos += 8;
+  yPos += hasPhoto ? Math.max(8, photoHeight - 7) : 8;
 
   // Verdict badge row
   const verdictColor = verdict === 'GO' ? COLORS.success : verdict === 'REVIEW' ? COLORS.warning : COLORS.danger;

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select } from './ui';
 import type { Property, Comp, DealAnalysis } from '../types';
 import { generateInvestmentAnalysisPDF } from '../utils/pdfExport';
-import { loadDefaultLogo } from '../utils/pdfBranding';
+import { loadDefaultLogo, loadLogoImage } from '../utils/pdfBranding';
 import { useAuth } from '../contexts/AuthContext';
 import {
   calculateVacancyAmount,
@@ -51,6 +51,7 @@ interface InvestmentAnalysisProps {
   initialData?: Partial<DealAnalysis> | null;
   onSave?: (data: Partial<DealAnalysis>) => void;
   saving?: boolean;
+  photoUrl?: string | null;
 }
 
 // Value-add checkbox items
@@ -68,16 +69,25 @@ export default function InvestmentAnalysis({
   initialData,
   onSave,
   saving = false,
+  photoUrl,
 }: InvestmentAnalysisProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [expanded, setExpanded] = useState(true);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
 
   // Pre-load white logo for PDF export
   useEffect(() => {
     loadDefaultLogo(user?.company_logo_url).then(setLogoBase64);
   }, [user?.company_logo_url]);
+
+  // Pre-load exterior photo for PDF export
+  useEffect(() => {
+    if (photoUrl) {
+      loadLogoImage(photoUrl).then(setPhotoBase64);
+    }
+  }, [photoUrl]);
 
   // ─── Form State ────────────────────────────────────────────────
   const [data, setData] = useState<Partial<DealAnalysis>>(() => ({
@@ -458,6 +468,7 @@ export default function InvestmentAnalysis({
                   company_address: user.company_address || undefined,
                 } : undefined,
                 logoBase64,
+                photoBase64,
               })}
             >
               <svg className="w-4 h-4 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
