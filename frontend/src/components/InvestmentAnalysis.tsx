@@ -374,6 +374,12 @@ export default function InvestmentAnalysis({
   const asIsNOI = asIsIncome - asIsExpenses;
   const noiLift = stabilizedNOI - asIsNOI;
 
+  // Value Creation derived values
+  const stabilizedValue = stabilizedNOI > 0 && exitCapRate > 0 ? stabilizedNOI / (exitCapRate / 100) : 0;
+  const equityCreated = stabilizedValue - totalProjectCost;
+  const profitOnSale = saleProceeds.netToSeller - totalCashInvested;
+  const costToValue = stabilizedValue > 0 ? (totalProjectCost / stabilizedValue) * 100 : 0;
+
   // Comp suggestions
   const suggestedExitCap = suggestExitCapRate(comps);
   const psfBenchmark = benchmarkPricePerSqft(comps);
@@ -659,6 +665,7 @@ export default function InvestmentAnalysis({
                   <p className={`text-2xl font-bold ${avgCashOnCash >= 8 ? 'text-green-600' : 'text-gray-900'}`}>
                     {formatPercent(avgCashOnCash)}
                   </p>
+                  {vaTotalCost > 0 && <p className="text-[10px] text-gray-400 mt-1">Incl. value-add CapEx</p>}
                 </div>
                 <div className="bg-white border rounded-xl p-4 text-center">
                   <p className="text-xs text-gray-500 uppercase">IRR</p>
@@ -1168,6 +1175,73 @@ export default function InvestmentAnalysis({
                 </div>
               </div>
 
+              {/* Value Creation Summary */}
+              {stabilizedNOI > 0 ? (
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 overflow-hidden">
+                  <div className="px-5 py-3 bg-indigo-100/60 border-b border-indigo-200">
+                    <h4 className="text-sm font-semibold text-indigo-800 uppercase tracking-wide">Value Creation Summary</h4>
+                  </div>
+                  <div className="p-5 space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Purchase Price</span>
+                      <span className="font-medium">{formatCurrency(purchasePrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">+ Closing Costs</span>
+                      <span className="font-medium">{formatCurrency(closingCosts)}</span>
+                    </div>
+                    {vaTotalCost > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">+ Value-Add Costs</span>
+                        <span className="font-medium">{formatCurrency(vaTotalCost)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-indigo-200 font-semibold">
+                      <span>Total Project Cost</span>
+                      <span>{formatCurrency(totalProjectCost)}</span>
+                    </div>
+
+                    <div className="pt-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Stabilized NOI</span>
+                        <span className="font-medium">{formatCurrency(stabilizedNOI)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">&divide; Exit Cap Rate</span>
+                        <span className="font-medium">{formatPercent(exitCapRate)}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-indigo-200 font-semibold">
+                        <span>Pro Forma Value</span>
+                        <span>{formatCurrency(stabilizedValue)}</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 mt-1 border-t-2 border-indigo-300 space-y-2">
+                      <div className="flex justify-between font-bold text-base">
+                        <span>Equity Created</span>
+                        <span className={equityCreated >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(equityCreated)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-bold text-base">
+                        <span>Profit on Sale</span>
+                        <span className={profitOnSale >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(profitOnSale)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Cost-to-Value</span>
+                        <span className="font-medium">{formatPercent(costToValue)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-5 border text-center">
+                  <p className="text-sm text-gray-500">Fill in stabilized assumptions on the Value-Add tab to see value creation analysis</p>
+                </div>
+              )}
+
               {/* Return Metrics */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-primary-50 rounded-xl p-4 text-center border border-primary-200">
@@ -1190,6 +1264,7 @@ export default function InvestmentAnalysis({
                     {formatPercent(avgCashOnCash)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">Target: {formatPercent(thresholds.cash_on_cash)}</p>
+                  {vaTotalCost > 0 && <p className="text-[10px] text-gray-400 mt-1">Incl. value-add CapEx</p>}
                 </div>
                 <div className="bg-primary-50 rounded-xl p-4 text-center border border-primary-200">
                   <p className="text-xs text-primary-600 uppercase font-medium">Total Cash Invested</p>
