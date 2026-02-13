@@ -22,7 +22,7 @@
   "author": "Apex Real Estate Services",
   "license": "UNLICENSED",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0",
+    "@anthropic-ai/sdk": "^0.74.0",
     "@supabase/supabase-js": "^2.39.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

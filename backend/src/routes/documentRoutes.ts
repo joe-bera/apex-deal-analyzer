@@ -8,6 +8,7 @@ import {
   getUploadUrl,
   createDocument,
   uploadFromUrl,
+  importAssetDataFromDocument,
 } from '../controllers/documentController';
 import { authenticate } from '../middleware/auth';
 import { upload } from '../middleware/upload';
@@ -72,6 +73,14 @@ router.post(
   aiLimiter,
   validate(uuidParamSchema, 'params'),
   extractDocument
+);
+
+// Import tenants & expenses from extracted data into Asset Management
+router.post(
+  '/:id/import-assets',
+  authenticate,
+  validate(uuidParamSchema, 'params'),
+  importAssetDataFromDocument
 );
 
 // Delete document

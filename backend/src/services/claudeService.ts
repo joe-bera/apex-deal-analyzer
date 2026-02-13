@@ -98,6 +98,85 @@ export const callClaude = async (params: ClaudeRequest): Promise<ClaudeResponse>
 };
 
 /**
+ * Call Claude API with a PDF document (base64-encoded)
+ * Uses the document content type to let Claude visually read image-based PDFs
+ */
+export const callClaudeWithPDF = async (params: {
+  pdfBase64: string;
+  prompt: string;
+  systemPrompt?: string;
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<ClaudeResponse> => {
+  try {
+    if (!config.anthropic.apiKey) {
+      console.error('[ClaudeService] ANTHROPIC_API_KEY is not configured');
+      throw new AppError(500, 'AI extraction is not configured. Please contact support.');
+    }
+
+    const {
+      pdfBase64,
+      prompt,
+      systemPrompt = 'You are a commercial real estate data extraction assistant.',
+      maxTokens = 8192,
+      temperature = 0,
+    } = params;
+
+    console.log(`[ClaudeService] Calling Claude API with PDF document, model: ${config.anthropic.model}`);
+
+    const message = await anthropic.messages.create({
+      model: config.anthropic.model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64,
+              },
+            } as any,
+            { type: 'text', text: prompt },
+          ],
+        },
+      ],
+    });
+
+    console.log(`[ClaudeService] Claude PDF response received, tokens: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
+
+    const textContent = message.content.find((block) => block.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      throw new AppError(500, 'No text content in Claude response');
+    }
+
+    return {
+      content: textContent.text,
+      usage: {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      },
+    };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    if (error instanceof Anthropic.APIError) {
+      console.error('Claude API error (PDF):', error.status, error.message);
+      throw new AppError(500, `Claude API error: ${error.message}`);
+    }
+
+    console.error('Claude service error (PDF):', error);
+    throw new AppError(500, 'Failed to call Claude API with PDF');
+  }
+};
+
+/**
  * Parse JSON from Claude's response
  * Handles both plain JSON and JSON wrapped in markdown code blocks
  */

@@ -25,6 +25,7 @@ export default function UploadDocument() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [importToAssetMgmt, setImportToAssetMgmt] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,6 +151,16 @@ export default function UploadDocument() {
       // Extract data from document (writes to master_properties automatically)
       await api.extractDocument(documentId);
 
+      // Import tenants/expenses to Asset Management if toggled on
+      if (importToAssetMgmt) {
+        try {
+          await api.importAssetsFromDocument(documentId);
+        } catch (importErr: any) {
+          console.warn('[Upload] Asset import warning:', importErr.message);
+          // Don't block navigation — extraction succeeded
+        }
+      }
+
       if (documentType === 'comp' && propertyId) {
         navigate(`/properties/${propertyId}`);
       } else {
@@ -162,9 +173,8 @@ export default function UploadDocument() {
           } else {
             navigate('/dashboard');
           }
-        } catch {
-          // If My Deals creation fails, still go to dashboard
-          navigate('/dashboard');
+        } catch (err: any) {
+          setError(err.message || 'Failed to create property from document');
         }
       }
     } catch (err: any) {
@@ -232,6 +242,25 @@ export default function UploadDocument() {
               <p className="mt-1 text-sm text-gray-500">
                 This comparable will be added to the selected property
               </p>
+            </div>
+          )}
+
+          {/* Asset Management Import Toggle */}
+          {(documentType === 'offering_memorandum' || documentType === 'property_profile') && (
+            <div className="flex items-center gap-3">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importToAssetMgmt}
+                  onChange={(e) => setImportToAssetMgmt(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+              </label>
+              <div>
+                <span className="text-sm font-medium text-gray-700">Import to Asset Management</span>
+                <p className="text-xs text-gray-500">Also import tenants & expenses into managed property</p>
+              </div>
             </div>
           )}
 

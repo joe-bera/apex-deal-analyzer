@@ -252,6 +252,9 @@ export const api = {
   extractDocument: (id: string) =>
     request(`/documents/${id}/extract`, { method: 'POST' }),
 
+  importAssetsFromDocument: (documentId: string) =>
+    request(`/documents/${documentId}/import-assets`, { method: 'POST' }),
+
   // Properties
   createProperty: (data: Record<string, unknown>) =>
     request('/properties', {

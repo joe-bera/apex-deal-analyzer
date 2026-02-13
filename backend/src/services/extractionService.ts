@@ -1,4 +1,4 @@
-import { callClaude, parseClaudeJSON } from './claudeService';
+import { callClaude, callClaudeWithPDF, parseClaudeJSON } from './claudeService';
 import { AppError } from '../middleware/errorHandler';
 
 /**
@@ -81,6 +81,25 @@ export interface ExtractedPropertyData {
   owner_name?: string;
   owner_address?: string;
 
+  // Tenant rent roll (extracted from OMs and property profiles)
+  tenants?: {
+    tenant_name: string;
+    unit_number?: string;
+    leased_sf?: number;
+    monthly_base_rent?: number;
+    rent_per_sf?: number;
+    lease_start?: string;
+    lease_end?: string;
+    lease_type?: string;
+  }[];
+
+  // Operating expense line items
+  expenses?: {
+    category: string;
+    description?: string;
+    annual_amount: number;
+  }[];
+
   // Confidence scores (0-100)
   confidence_scores?: {
     [key: string]: number;
@@ -132,7 +151,16 @@ ${text.slice(0, 50000)}
 IMPORTANT: Look for "Property History" or "Transaction History" sections:
 - Extract any previous sales with dates and prices
 - Note any significant improvements or renovations with dates
-- Put historical sales in the transaction_history array`;
+- Put historical sales in the transaction_history array
+
+IMPORTANT: Extract the full rent roll / tenant roster if present:
+- Each tenant: name, suite/unit number, leased SF, monthly base rent, rent per SF, lease start date, lease end date, lease type (gross, nnn, modified_gross, etc.)
+- Put in the "tenants" array
+
+IMPORTANT: Extract operating expense line items if present:
+- Each line item: category, description, annual amount
+- Categories should be one of: property_tax, insurance, utilities_electric, utilities_water, utilities_gas, maintenance_repair, landscaping, janitorial, management_fee, other
+- Put in the "expenses" array`;
       break;
 
     case 'title_report':
@@ -244,12 +272,198 @@ Return a JSON object with this exact structure (use null for missing fields):
       "notes": "string or null"
     }
   ] or null,
+  "tenants": [
+    {
+      "tenant_name": "string",
+      "unit_number": "string or null",
+      "leased_sf": number or null,
+      "monthly_base_rent": number or null,
+      "rent_per_sf": number or null,
+      "lease_start": "YYYY-MM-DD or null",
+      "lease_end": "YYYY-MM-DD or null",
+      "lease_type": "gross|nnn|modified_gross|full_service or null"
+    }
+  ] or null,
+  "expenses": [
+    {
+      "category": "property_tax|insurance|utilities_electric|utilities_water|utilities_gas|maintenance_repair|landscaping|janitorial|management_fee|other",
+      "description": "string or null",
+      "annual_amount": number
+    }
+  ] or null,
   "confidence_scores": {
     "field_name": 0-100
   }
 }`;
 
   return basePrompt + specificInstructions + '\n\n' + jsonSchema;
+};
+
+/**
+ * Build extraction prompt for PDF-based extraction (no text block — PDF is sent as document content)
+ */
+const buildPDFExtractionPrompt = (documentType: DocumentType): string => {
+  const basePrompt = `Extract structured property data from the attached ${documentType.replace('_', ' ')} PDF document. Read every page carefully and extract all available data.\n\n`;
+
+  // Reuse the same specific instructions as text-based extraction
+  let specificInstructions = '';
+
+  switch (documentType) {
+    case 'offering_memorandum':
+      specificInstructions = `This is an Offering Memorandum (OM). Focus on:
+- Property address and location details
+- Building specifications (size, year built, construction type)
+- Financial performance (asking price, NOI, CAP rate, rental income)
+- Tenant information (names, lease terms, occupancy)
+- Property features and amenities
+- Market positioning and comparable sales data
+- Current owner information (owner_name)
+
+IMPORTANT: Extract the full rent roll / tenant roster if present:
+- Each tenant: name, suite/unit number, leased SF, monthly base rent, rent per SF, lease start date, lease end date, lease type (gross, nnn, modified_gross, etc.)
+- Put in the "tenants" array
+
+IMPORTANT: Extract operating expense line items if present:
+- Each line item: category, description, annual amount
+- Categories should be one of: property_tax, insurance, utilities_electric, utilities_water, utilities_gas, maintenance_repair, landscaping, janitorial, management_fee, other
+- Put in the "expenses" array
+
+IMPORTANT: Look for "Property History" or "Transaction History" sections:
+- Extract any previous sales with dates and prices
+- Put historical sales in the transaction_history array`;
+      break;
+
+    case 'property_profile':
+      specificInstructions = `This is a Property Profile. Focus on:
+- Property address and location details
+- Building specifications (size, year built, lot size)
+- Financial data (price, NOI, cap rate)
+- Tenant and lease information
+- Owner information
+
+Extract tenants into the "tenants" array and expenses into the "expenses" array if present.`;
+      break;
+
+    default:
+      specificInstructions = `Extract any available property information including address, size, price, and key characteristics.`;
+  }
+
+  // Reuse the same JSON schema
+  const jsonSchema = `
+Return a JSON object with this exact structure (use null for missing fields):
+
+{
+  "address": "string or null",
+  "city": "string or null",
+  "state": "string or null",
+  "zip_code": "string or null",
+  "apn": "string or null",
+  "property_type": "industrial|office|retail|multifamily|land|mixed_use or null",
+  "subtype": "string or null",
+  "building_size": number or null,
+  "lot_size": number or null,
+  "lot_size_unit": "sf" or "acres" or null,
+  "year_built": number or null,
+  "stories": number or null,
+  "units": number or null,
+  "price": number or null,
+  "price_per_sqft": number or null,
+  "cap_rate": number or null,
+  "noi": number or null,
+  "gross_income": number or null,
+  "operating_expenses": number or null,
+  "occupancy_rate": number or null,
+  "lease_rate_per_sqft": number or null,
+  "lease_term_years": number or null,
+  "tenant_name": "string or null",
+  "market": "string or null",
+  "submarket": "string or null",
+  "sale_date": "YYYY-MM-DD or null",
+  "comparable_to": "string or null",
+  "zoning": "string or null",
+  "parking_spaces": number or null,
+  "amenities": ["array", "of", "strings"] or null,
+  "notes": "string with important details or null",
+  "owner_name": "string or null",
+  "owner_address": "string or null",
+  "transaction_history": [
+    {
+      "transaction_date": "YYYY-MM-DD or null",
+      "sale_price": number or null,
+      "price_per_sf": number or null,
+      "buyer": "string or null",
+      "seller": "string or null",
+      "transaction_type": "sale|lease|refinance|transfer or null",
+      "notes": "string or null"
+    }
+  ] or null,
+  "tenants": [
+    {
+      "tenant_name": "string",
+      "unit_number": "string or null",
+      "leased_sf": number or null,
+      "monthly_base_rent": number or null,
+      "rent_per_sf": number or null,
+      "lease_start": "YYYY-MM-DD or null",
+      "lease_end": "YYYY-MM-DD or null",
+      "lease_type": "gross|nnn|modified_gross|full_service or null"
+    }
+  ] or null,
+  "expenses": [
+    {
+      "category": "property_tax|insurance|utilities_electric|utilities_water|utilities_gas|maintenance_repair|landscaping|janitorial|management_fee|other",
+      "description": "string or null",
+      "annual_amount": number
+    }
+  ] or null,
+  "confidence_scores": {
+    "field_name": 0-100
+  }
+}`;
+
+  return basePrompt + specificInstructions + '\n\n' + jsonSchema;
+};
+
+/**
+ * Extract structured data from a PDF buffer using Claude's document vision
+ * Used when text extraction yields sparse results (image-based PDFs)
+ */
+export const extractPropertyDataFromPDF = async (
+  pdfBuffer: Buffer,
+  documentType: DocumentType
+): Promise<ExtractedPropertyData> => {
+  try {
+    const pdfBase64 = pdfBuffer.toString('base64');
+    const prompt = buildPDFExtractionPrompt(documentType);
+
+    console.log(`[ExtractionService] Using PDF vision extraction for ${documentType}, PDF size: ${pdfBuffer.length} bytes`);
+
+    const response = await callClaudeWithPDF({
+      pdfBase64,
+      prompt,
+      systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+      maxTokens: 8192,
+      temperature: 0,
+    });
+
+    const extractedData = parseClaudeJSON<ExtractedPropertyData>(response.content);
+
+    const hasData = Object.values(extractedData).some(
+      (value) => value !== null && value !== undefined
+    );
+
+    if (!hasData) {
+      throw new AppError(500, 'No data could be extracted from PDF document');
+    }
+
+    return extractedData;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    console.error('PDF extraction error:', error);
+    throw new AppError(500, 'Failed to extract property data from PDF');
+  }
 };
 
 /**

@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { AppError } from '../middleware/errorHandler';
 import { uploadToStorage, createSignedUploadUrl, getPublicUrl, getSignedDownloadUrl } from '../services/storageService';
 import { parsePDF, parsePDFFromURL, cleanPDFText } from '../services/pdfService';
-import { extractPropertyData, DocumentType, HistoricalTransaction } from '../services/extractionService';
+import { extractPropertyData, extractPropertyDataFromPDF, DocumentType, HistoricalTransaction } from '../services/extractionService';
 
 /**
  * Verify a property_id exists in either the old properties table or master_properties.
@@ -462,22 +462,41 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
       throw new AppError(403, 'You do not have access to this document');
     }
 
-    // Check if document has extracted text
-    if (!document.extracted_data?.raw_text) {
-      throw new AppError(400, 'Document has no extracted text. Please re-upload the document.');
-    }
-
     // Update extraction status to processing
     await supabaseAdmin
       .from('documents')
       .update({ extraction_status: 'processing' })
       .eq('id', id);
 
-    // Extract property data using Claude
-    const extractedData = await extractPropertyData(
-      document.extracted_data.raw_text,
-      document.document_type as DocumentType
-    );
+    // Determine if text extraction was sparse (image-based PDF)
+    const rawText = document.extracted_data?.raw_text || '';
+    const isSparseText = rawText.trim().length < 200;
+
+    let extractedData;
+
+    if (isSparseText) {
+      // Text extraction yielded almost nothing — use PDF vision extraction
+      console.log(`[DocumentController] Text sparse (${rawText.trim().length} chars), using PDF vision extraction`);
+
+      // Fetch the PDF from Supabase Storage
+      const signedUrl = await getSignedDownloadUrl(document.file_path);
+      const pdfResponse = await fetch(signedUrl);
+      if (!pdfResponse.ok) {
+        throw new AppError(500, 'Failed to download PDF from storage for vision extraction');
+      }
+      const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
+
+      extractedData = await extractPropertyDataFromPDF(
+        pdfBuffer,
+        document.document_type as DocumentType
+      );
+    } else {
+      // Normal text-based extraction
+      extractedData = await extractPropertyData(
+        rawText,
+        document.document_type as DocumentType
+      );
+    }
 
     // Merge with existing extracted_data
     const updatedExtractedData = {
@@ -1000,6 +1019,169 @@ export const createDocument = async (req: Request, res: Response): Promise<void>
     } else {
       console.error('Create document error:', error);
       res.status(500).json({ success: false, error: 'Failed to create document' });
+    }
+  }
+};
+
+/**
+ * Import tenants & expenses from a document's extracted data into Asset Management
+ * POST /api/documents/:id/import-assets
+ */
+export const importAssetDataFromDocument = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { id } = req.params;
+
+    // Get the document with its extracted data
+    const { data: document, error: fetchError } = await supabaseAdmin
+      .from('documents')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !document) {
+      throw new AppError(404, 'Document not found');
+    }
+
+    if (document.uploaded_by !== req.user.id) {
+      throw new AppError(403, 'You do not have access to this document');
+    }
+
+    const structuredData = document.extracted_data?.structured_data;
+    if (!structuredData) {
+      throw new AppError(400, 'Document has no extracted structured data. Run extraction first.');
+    }
+
+    const tenants = structuredData.tenants || [];
+    const expenses = structuredData.expenses || [];
+
+    if (tenants.length === 0 && expenses.length === 0) {
+      throw new AppError(400, 'No tenant or expense data found in extraction results.');
+    }
+
+    // Find or create a master_property for this document's address
+    let masterPropertyId: string | null = document.property_id || null;
+
+    if (!masterPropertyId && structuredData.address) {
+      const extractedAddr = structuredData.address.trim();
+
+      let lookupQuery = supabaseAdmin
+        .from('master_properties')
+        .select('id')
+        .ilike('address', extractedAddr)
+        .eq('is_deleted', false);
+
+      if (structuredData.city) {
+        lookupQuery = lookupQuery.ilike('city', structuredData.city.trim());
+      }
+
+      const { data: matchedProperty } = await lookupQuery.limit(1).maybeSingle();
+
+      if (matchedProperty) {
+        masterPropertyId = matchedProperty.id;
+      } else {
+        // Create new master property
+        const { data: newProp, error: createError } = await supabaseAdmin
+          .from('master_properties')
+          .insert({
+            address: structuredData.address,
+            city: structuredData.city || null,
+            state: structuredData.state || 'CA',
+            source: 'pdf_extract',
+            created_by: req.user.id,
+            notes: `Created from document asset import (doc: ${id})`,
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          throw new AppError(500, `Failed to create property: ${createError.message}`);
+        }
+        masterPropertyId = newProp.id;
+      }
+    }
+
+    if (!masterPropertyId) {
+      throw new AppError(400, 'Cannot determine property for asset import. Document has no address or property_id.');
+    }
+
+    // Enable asset management on the property
+    await supabaseAdmin
+      .from('master_properties')
+      .update({
+        is_managed: true,
+        management_tier: 'asset_management',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', masterPropertyId);
+
+    // Import tenants
+    let tenantsCreated = 0;
+    for (const t of tenants) {
+      if (!t.tenant_name) continue;
+
+      const { error: tenantError } = await supabaseAdmin
+        .from('tenants')
+        .insert({
+          master_property_id: masterPropertyId,
+          tenant_name: t.tenant_name,
+          unit_number: t.unit_number || null,
+          leased_sf: t.leased_sf || null,
+          monthly_base_rent: t.monthly_base_rent || null,
+          rent_per_sf: t.rent_per_sf || null,
+          lease_start: t.lease_start || null,
+          lease_end: t.lease_end || null,
+          lease_type: t.lease_type || null,
+          created_by: req.user.id,
+        });
+
+      if (tenantError) {
+        console.error(`[importAssets] Failed to insert tenant "${t.tenant_name}":`, tenantError);
+      } else {
+        tenantsCreated++;
+      }
+    }
+
+    // Import expenses
+    let expensesCreated = 0;
+    for (const e of expenses) {
+      if (!e.annual_amount) continue;
+
+      const { error: expError } = await supabaseAdmin
+        .from('operating_expenses')
+        .insert({
+          master_property_id: masterPropertyId,
+          expense_category: e.category || 'other',
+          description: e.description || null,
+          amount: e.annual_amount,
+          created_by: req.user.id,
+        });
+
+      if (expError) {
+        console.error(`[importAssets] Failed to insert expense "${e.category}":`, expError);
+      } else {
+        expensesCreated++;
+      }
+    }
+
+    console.log(`[importAssets] Imported ${tenantsCreated} tenants, ${expensesCreated} expenses for property ${masterPropertyId}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Imported ${tenantsCreated} tenants and ${expensesCreated} expenses into Asset Management`,
+      tenants_created: tenantsCreated,
+      expenses_created: expensesCreated,
+      master_property_id: masterPropertyId,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Import assets error:', error);
+      res.status(500).json({ success: false, error: 'Failed to import asset data' });
     }
   }
 };
