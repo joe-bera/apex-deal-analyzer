@@ -42,6 +42,8 @@ import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
 import { generateExecutiveSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
+import { generateListingProposalPDF } from '../utils/listingProposalPdf';
+import type { OwnerInfo } from '../utils/listingProposalPdf';
 import { loadDefaultLogo } from '../utils/pdfBranding';
 
 interface Photo {
@@ -295,6 +297,9 @@ export default function PropertyDetail() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [txDebug, setTxDebug] = useState<any>(null);
 
+  // Listing proposal modal state
+  const [showProposalForm, setShowProposalForm] = useState(false);
+
   // Cached logo for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
@@ -539,6 +544,32 @@ export default function PropertyDetail() {
       company_address: user.company_address,
     } : undefined;
     generateExecutiveSummaryPDF({ property, valuation, branding, logoBase64 });
+  };
+
+  const handleGenerateListingProposal = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!property || !valuation) return;
+
+    const formData = new FormData(e.currentTarget);
+    const ownerInfo: OwnerInfo = {
+      owner_name: formData.get('proposal_owner_name') as string,
+      owner_address_line1: formData.get('proposal_owner_address') as string,
+      owner_city: formData.get('proposal_owner_city') as string,
+      owner_state: formData.get('proposal_owner_state') as string,
+      owner_zip: formData.get('proposal_owner_zip') as string,
+      entity_name: formData.get('proposal_entity_name') as string,
+    };
+
+    const branding = user ? {
+      company_name: user.company_name,
+      company_logo_url: user.company_logo_url,
+      company_phone: user.company_phone,
+      company_email: user.company_email,
+      company_address: user.company_address,
+    } : undefined;
+
+    generateListingProposalPDF({ property, valuation, ownerInfo, branding, logoBase64 });
+    setShowProposalForm(false);
   };
 
   // Handle multi-comp PDF upload
@@ -961,6 +992,24 @@ export default function PropertyDetail() {
                   </div>
                 )}
 
+                {/* Generate Listing Proposal Button */}
+                {valuation.pricing_scenarios && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowProposalForm(true)}
+                      leftIcon={
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      }
+                    >
+                      Generate Listing Proposal
+                    </Button>
+                  </div>
+                )}
+
                 {/* Wholesale Offer */}
                 {valuation.wholesale_offer && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
@@ -1075,6 +1124,93 @@ export default function PropertyDetail() {
                     </Button>
                     <Button type="submit" isLoading={generatingLOI} disabled={generatingLOI} className="flex-1">
                       {generatingLOI ? 'Generating...' : 'Generate LOI'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Listing Proposal Form Modal */}
+        {showProposalForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Generate Listing Proposal</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => setShowProposalForm(false)}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleGenerateListingProposal} className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Property Owner Information</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <Input
+                          name="proposal_owner_name"
+                          required
+                          label="Owner Name *"
+                          placeholder="John Smith"
+                          defaultValue={(property?.additional_data?.owner_name as string) || ''}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          name="proposal_owner_address"
+                          required
+                          label="Street Address *"
+                          placeholder="123 Main Street"
+                        />
+                      </div>
+                      <Input
+                        name="proposal_owner_city"
+                        required
+                        label="City *"
+                        placeholder="Rancho Cucamonga"
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input
+                          name="proposal_owner_state"
+                          required
+                          label="State *"
+                          placeholder="CA"
+                          maxLength={2}
+                          defaultValue="CA"
+                        />
+                        <Input
+                          name="proposal_owner_zip"
+                          required
+                          label="Zip *"
+                          placeholder="91730"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Scope of Service</h4>
+                    <Input
+                      name="proposal_entity_name"
+                      required
+                      label="Entity / Owner Name for Agreement *"
+                      placeholder="Smith Family Trust"
+                      defaultValue={(property?.additional_data?.owner_name as string) || ''}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">The legal entity or individual name that will appear in the Scope of Service section.</p>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t">
+                    <Button type="button" variant="outline" onClick={() => setShowProposalForm(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="flex-1">
+                      Generate PDF
                     </Button>
                   </div>
                 </form>
