@@ -1439,7 +1439,11 @@ export default function PropertyDetail() {
                     <Metric label="Building Size" value={property.building_size} format="number" />
                   )}
                   {property.lot_size && (
-                    <Metric label="Lot Size" value={`${property.lot_size} acres`} />
+                    <Metric label="Lot Size" value={
+                      property.additional_data?.lot_size_unit === 'acres'
+                        ? `${property.lot_size} acres`
+                        : `${formatNumber(property.lot_size)} SF`
+                    } />
                   )}
                   {property.year_built && (
                     <Metric label="Year Built" value={property.year_built} />

@@ -42,7 +42,8 @@ export interface ExtractedPropertyData {
 
   // Size and physical characteristics
   building_size?: number; // square feet
-  lot_size?: number; // square feet or acres
+  lot_size?: number; // lot size value
+  lot_size_unit?: 'sf' | 'acres'; // unit for lot_size
   year_built?: number;
   stories?: number;
   units?: number; // for multifamily
@@ -208,6 +209,7 @@ Return a JSON object with this exact structure (use null for missing fields):
   "subtype": "string or null",
   "building_size": number or null,
   "lot_size": number or null,
+  "lot_size_unit": "sf" or "acres" or null,
   "year_built": number or null,
   "stories": number or null,
   "units": number or null,

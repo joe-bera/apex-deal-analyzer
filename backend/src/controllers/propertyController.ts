@@ -213,6 +213,31 @@ export const createPropertyFromDocument = async (
     // Map the extracted property_type to database enum value
     const mappedPropertyType = mapPropertyTypeToDatabase(propertyData.property_type, propertyData.subtype);
 
+    // Convert lot_size to SF if provided in acres
+    let lotSizeValue = propertyData.lot_size;
+    if (lotSizeValue && propertyData.lot_size_unit === 'acres') {
+      lotSizeValue = Math.round(lotSizeValue * 43560); // Convert acres to SF
+    }
+
+    // Try to find matching master_property for direct link
+    let masterPropertyId: string | null = null;
+    if (propertyData.address) {
+      let lookupQuery = supabaseAdmin
+        .from('master_properties')
+        .select('id')
+        .ilike('address', propertyData.address.trim())
+        .eq('is_deleted', false);
+
+      if (propertyData.city) {
+        lookupQuery = lookupQuery.ilike('city', propertyData.city.trim());
+      }
+
+      const { data: matchedMaster } = await lookupQuery.limit(1).maybeSingle();
+      if (matchedMaster) {
+        masterPropertyId = matchedMaster.id;
+      }
+    }
+
     // Create property record
     const { data: property, error: createError } = await supabaseAdmin
       .from('properties')
@@ -226,7 +251,7 @@ export const createPropertyFromDocument = async (
         property_type: mappedPropertyType,
         subtype: propertyData.subtype,
         building_size: propertyData.building_size,
-        lot_size: propertyData.lot_size,
+        lot_size: lotSizeValue,
         year_built: propertyData.year_built,
         stories: propertyData.stories,
         units: propertyData.units,
@@ -251,6 +276,8 @@ export const createPropertyFromDocument = async (
           notes: propertyData.notes,
           confidence_scores: propertyData.confidence_scores,
           source_document_id: documentId,
+          lot_size_unit: propertyData.lot_size_unit || 'sf',
+          ...(masterPropertyId && { master_property_id: masterPropertyId }),
         },
       })
       .select()
@@ -331,7 +358,7 @@ export const createPropertyFromMaster = async (req: Request, res: Response): Pro
         property_type: mappedType,
         subtype: mp.property_subtype,
         building_size: mp.building_size,
-        lot_size: mp.lot_size_acres,
+        lot_size: mp.land_area_sf || mp.lot_size_acres,
         year_built: mp.year_built,
         stories: mp.number_of_floors,
         units: mp.number_of_units,
@@ -345,6 +372,9 @@ export const createPropertyFromMaster = async (req: Request, res: Response): Pro
         zoning: mp.zoning,
         parking_spaces: mp.parking_spaces,
         status: 'prospect',
+        additional_data: {
+          master_property_id: masterPropertyId,
+        },
       })
       .select()
       .single();
@@ -794,6 +824,10 @@ export const analyzePropertyValuation = async (
 /**
  * Get transaction history for a property by matching to master_properties
  * GET /api/properties/:id/transactions
+ *
+ * Strategy:
+ * 1. Check additional_data.master_property_id for a direct link
+ * 2. Fall back to flexible address matching (ilike with wildcards)
  */
 export const getPropertyTransactions = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -803,10 +837,10 @@ export const getPropertyTransactions = async (req: Request, res: Response): Prom
 
     const { id } = req.params;
 
-    // Get the property to find its address
+    // Get the property including additional_data for direct link
     const { data: property, error: propError } = await supabaseAdmin
       .from('properties')
-      .select('address, city, state')
+      .select('address, city, state, additional_data')
       .eq('id', id)
       .single();
 
@@ -814,24 +848,56 @@ export const getPropertyTransactions = async (req: Request, res: Response): Prom
       throw new AppError(404, 'Property not found');
     }
 
-    if (!property.address) {
+    let masterIds: string[] = [];
+
+    // Strategy 1: Direct link via additional_data.master_property_id
+    const directMasterId = (property.additional_data as any)?.master_property_id;
+    if (directMasterId) {
+      masterIds.push(directMasterId);
+    }
+
+    // Strategy 2: Address matching (flexible with wildcards and city)
+    if (property.address) {
+      const addr = property.address.trim();
+
+      // Try exact ilike match first
+      let lookupQuery = supabaseAdmin
+        .from('master_properties')
+        .select('id')
+        .ilike('address', addr)
+        .eq('is_deleted', false);
+
+      const { data: exactMatches } = await lookupQuery;
+
+      if (exactMatches && exactMatches.length > 0) {
+        for (const mp of exactMatches) {
+          if (!masterIds.includes(mp.id)) masterIds.push(mp.id);
+        }
+      } else {
+        // Try fuzzy match: wildcard around address, filtered by city
+        let fuzzyQuery = supabaseAdmin
+          .from('master_properties')
+          .select('id')
+          .ilike('address', `%${addr}%`)
+          .eq('is_deleted', false);
+
+        if (property.city) {
+          fuzzyQuery = fuzzyQuery.ilike('city', property.city.trim());
+        }
+
+        const { data: fuzzyMatches } = await fuzzyQuery;
+        if (fuzzyMatches) {
+          for (const mp of fuzzyMatches) {
+            if (!masterIds.includes(mp.id)) masterIds.push(mp.id);
+          }
+        }
+      }
+    }
+
+    if (masterIds.length === 0) {
       res.status(200).json({ success: true, transactions: [] });
       return;
     }
-
-    // Look up matching master_properties by address (case-insensitive)
-    const { data: masterProps } = await supabaseAdmin
-      .from('master_properties')
-      .select('id')
-      .ilike('address', property.address)
-      .eq('is_deleted', false);
-
-    if (!masterProps || masterProps.length === 0) {
-      res.status(200).json({ success: true, transactions: [] });
-      return;
-    }
-
-    const masterIds = masterProps.map((mp: any) => mp.id);
 
     // Fetch all transactions for matching master properties
     const { data: transactions, error: txError } = await supabaseAdmin

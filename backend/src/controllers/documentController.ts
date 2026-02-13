@@ -579,7 +579,17 @@ export const extractDocument = async (req: Request, res: Response): Promise<void
         // Only write text/number fields — skip enum columns (property_subtype, property_type)
         // to avoid AI-extracted values that don't match DB enum constraints
         if (extractedData.building_size) propertyUpdate.building_size = Math.round(extractedData.building_size);
-        if (extractedData.lot_size) propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
+        if (extractedData.lot_size) {
+          if (extractedData.lot_size_unit === 'acres') {
+            propertyUpdate.lot_size_acres = extractedData.lot_size;
+            // Also store SF conversion (1 acre = 43,560 SF)
+            propertyUpdate.land_area_sf = Math.round(extractedData.lot_size * 43560);
+          } else {
+            // Default to SF
+            propertyUpdate.land_area_sf = Math.round(extractedData.lot_size);
+            propertyUpdate.lot_size_acres = parseFloat((extractedData.lot_size / 43560).toFixed(2));
+          }
+        }
         if (extractedData.year_built) propertyUpdate.year_built = extractedData.year_built;
         if (extractedData.stories) propertyUpdate.number_of_floors = extractedData.stories;
         if (extractedData.units) propertyUpdate.number_of_units = extractedData.units;
