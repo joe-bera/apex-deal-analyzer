@@ -299,6 +299,7 @@ export default function PropertyDetail() {
 
   // Listing proposal modal state
   const [showProposalForm, setShowProposalForm] = useState(false);
+  const [execSummaryPdfUrl, setExecSummaryPdfUrl] = useState<string | null>(null);
 
   // Cached logos for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -563,7 +564,10 @@ export default function PropertyDetail() {
       entity_name: formData.get('proposal_entity_name') as string,
     };
 
-    generateExecutiveSummaryPDF({ property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 });
+    // Revoke previous blob URL to avoid memory leak
+    if (execSummaryPdfUrl) URL.revokeObjectURL(execSummaryPdfUrl);
+    const pdfUrl = generateExecutiveSummaryPDF({ property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 });
+    setExecSummaryPdfUrl(pdfUrl);
     setShowProposalForm(false);
   };
 
@@ -1016,19 +1020,56 @@ export default function PropertyDetail() {
 
                 {/* Generate Executive Summary Button */}
                 {valuation.pricing_scenarios && (
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowProposalForm(true)}
-                      leftIcon={
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      }
-                    >
-                      Generate Executive Summary
-                    </Button>
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowProposalForm(true)}
+                        leftIcon={
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        }
+                      >
+                        {execSummaryPdfUrl ? 'Regenerate Executive Summary' : 'Generate Executive Summary'}
+                      </Button>
+                    </div>
+
+                    {/* Inline PDF Preview */}
+                    {execSummaryPdfUrl && (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
+                          <span className="text-sm font-medium text-gray-700">Executive Summary Preview</span>
+                          <div className="flex gap-2">
+                            <a
+                              href={execSummaryPdfUrl}
+                              download={`Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download
+                            </a>
+                            <button
+                              onClick={() => { URL.revokeObjectURL(execSummaryPdfUrl); setExecSummaryPdfUrl(null); }}
+                              className="text-xs text-gray-400 hover:text-gray-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        <iframe
+                          src={execSummaryPdfUrl}
+                          className="w-full"
+                          style={{ height: '500px' }}
+                          title="Executive Summary PDF Preview"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 

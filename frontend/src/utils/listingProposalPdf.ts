@@ -734,4 +734,8 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
   // ============================
   const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
+
+  // Return blob URL for inline preview
+  const blob = doc.output('blob');
+  return URL.createObjectURL(blob);
 }
