@@ -142,7 +142,7 @@ function buildValuationPrompt(property: Property, comps: Comp[]): string {
 **Location:** ${property.address || 'N/A'}, ${property.city || 'N/A'}, ${property.state || 'N/A'} ${property.zip_code || ''}
 **Type:** ${property.property_type}
 **Size:** ${property.building_size ? `${property.building_size.toLocaleString()} SF` : 'N/A'}
-**Lot Size:** ${property.lot_size ? `${property.lot_size.toLocaleString()} ${property.additional_data?.lot_size_unit === 'acres' ? 'acres' : 'SF'}` : 'N/A'}
+**Lot Size:** ${property.lot_size ? (property.additional_data?.lot_size_unit === 'acres' ? `${(property.lot_size / 43560).toFixed(2)} acres` : `${property.lot_size.toLocaleString()} SF`) : 'N/A'}
 **Year Built:** ${property.year_built || 'N/A'}
 **Current List Price:** ${property.price ? `$${property.price.toLocaleString()}` : 'N/A'}
 **Current Price/SF:** ${property.price_per_sqft ? `$${property.price_per_sqft}/SF` : 'N/A'}

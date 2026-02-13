@@ -77,7 +77,7 @@ Address: ${property.address || 'TBD'}
 City: ${property.city || ''}, ${property.state || 'CA'} ${property.zip_code || ''}
 Property Type: ${property.property_type}
 Building Size: ${property.building_size ? `${property.building_size.toLocaleString()} SF` : 'TBD'}
-Lot Size: ${property.lot_size ? `${property.lot_size.toLocaleString()} ${property.additional_data?.lot_size_unit === 'acres' ? 'acres' : 'SF'}` : 'TBD'}
+Lot Size: ${property.lot_size ? (property.additional_data?.lot_size_unit === 'acres' ? `${(property.lot_size / 43560).toFixed(2)} acres` : `${property.lot_size.toLocaleString()} SF`) : 'TBD'}
 Year Built: ${property.year_built || 'TBD'}
 APN: ${property.apn || 'TBD'}
 

@@ -1956,7 +1956,7 @@ export default function PropertyDetail() {
                     {property.lot_size && (
                       <Metric label="Lot Size" value={
                         property.additional_data?.lot_size_unit === 'acres'
-                          ? `${property.lot_size} acres`
+                          ? `${(property.lot_size / 43560).toFixed(2)} acres`
                           : `${formatNumber(property.lot_size)} SF`
                       } />
                     )}

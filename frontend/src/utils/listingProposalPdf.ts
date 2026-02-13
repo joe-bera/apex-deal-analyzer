@@ -575,7 +575,7 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): { blob
   const buildingSf = property.building_size ? `\u00b1${property.building_size.toLocaleString()} SF Building` : '';
   const lotSf = property.lot_size
     ? (property.additional_data?.lot_size_unit === 'acres'
-      ? `on \u00b1${property.lot_size} Acre Lot`
+      ? `on \u00b1${(property.lot_size / 43560).toFixed(2)} Acre Lot`
       : `on \u00b1${property.lot_size.toLocaleString()} SF Lot`)
     : '';
   const sfParts = [buildingSf, lotSf].filter(Boolean).join(' ');

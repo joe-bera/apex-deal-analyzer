@@ -66,7 +66,7 @@ export default function PropertyComparison({ properties, onClose }: PropertyComp
     { key: 'cap_rate', label: 'CAP Rate', format: (v: number | null | undefined) => v ? `${v}%` : '—', best: 'high' },
     { key: 'price_per_sqft', label: 'Price/SF', format: (v: number | null | undefined) => v ? `$${v}` : '—', best: 'low' },
     { key: 'building_size', label: 'Building Size', format: (v: number | null | undefined) => v ? `${formatNumber(v)} SF` : '—', best: 'high' },
-    { key: 'lot_size', label: 'Lot Size', format: (v: number | null | undefined) => v ? `${v} acres` : '—', best: 'high' },
+    { key: 'lot_size', label: 'Lot Size', format: (v: number | null | undefined) => v ? `${formatNumber(v)} SF` : '—', best: 'high' },
     { key: 'year_built', label: 'Year Built', format: (v: number | null | undefined) => v?.toString() || '—', best: 'high' },
     { key: 'noi', label: 'NOI', format: formatCurrency, best: 'high' },
   ];
