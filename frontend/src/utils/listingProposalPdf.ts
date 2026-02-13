@@ -699,7 +699,6 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
 
   // Rest of NOTE text in bold black
   doc.setTextColor(...BLACK);
-  const noteLines: string[] = doc.splitTextToSize(template.noteText, pageWidth - MARGIN * 2);
   // First line starts after "NOTE: "
   const firstLineRemaining = pageWidth - MARGIN * 2 - notePrefixWidth;
   const firstNoteLines: string[] = doc.splitTextToSize(template.noteText, firstLineRemaining);
