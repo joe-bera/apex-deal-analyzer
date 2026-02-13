@@ -1071,6 +1071,7 @@ export default function InvestmentAnalysis({
               <div className="bg-gray-100 rounded-xl p-4 border">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div><span className="text-gray-600">Bank Loan:</span> <span className="font-medium">{formatCurrency(loanAmount)}</span></div>
+                  <div><span className="text-gray-600">Monthly Pmt:</span> <span className="font-medium">{formatCurrency(monthlyPmt)}</span></div>
                   {sellerCarrybackAmt > 0 && (
                     <div><span className="text-gray-600">Seller Loan:</span> <span className="font-medium">{formatCurrency(sellerCarrybackAmt)}</span></div>
                   )}
