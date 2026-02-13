@@ -300,11 +300,14 @@ export default function PropertyDetail() {
   // Listing proposal modal state
   const [showProposalForm, setShowProposalForm] = useState(false);
   const [execSummaryHistory, setExecSummaryHistory] = useState<Array<{
+    id: string;
     url: string;
     ownerName: string;
     date: Date;
     fileName: string;
   }>>([]);
+  const [savingExecSummary, setSavingExecSummary] = useState(false);
+  const [execSummaryPreviewUrl, setExecSummaryPreviewUrl] = useState<string | null>(null);
 
   // Cached logos for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -327,13 +330,14 @@ export default function PropertyDetail() {
   const loadPropertyData = async () => {
     try {
       setLoading(true);
-      const [propData, compsData, photosData, analysisData, valuationData, txData] = await Promise.all([
+      const [propData, compsData, photosData, analysisData, valuationData, txData, execSumData] = await Promise.all([
         api.getProperty(id!),
         api.getComps(id!).catch(() => ({ comps: [] })),
         api.getPhotos(id!).catch(() => ({ photos: [] })),
         api.getDealAnalysis(id!).catch(() => ({ analysis: null })),
         api.getValuation(id!).catch(() => ({ valuation: null })),
         api.getPropertyTransactions(id!).catch(() => ({ transactions: [] })),
+        api.listExecutiveSummaries(id!).catch(() => ({ data: [] })),
       ]);
       setProperty((propData as PropertyResponse).property);
       setComps((compsData as CompsResponse).comps || []);
@@ -344,6 +348,17 @@ export default function PropertyDetail() {
       const savedValuation = (valuationData as any)?.valuation;
       if (savedValuation) {
         setValuation(savedValuation);
+      }
+      // Load persisted executive summaries
+      const savedSummaries = (execSumData as any)?.data || [];
+      if (savedSummaries.length > 0) {
+        setExecSummaryHistory(savedSummaries.map((s: any) => ({
+          id: s.id,
+          url: s.file_url,
+          ownerName: s.owner_name,
+          date: new Date(s.created_at),
+          fileName: s.file_name,
+        })));
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load property';
@@ -556,7 +571,7 @@ export default function PropertyDetail() {
     generateValuationSummaryPDF({ property, valuation, branding, logoBase64 });
   };
 
-  const handleGenerateExecSummary = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleGenerateExecSummary = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!property || !valuation) return;
 
@@ -571,15 +586,35 @@ export default function PropertyDetail() {
       entity_name: formData.get('proposal_entity_name') as string,
     };
 
-    const pdfUrl = generateExecutiveSummaryPDF({ property, valuation, ownerInfo, apexColorLogoBase64, kwLogoBase64 });
-    const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${ownerInfo.owner_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    setExecSummaryHistory(prev => [{
-      url: pdfUrl,
-      ownerName: ownerInfo.owner_name,
-      date: new Date(),
-      fileName,
-    }, ...prev]);
-    setShowProposalForm(false);
+    setSavingExecSummary(true);
+    try {
+      const { blob, url } = generateExecutiveSummaryPDF({ property, valuation, ownerInfo, apexColorLogoBase64, kwLogoBase64 });
+      setExecSummaryPreviewUrl(url);
+      setShowProposalForm(false);
+
+      // Persist to backend
+      const saved = await api.uploadExecutiveSummary(property.id, blob, {
+        owner_name: ownerInfo.owner_name,
+        honorific: ownerInfo.honorific,
+        entity_name: ownerInfo.entity_name,
+      });
+
+      setExecSummaryHistory(prev => [{
+        id: saved.id,
+        url: saved.file_url,
+        ownerName: saved.owner_name,
+        date: new Date(saved.created_at),
+        fileName: saved.file_name,
+      }, ...prev]);
+      // Switch preview to persisted URL
+      URL.revokeObjectURL(url);
+      setExecSummaryPreviewUrl(saved.file_url);
+    } catch (err) {
+      console.error('Failed to save executive summary:', err);
+      // Preview still works from blob URL even if save fails
+    } finally {
+      setSavingExecSummary(false);
+    }
   };
 
   // Handle multi-comp PDF upload
@@ -1032,28 +1067,30 @@ export default function PropertyDetail() {
                 {/* Generate Executive Summary */}
                 {valuation.pricing_scenarios && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       {/* History pills */}
                       {execSummaryHistory.length > 0 && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Generated:</span>
-                          {execSummaryHistory.map((item, idx) => (
-                            <a
-                              key={idx}
-                              href={item.url}
-                              download={item.fileName}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-xs text-gray-700 transition-colors group"
-                              title={`Download - ${item.date.toLocaleString()}`}
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide shrink-0">Summaries:</span>
+                          {execSummaryHistory.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => setExecSummaryPreviewUrl(item.url)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors group ${
+                                execSummaryPreviewUrl === item.url
+                                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300'
+                                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              }`}
+                              title={item.date.toLocaleString()}
                             >
                               <svg className="w-3 h-3 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
-                              <span className="font-medium">{item.ownerName}</span>
-                              <span className="text-gray-400">{item.date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                              <svg className="w-3 h-3 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            </a>
+                              <span className="font-medium truncate max-w-[120px]">{item.ownerName}</span>
+                              <span className="text-gray-400 shrink-0">
+                                {item.date.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              </span>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1061,37 +1098,50 @@ export default function PropertyDetail() {
                         variant="outline"
                         size="sm"
                         onClick={() => setShowProposalForm(true)}
+                        isLoading={savingExecSummary}
+                        disabled={savingExecSummary}
                         className="ml-auto shrink-0"
                         leftIcon={
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
                         }
                       >
-                        {execSummaryHistory.length > 0 ? 'New Executive Summary' : 'Generate Executive Summary'}
+                        {savingExecSummary ? 'Saving...' : execSummaryHistory.length > 0 ? 'New Summary' : 'Generate Executive Summary'}
                       </Button>
                     </div>
 
-                    {/* Inline PDF Preview — shows the latest */}
-                    {execSummaryHistory.length > 0 && (
+                    {/* Inline PDF Preview */}
+                    {execSummaryPreviewUrl && (
                       <div className="border border-gray-200 rounded-xl overflow-hidden">
                         <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
                           <span className="text-sm font-medium text-gray-700">
-                            Executive Summary — {execSummaryHistory[0].ownerName}
+                            Executive Summary — {execSummaryHistory.find(h => h.url === execSummaryPreviewUrl)?.ownerName || 'Preview'}
                           </span>
-                          <a
-                            href={execSummaryHistory[0].url}
-                            download={execSummaryHistory[0].fileName}
-                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Download PDF
-                          </a>
+                          <div className="flex items-center gap-3">
+                            <a
+                              href={execSummaryPreviewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Download
+                            </a>
+                            <button
+                              onClick={() => setExecSummaryPreviewUrl(null)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                         <iframe
-                          src={execSummaryHistory[0].url}
+                          src={execSummaryPreviewUrl}
                           className="w-full"
                           style={{ height: '500px' }}
                           title="Executive Summary PDF Preview"

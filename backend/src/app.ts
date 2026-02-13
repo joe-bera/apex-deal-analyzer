@@ -37,6 +37,7 @@ import inspectionRoutes from './routes/inspectionRoutes';
 import workOrderRoutes from './routes/workOrderRoutes';
 import capitalProjectRoutes from './routes/capitalProjectRoutes';
 import complianceRoutes from './routes/complianceRoutes';
+import executiveSummaryRoutes from './routes/executiveSummaryRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -145,6 +146,7 @@ export const createApp = (): Application => {
   app.use('/api/work-orders', workOrderRoutes);
   app.use('/api/capital-projects', capitalProjectRoutes);
   app.use('/api/compliance', complianceRoutes);
+  app.use('/api/executive-summaries', executiveSummaryRoutes);
 
   // 404 handler (must be after all routes)
   app.use(notFoundHandler);

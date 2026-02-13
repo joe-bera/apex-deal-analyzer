@@ -509,7 +509,7 @@ function renderSignatureBlock(doc: jsPDF, y: number): number {
 // Main PDF Generator
 // ============================================================================
 
-export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string {
+export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): { blob: Blob; url: string } {
   const { property, valuation, ownerInfo, apexColorLogoBase64, kwLogoBase64 } = options;
 
   const template = getTemplate(property.property_type);
@@ -739,7 +739,8 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string
   // No branded footer — templates don't have one
   // ============================
 
-  // Return blob URL for inline preview (no auto-download)
+  // Return blob + URL for inline preview and upload
   const blob = doc.output('blob');
-  return URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  return { blob, url };
 }

@@ -1218,4 +1218,57 @@ export const api = {
     a.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  // ─── Executive Summaries ────────────────────────────────────────────
+  listExecutiveSummaries: (propertyId: string) =>
+    request<{ success: boolean; data: any[] }>(`/executive-summaries/${propertyId}`),
+
+  uploadExecutiveSummary: async (
+    propertyId: string,
+    pdfBlob: Blob,
+    meta: { owner_name: string; honorific: string; entity_name?: string }
+  ) => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new APIError(401, 'Please log in');
+
+    const fileName = `Executive_Summary_${meta.owner_name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+    // Step 1: Get signed upload URL
+    const urlRes = await fetch(`${API_BASE}/executive-summaries/upload-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ property_id: propertyId, file_name: fileName }),
+    });
+    const urlData = await urlRes.json();
+    if (!urlRes.ok) throw new APIError(urlRes.status, urlData.error);
+
+    // Step 2: Upload PDF directly to Supabase Storage
+    const uploadRes = await fetch(urlData.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: await pdfBlob.arrayBuffer(),
+    });
+    if (!uploadRes.ok) throw new APIError(uploadRes.status, 'Failed to upload PDF');
+
+    // Step 3: Create database record
+    const createRes = await fetch(`${API_BASE}/executive-summaries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        property_id: propertyId,
+        owner_name: meta.owner_name,
+        honorific: meta.honorific,
+        entity_name: meta.entity_name,
+        storage_path: urlData.storage_path,
+        file_name: fileName,
+      }),
+    });
+    const createData = await createRes.json();
+    if (!createRes.ok) throw new APIError(createRes.status, createData.error);
+
+    return createData.data;
+  },
+
+  deleteExecutiveSummary: (id: string) =>
+    request<{ success: boolean }>(`/executive-summaries/${id}`, { method: 'DELETE' }),
 };
