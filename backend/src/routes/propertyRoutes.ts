@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createProperty,
   createPropertyFromDocument,
+  createPropertyFromMaster,
   getProperty,
   listProperties,
   updateProperty,
@@ -53,6 +54,13 @@ router.post(
   validate(documentIdParamSchema, 'params'),
   validate(propertyOverridesSchema, 'body'),
   createPropertyFromDocument
+);
+
+// Create property in My Deals from a master_properties record
+router.post(
+  '/from-master/:masterPropertyId',
+  authenticate,
+  createPropertyFromMaster
 );
 
 // List properties with filters

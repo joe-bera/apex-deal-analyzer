@@ -265,6 +265,11 @@ export const api = {
       body: JSON.stringify({ overrides }),
     }),
 
+  createPropertyFromMaster: (masterPropertyId: string) =>
+    request(`/properties/from-master/${masterPropertyId}`, {
+      method: 'POST',
+    }),
+
   listProperties: (params?: Record<string, string>) => {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
     return request(`/properties${query}`);

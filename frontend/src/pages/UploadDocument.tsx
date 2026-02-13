@@ -147,19 +147,24 @@ export default function UploadDocument() {
       );
       const documentId = result.document.id;
 
-      // Extract data from document
-      const extractResult: any = await api.extractDocument(documentId);
+      // Extract data from document (writes to master_properties automatically)
+      await api.extractDocument(documentId);
 
       if (documentType === 'comp' && propertyId) {
         navigate(`/properties/${propertyId}`);
       } else {
-        // Navigate to the extracted property's page in the data hub
-        // The extraction write-back updates master_properties automatically
-        const addr = extractResult?.extracted_data?.address;
-        if (addr) {
-          navigate('/data-hub');
-        } else {
-          navigate('/data-hub');
+        // Create property in My Deals (properties table) from the extracted data
+        // The extraction already wrote to master_properties automatically
+        try {
+          const propResult: any = await api.createPropertyFromDocument(documentId);
+          if (propResult?.property?.id) {
+            navigate(`/properties/${propResult.property.id}`);
+          } else {
+            navigate('/dashboard');
+          }
+        } catch {
+          // If My Deals creation fails, still go to dashboard
+          navigate('/dashboard');
         }
       }
     } catch (err: any) {

@@ -739,6 +739,7 @@ export default function MasterPropertyDetail() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addingToDeal, setAddingToDeal] = useState(false);
   const [showMgmtModal, setShowMgmtModal] = useState(false);
   const [mgmtSaving, setMgmtSaving] = useState(false);
   const [mgmtForm, setMgmtForm] = useState({
@@ -856,6 +857,29 @@ export default function MasterPropertyDetail() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  setAddingToDeal(true);
+                  try {
+                    const result: any = await api.createPropertyFromMaster(id!);
+                    if (result?.property?.id) {
+                      navigate(`/properties/${result.property.id}`);
+                    }
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to add to My Deals');
+                  } finally {
+                    setAddingToDeal(false);
+                  }
+                }}
+                disabled={addingToDeal}
+                isLoading={addingToDeal}
+              >
+                <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add to My Deals
+              </Button>
               {(property as any).is_managed ? (
                 <>
                   <Link to={`/asset-services/${id}`}>

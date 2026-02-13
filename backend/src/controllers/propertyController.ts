@@ -283,6 +283,93 @@ export const createPropertyFromDocument = async (
 };
 
 /**
+ * Create a My Deals property from a master_properties record
+ * POST /api/properties/from-master/:masterPropertyId
+ */
+export const createPropertyFromMaster = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { masterPropertyId } = req.params;
+
+    // Fetch the master property
+    const { data: mp, error: fetchError } = await supabaseAdmin
+      .from('master_properties')
+      .select('*')
+      .eq('id', masterPropertyId)
+      .eq('is_deleted', false)
+      .single();
+
+    if (fetchError || !mp) {
+      throw new AppError(404, 'Property not found in database');
+    }
+
+    // Map master_properties property_type to properties table enum
+    const mappedType = mapPropertyTypeToDatabase(mp.property_type);
+
+    // Fetch latest sale transaction for pricing data
+    const { data: latestSale } = await supabaseAdmin
+      .from('transactions')
+      .select('sale_price, price_per_sf, cap_rate, noi')
+      .eq('property_id', masterPropertyId)
+      .eq('transaction_type', 'sale')
+      .order('transaction_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    const { data: property, error: createError } = await supabaseAdmin
+      .from('properties')
+      .insert({
+        created_by: req.user.id,
+        address: mp.address,
+        city: mp.city,
+        state: mp.state || 'CA',
+        zip_code: mp.zip,
+        apn: mp.apn,
+        property_type: mappedType,
+        subtype: mp.property_subtype,
+        building_size: mp.building_size,
+        lot_size: mp.lot_size_acres,
+        year_built: mp.year_built,
+        stories: mp.number_of_floors,
+        units: mp.number_of_units,
+        price: latestSale?.sale_price || null,
+        price_per_sqft: latestSale?.price_per_sf || null,
+        cap_rate: latestSale?.cap_rate || null,
+        noi: latestSale?.noi || null,
+        occupancy_rate: mp.percent_leased,
+        market: mp.market,
+        submarket: mp.submarket,
+        zoning: mp.zoning,
+        parking_spaces: mp.parking_spaces,
+        status: 'prospect',
+      })
+      .select()
+      .single();
+
+    if (createError || !property) {
+      console.error('Property creation from master error:', createError);
+      throw new AppError(500, 'Failed to create property in My Deals');
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Property added to My Deals',
+      property,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Create property from master error:', error);
+      res.status(500).json({ success: false, error: 'Failed to add property to My Deals' });
+    }
+  }
+};
+
+/**
  * Update property with manual edits
  * PATCH /api/properties/:id
  */
