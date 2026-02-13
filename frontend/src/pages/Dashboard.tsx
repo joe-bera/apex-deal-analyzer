@@ -64,9 +64,11 @@ export default function Dashboard() {
       zip_code: fd.get('zip_code') as string || undefined,
       property_type: fd.get('property_type') as string || undefined,
       building_size: fd.get('building_size') ? Number(fd.get('building_size')) : undefined,
+      lot_size: fd.get('lot_size') ? Number(fd.get('lot_size')) : undefined,
       year_built: fd.get('year_built') ? Number(fd.get('year_built')) : undefined,
       price: fd.get('price') ? Number(fd.get('price')) : undefined,
       cap_rate: fd.get('cap_rate') ? Number(fd.get('cap_rate')) : undefined,
+      apn: fd.get('apn') as string || undefined,
     };
     // Remove undefined values
     Object.keys(body).forEach((k) => { if (body[k] === undefined || body[k] === '') delete body[k]; });
@@ -596,18 +598,38 @@ export default function Dashboard() {
                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
                       >
                         <option value="">Select type...</option>
-                        <option value="warehouse">Warehouse</option>
-                        <option value="distribution_center">Distribution Center</option>
-                        <option value="manufacturing">Manufacturing</option>
-                        <option value="flex_space">Flex Space</option>
-                        <option value="cold_storage">Cold Storage</option>
-                        <option value="other">Other</option>
+                        <optgroup label="Industrial">
+                          <option value="warehouse">Warehouse</option>
+                          <option value="distribution_center">Distribution Center</option>
+                          <option value="manufacturing">Manufacturing</option>
+                          <option value="flex_space">Flex Space</option>
+                          <option value="cold_storage">Cold Storage</option>
+                          <option value="industrial">Industrial (General)</option>
+                        </optgroup>
+                        <optgroup label="Commercial">
+                          <option value="retail">Retail</option>
+                          <option value="office">Office</option>
+                          <option value="mixed_use">Mixed Use</option>
+                        </optgroup>
+                        <optgroup label="Residential">
+                          <option value="multifamily">Multifamily</option>
+                          <option value="residential">Residential</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                          <option value="land">Land</option>
+                          <option value="other">Other</option>
+                        </optgroup>
                       </select>
                     </div>
                     <Input name="building_size" type="number" label="Building Size (SF)" placeholder="50000" />
+                    <Input name="lot_size" type="number" label="Lot Size (SF)" placeholder="80000" />
                     <Input name="year_built" type="number" label="Year Built" placeholder="2005" />
                     <Input name="price" type="number" label="Price" placeholder="5000000" />
                     <Input name="cap_rate" type="number" step="0.01" label="CAP Rate (%)" placeholder="5.5" />
+                    <div className="col-span-2">
+                      <Input name="apn" label="APN(s)" placeholder="0110-141-01, 0110-141-02" />
+                      <p className="mt-1 text-xs text-gray-500">Separate multiple APNs with commas</p>
+                    </div>
                   </div>
                   <div className="flex gap-3 pt-2 border-t">
                     <Button type="button" variant="outline" onClick={() => setAddMode('choose')} className="flex-1">

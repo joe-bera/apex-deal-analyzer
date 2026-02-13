@@ -5,11 +5,10 @@ import { ExtractedPropertyData } from '../services/extractionService';
 import { analyzePropertyValue } from '../services/valuationService';
 
 // Database property_type enum values
-type DatabasePropertyType = 'warehouse' | 'distribution_center' | 'manufacturing' | 'flex_space' | 'cold_storage' | 'other';
+type DatabasePropertyType = 'warehouse' | 'distribution_center' | 'manufacturing' | 'flex_space' | 'cold_storage' | 'retail' | 'office' | 'land' | 'residential' | 'multifamily' | 'mixed_use' | 'industrial' | 'other';
 
 /**
  * Map extracted property types to database enum values
- * The extraction service returns broader categories, we need to map them to our industrial-focused enum
  */
 const mapPropertyTypeToDatabase = (extractedType: string | undefined | null, subtype?: string): DatabasePropertyType => {
   if (!extractedType) {
@@ -27,16 +26,33 @@ const mapPropertyTypeToDatabase = (extractedType: string | undefined | null, sub
 
   const typeLower = extractedType.toLowerCase();
 
-  // Direct matches or mappings
-  if (typeLower === 'warehouse') return 'warehouse';
-  if (typeLower === 'distribution_center' || typeLower.includes('distribution')) return 'distribution_center';
-  if (typeLower === 'manufacturing') return 'manufacturing';
-  if (typeLower === 'flex_space' || typeLower.includes('flex')) return 'flex_space';
-  if (typeLower === 'cold_storage' || typeLower.includes('cold')) return 'cold_storage';
+  // Direct matches
+  const directMatches: Record<string, DatabasePropertyType> = {
+    warehouse: 'warehouse',
+    distribution_center: 'distribution_center',
+    manufacturing: 'manufacturing',
+    flex_space: 'flex_space',
+    cold_storage: 'cold_storage',
+    retail: 'retail',
+    office: 'office',
+    land: 'land',
+    residential: 'residential',
+    multifamily: 'multifamily',
+    mixed_use: 'mixed_use',
+    industrial: 'industrial',
+    other: 'other',
+  };
 
-  // Map broader extraction types to our industrial-focused types
+  if (directMatches[typeLower]) return directMatches[typeLower];
+
+  // Fuzzy matches
+  if (typeLower.includes('distribution')) return 'distribution_center';
+  if (typeLower.includes('flex')) return 'flex_space';
+  if (typeLower.includes('cold')) return 'cold_storage';
+  if (typeLower.includes('warehouse')) return 'warehouse';
+
+  // If industrial, try to be more specific based on subtype
   if (typeLower === 'industrial') {
-    // Try to be more specific based on subtype
     if (subtype) {
       const subtypeLower = subtype.toLowerCase();
       if (subtypeLower.includes('warehouse')) return 'warehouse';
@@ -45,12 +61,7 @@ const mapPropertyTypeToDatabase = (extractedType: string | undefined | null, sub
       if (subtypeLower.includes('flex')) return 'flex_space';
       if (subtypeLower.includes('cold')) return 'cold_storage';
     }
-    return 'warehouse'; // Default industrial to warehouse
-  }
-
-  // Non-industrial types go to 'other'
-  if (['office', 'retail', 'multifamily', 'land', 'mixed_use', 'residential'].includes(typeLower)) {
-    return 'other';
+    return 'industrial';
   }
 
   return 'other';
@@ -531,6 +542,7 @@ export const listProperties = async (req: Request, res: Response): Promise<void>
     let query = supabaseAdmin
       .from('properties')
       .select('*, documents(id, file_name, document_type)', { count: 'exact' })
+      .eq('is_archived', false)
       .order('created_at', { ascending: false });
 
     // Apply filters

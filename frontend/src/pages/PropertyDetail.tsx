@@ -1831,18 +1831,27 @@ export default function PropertyDetail() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                       >
                         <option value="">Select type</option>
-                        <option value="warehouse">Warehouse</option>
-                        <option value="distribution_center">Distribution Center</option>
-                        <option value="manufacturing">Manufacturing</option>
-                        <option value="flex_space">Flex Space</option>
-                        <option value="cold_storage">Cold Storage</option>
-                        <option value="industrial">Industrial</option>
-                        <option value="office">Office</option>
-                        <option value="retail">Retail</option>
-                        <option value="multifamily">Multifamily</option>
-                        <option value="land">Land</option>
-                        <option value="mixed_use">Mixed Use</option>
-                        <option value="other">Other</option>
+                        <optgroup label="Industrial">
+                          <option value="warehouse">Warehouse</option>
+                          <option value="distribution_center">Distribution Center</option>
+                          <option value="manufacturing">Manufacturing</option>
+                          <option value="flex_space">Flex Space</option>
+                          <option value="cold_storage">Cold Storage</option>
+                          <option value="industrial">Industrial (General)</option>
+                        </optgroup>
+                        <optgroup label="Commercial">
+                          <option value="retail">Retail</option>
+                          <option value="office">Office</option>
+                          <option value="mixed_use">Mixed Use</option>
+                        </optgroup>
+                        <optgroup label="Residential">
+                          <option value="multifamily">Multifamily</option>
+                          <option value="residential">Residential</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                          <option value="land">Land</option>
+                          <option value="other">Other</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
