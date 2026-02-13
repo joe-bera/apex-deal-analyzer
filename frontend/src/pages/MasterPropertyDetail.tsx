@@ -99,17 +99,39 @@ interface Transaction {
   id: string;
   transaction_type: string;
   transaction_date?: string;
+  recording_date?: string;
+  // Sale
   sale_price?: number;
   price_per_sf?: number;
   cap_rate?: number;
   noi?: number;
+  // Parties
   buyer_name?: string;
   seller_name?: string;
+  broker_name?: string;
+  broker_company?: string;
+  // Lease
   tenant_name?: string;
   lease_type?: string;
+  lease_term_months?: number;
+  rent_per_sf_year?: number;
+  lease_start_date?: string;
+  lease_end_date?: string;
+  // Listing
+  asking_price?: number;
+  asking_price_per_sf?: number;
+  days_on_market?: number;
+  listing_status?: string;
+  asking_cap_rate?: number;
+  // Financing
   lender?: string;
   loan_amount?: number;
+  loan_type?: string;
+  interest_rate?: number;
+  maturity_date?: string;
+  // Meta
   source?: string;
+  notes?: string;
   created_at?: string;
 }
 
@@ -146,6 +168,178 @@ function hasAnyValue(obj: PropertyData, keys: (keyof PropertyData)[]) {
     const v = obj[k];
     return v != null && v !== '' && v !== false;
   });
+}
+
+// ── Transaction Expandable Card ─────────────────────────────────
+function TransactionCard({ tx }: { tx: Transaction }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const typeBadge: Record<string, { color: string; label: string }> = {
+    sale: { color: 'bg-green-100 text-green-800', label: 'Sale' },
+    lease: { color: 'bg-blue-100 text-blue-800', label: 'Lease' },
+    listing: { color: 'bg-purple-100 text-purple-800', label: 'Listing' },
+    off_market: { color: 'bg-gray-100 text-gray-800', label: 'Off Market' },
+  };
+  const badge = typeBadge[tx.transaction_type] || typeBadge.off_market;
+
+  // Build headline depending on type
+  const headline = tx.transaction_type === 'sale'
+    ? formatCurrency(tx.sale_price)
+    : tx.transaction_type === 'lease'
+    ? (tx.tenant_name || 'Lease')
+    : tx.transaction_type === 'listing'
+    ? `Asking ${formatCurrency(tx.asking_price)}`
+    : 'Off Market';
+
+  const subline = tx.transaction_type === 'sale'
+    ? [tx.price_per_sf ? `$${tx.price_per_sf.toFixed(0)}/SF` : null, tx.cap_rate ? `${tx.cap_rate.toFixed(2)}% Cap` : null].filter(Boolean).join(' · ')
+    : tx.transaction_type === 'lease'
+    ? [tx.lease_type, tx.rent_per_sf_year ? `$${tx.rent_per_sf_year.toFixed(2)}/SF/yr` : null].filter(Boolean).join(' · ')
+    : tx.transaction_type === 'listing'
+    ? [tx.asking_price_per_sf ? `$${tx.asking_price_per_sf.toFixed(0)}/SF` : null, tx.days_on_market ? `${tx.days_on_market} DOM` : null, tx.listing_status].filter(Boolean).join(' · ')
+    : '';
+
+  // Check which detail sections have data
+  const hasSaleDetails = tx.transaction_type === 'sale' && (tx.noi || tx.buyer_name || tx.seller_name || tx.recording_date);
+  const hasLeaseDetails = tx.transaction_type === 'lease' && (tx.lease_term_months || tx.lease_start_date || tx.lease_end_date || tx.rent_per_sf_year);
+  const hasListingDetails = tx.transaction_type === 'listing' && (tx.asking_cap_rate || tx.days_on_market || tx.listing_status);
+  const hasParties = tx.buyer_name || tx.seller_name || tx.broker_name || tx.broker_company;
+  const hasFinancing = tx.lender || tx.loan_amount || tx.loan_type || tx.interest_rate || tx.maturity_date;
+  const hasMeta = tx.source || tx.notes;
+  const hasDetails = hasSaleDetails || hasLeaseDetails || hasListingDetails || hasParties || hasFinancing || hasMeta;
+
+  return (
+    <div className={`border rounded-xl overflow-hidden transition-all ${expanded ? 'border-gray-300 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
+      {/* Summary Row — always visible */}
+      <button
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        className={`w-full flex items-center justify-between px-5 py-4 text-left ${hasDetails ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${badge.color}`}>
+            {badge.label}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">{headline}</p>
+            {subline && <p className="text-xs text-gray-500 mt-0.5">{subline}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+          <span className="text-sm text-gray-500">{formatDate(tx.transaction_date)}</span>
+          {hasDetails && (
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded Detail */}
+      {expanded && hasDetails && (
+        <div className="border-t bg-gray-50 px-5 py-4 space-y-5">
+          {/* Sale Details */}
+          {tx.transaction_type === 'sale' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Sale Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Sale Price" value={formatCurrency(tx.sale_price)} />
+                <TxField label="Price/SF" value={tx.price_per_sf ? `$${tx.price_per_sf.toFixed(2)}` : null} />
+                <TxField label="Cap Rate" value={tx.cap_rate ? `${tx.cap_rate.toFixed(2)}%` : null} />
+                <TxField label="NOI" value={formatCurrency(tx.noi)} />
+                <TxField label="Recording Date" value={formatDate(tx.recording_date)} />
+              </dl>
+            </div>
+          )}
+
+          {/* Lease Details */}
+          {tx.transaction_type === 'lease' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Lease Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Tenant" value={tx.tenant_name} />
+                <TxField label="Lease Type" value={tx.lease_type} />
+                <TxField label="Rent/SF/Yr" value={tx.rent_per_sf_year ? `$${tx.rent_per_sf_year.toFixed(2)}` : null} />
+                <TxField label="Term" value={tx.lease_term_months ? `${tx.lease_term_months} months` : null} />
+                <TxField label="Start Date" value={formatDate(tx.lease_start_date)} />
+                <TxField label="End Date" value={formatDate(tx.lease_end_date)} />
+              </dl>
+            </div>
+          )}
+
+          {/* Listing Details */}
+          {tx.transaction_type === 'listing' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Listing Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Asking Price" value={formatCurrency(tx.asking_price)} />
+                <TxField label="Asking $/SF" value={tx.asking_price_per_sf ? `$${tx.asking_price_per_sf.toFixed(0)}` : null} />
+                <TxField label="Asking Cap" value={tx.asking_cap_rate ? `${tx.asking_cap_rate.toFixed(2)}%` : null} />
+                <TxField label="Days on Market" value={tx.days_on_market?.toString()} />
+                <TxField label="Status" value={tx.listing_status} />
+              </dl>
+            </div>
+          )}
+
+          {/* Parties */}
+          {hasParties && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Parties</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Buyer" value={tx.buyer_name} />
+                <TxField label="Seller" value={tx.seller_name} />
+                <TxField label="Broker" value={tx.broker_name} />
+                <TxField label="Brokerage" value={tx.broker_company} />
+              </dl>
+            </div>
+          )}
+
+          {/* Financing */}
+          {hasFinancing && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Financing</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Lender" value={tx.lender} />
+                <TxField label="Loan Amount" value={formatCurrency(tx.loan_amount)} />
+                <TxField label="Loan Type" value={tx.loan_type} />
+                <TxField label="Interest Rate" value={tx.interest_rate ? `${tx.interest_rate}%` : null} />
+                <TxField label="Maturity" value={formatDate(tx.maturity_date)} />
+                {tx.loan_amount && tx.sale_price ? (
+                  <TxField label="LTV" value={`${((tx.loan_amount / tx.sale_price) * 100).toFixed(0)}%`} />
+                ) : null}
+              </dl>
+            </div>
+          )}
+
+          {/* Source & Notes */}
+          {hasMeta && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Source & Notes</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Source" value={tx.source?.replace('_', ' ')} />
+                {tx.notes && (
+                  <div className="col-span-full">
+                    <dt className="text-xs text-gray-500">Notes</dt>
+                    <dd className="text-sm text-gray-700 mt-0.5">{tx.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline field for transaction cards — only renders if value is present
+function TxField({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value || value === '-') return null;
+  return (
+    <div>
+      <dt className="text-xs text-gray-500">{label}</dt>
+      <dd className="text-sm font-medium text-gray-900">{value}</dd>
+    </div>
+  );
 }
 
 const ENTITY_TYPE_LABELS: Record<OwnerEntityType, string> = {
@@ -957,7 +1151,7 @@ export default function MasterPropertyDetail() {
           </Card>
         )}
 
-        {/* Transactions */}
+        {/* Transaction History — Expandable Cards */}
         <Card>
           <CardHeader>
             <CardTitle>Transaction History ({transactions.length})</CardTitle>
@@ -966,43 +1160,10 @@ export default function MasterPropertyDetail() {
             {transactions.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-6">No transactions recorded</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Type</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Date</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">Price</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">$/SF</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">Cap Rate</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">NOI</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Buyer/Tenant</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Seller</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {transactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <Badge variant={tx.transaction_type === 'sale' ? 'success' : 'info'} className="capitalize">
-                            {tx.transaction_type}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{formatDate(tx.transaction_date)}</td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(tx.sale_price)}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">
-                          {tx.price_per_sf ? `$${tx.price_per_sf.toFixed(0)}` : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-right text-gray-600">
-                          {tx.cap_rate ? `${tx.cap_rate.toFixed(2)}%` : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(tx.noi)}</td>
-                        <td className="px-4 py-3 text-gray-600">{tx.buyer_name || tx.tenant_name || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600">{tx.seller_name || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                {transactions.map((tx) => (
+                  <TransactionCard key={tx.id} tx={tx} />
+                ))}
               </div>
             )}
           </CardContent>
