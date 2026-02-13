@@ -40,8 +40,16 @@ import {
   solveRequiredRentPSF,
   solveCapexCeiling,
   solveTargetExitCap,
+  calculateNNNReimbursements,
+  calculateAdjustedDownPayment,
+  calculateTotalAnnualDebtService,
 } from '../utils/financialCalculations';
 import type { InvestmentStrategy } from '../utils/financialCalculations';
+import {
+  getDefaultPropertyTaxes,
+  getDefaultInsurance,
+  getDefaultUtilities,
+} from '../utils/expenseDefaults';
 
 type TabType = 'summary' | 'strategy' | 'valueadd' | 'proforma' | 'exit' | 'decision' | 'optimization';
 
@@ -95,6 +103,10 @@ export default function InvestmentAnalysis({
     potential_gross_income: initialData?.potential_gross_income ?? property.gross_income ?? 0,
     vacancy_rate: initialData?.vacancy_rate ?? 5,
     other_income: initialData?.other_income ?? 0,
+    // Lease Structure
+    lease_type: initialData?.lease_type ?? 'gross',
+    nnn_reimbursement_rate: initialData?.nnn_reimbursement_rate ?? 100,
+    modified_gross_reimbursement: initialData?.modified_gross_reimbursement ?? 0,
     // Expenses
     property_taxes: initialData?.property_taxes ?? 0,
     insurance: initialData?.insurance ?? 0,
@@ -103,12 +115,20 @@ export default function InvestmentAnalysis({
     repairs_maintenance: initialData?.repairs_maintenance ?? 0,
     reserves_capex: initialData?.reserves_capex ?? 0,
     other_expenses: initialData?.other_expenses ?? 0,
+    // Smart expense defaults tracking
+    auto_property_taxes: initialData?.auto_property_taxes ?? false,
+    auto_insurance: initialData?.auto_insurance ?? false,
+    auto_utilities: initialData?.auto_utilities ?? false,
     // Financing
     purchase_price: initialData?.purchase_price ?? property.price ?? 0,
     ltv_percent: initialData?.ltv_percent ?? 70,
     interest_rate: initialData?.interest_rate ?? 7,
     amortization_years: initialData?.amortization_years ?? 25,
     closing_costs_percent: initialData?.closing_costs_percent ?? 2,
+    // Seller Carryback
+    seller_carryback_amount: initialData?.seller_carryback_amount ?? 0,
+    seller_carryback_rate: initialData?.seller_carryback_rate ?? 0,
+    seller_carryback_term: initialData?.seller_carryback_term ?? 5,
     // Strategy
     investment_strategy: initialData?.investment_strategy ?? 'value_add',
     // Value-Add Attribution
@@ -158,6 +178,9 @@ export default function InvestmentAnalysis({
         potential_gross_income: initialData.potential_gross_income ?? prev.potential_gross_income,
         vacancy_rate: initialData.vacancy_rate ?? prev.vacancy_rate,
         other_income: initialData.other_income ?? prev.other_income,
+        lease_type: initialData.lease_type ?? prev.lease_type,
+        nnn_reimbursement_rate: initialData.nnn_reimbursement_rate ?? prev.nnn_reimbursement_rate,
+        modified_gross_reimbursement: initialData.modified_gross_reimbursement ?? prev.modified_gross_reimbursement,
         property_taxes: initialData.property_taxes ?? prev.property_taxes,
         insurance: initialData.insurance ?? prev.insurance,
         utilities: initialData.utilities ?? prev.utilities,
@@ -165,11 +188,17 @@ export default function InvestmentAnalysis({
         repairs_maintenance: initialData.repairs_maintenance ?? prev.repairs_maintenance,
         reserves_capex: initialData.reserves_capex ?? prev.reserves_capex,
         other_expenses: initialData.other_expenses ?? prev.other_expenses,
+        auto_property_taxes: initialData.auto_property_taxes ?? prev.auto_property_taxes,
+        auto_insurance: initialData.auto_insurance ?? prev.auto_insurance,
+        auto_utilities: initialData.auto_utilities ?? prev.auto_utilities,
         purchase_price: initialData.purchase_price ?? prev.purchase_price,
         ltv_percent: initialData.ltv_percent ?? prev.ltv_percent,
         interest_rate: initialData.interest_rate ?? prev.interest_rate,
         amortization_years: initialData.amortization_years ?? prev.amortization_years,
         closing_costs_percent: initialData.closing_costs_percent ?? prev.closing_costs_percent,
+        seller_carryback_amount: initialData.seller_carryback_amount ?? prev.seller_carryback_amount,
+        seller_carryback_rate: initialData.seller_carryback_rate ?? prev.seller_carryback_rate,
+        seller_carryback_term: initialData.seller_carryback_term ?? prev.seller_carryback_term,
         investment_strategy: initialData.investment_strategy ?? prev.investment_strategy,
         va_below_market_rents: initialData.va_below_market_rents ?? prev.va_below_market_rents,
         va_below_market_rents_note: initialData.va_below_market_rents_note ?? prev.va_below_market_rents_note,
@@ -204,6 +233,44 @@ export default function InvestmentAnalysis({
     }
   }, [initialData]);
 
+  // ─── Smart Expense Defaults ──────────────────────────────────
+  const smartDefaultsApplied = useRef(false);
+  useEffect(() => {
+    // Only auto-fill on first mount when there is no saved analysis data and expense fields are 0
+    if (initialData || smartDefaultsApplied.current) return;
+    smartDefaultsApplied.current = true;
+
+    const pp = property.price ?? 0;
+    const sf = property.building_size ?? 0;
+    const pt = property.property_type ?? 'industrial';
+
+    const updates: Partial<DealAnalysis> = {};
+
+    if (pp > 0) {
+      const defaultTaxes = getDefaultPropertyTaxes(pp, property.city);
+      if (defaultTaxes > 0) {
+        updates.property_taxes = defaultTaxes;
+        updates.auto_property_taxes = true;
+      }
+    }
+    if (sf > 0) {
+      const defaultIns = getDefaultInsurance(sf, pt);
+      if (defaultIns > 0) {
+        updates.insurance = defaultIns;
+        updates.auto_insurance = true;
+      }
+      const defaultUtil = getDefaultUtilities(sf, pt);
+      if (defaultUtil > 0) {
+        updates.utilities = defaultUtil;
+        updates.auto_utilities = true;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setData(prev => ({ ...prev, ...updates }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Derived Calculations ──────────────────────────────────────
 
   const n = (v: number | null | undefined) => v ?? 0;
@@ -211,10 +278,23 @@ export default function InvestmentAnalysis({
   const strategy = (data.investment_strategy ?? 'value_add') as InvestmentStrategy;
   const thresholds = STRATEGY_THRESHOLDS[strategy];
 
+  // Lease type & NNN reimbursements
+  const leaseType = data.lease_type ?? 'gross';
+  const nnnReimbursements = leaseType === 'nnn'
+    ? calculateNNNReimbursements(
+        n(data.property_taxes),
+        n(data.insurance),
+        n(data.repairs_maintenance),
+        n(data.nnn_reimbursement_rate)
+      )
+    : leaseType === 'modified_gross'
+      ? n(data.modified_gross_reimbursement)
+      : 0;
+
   // Income / Expense
   const pgi = n(data.potential_gross_income);
   const vacancyAmount = calculateVacancyAmount(pgi, n(data.vacancy_rate));
-  const egi = calculateEffectiveGrossIncome(pgi, vacancyAmount, n(data.other_income));
+  const egi = calculateEffectiveGrossIncome(pgi, vacancyAmount, n(data.other_income) + nnnReimbursements);
   const managementFee = calculateManagementFee(egi, n(data.management_fee_percent));
   const totalExpenses = calculateTotalExpenses({
     propertyTaxes: n(data.property_taxes),
@@ -230,9 +310,20 @@ export default function InvestmentAnalysis({
   // Financing
   const purchasePrice = n(data.purchase_price);
   const loanAmount = calculateLoanAmount(purchasePrice, n(data.ltv_percent));
-  const downPayment = calculateDownPayment(purchasePrice, loanAmount);
+
+  // Seller carryback
+  const sellerCarrybackAmt = n(data.seller_carryback_amount);
+  const sellerCarrybackRate = n(data.seller_carryback_rate);
+  const sellerCarrybackTerm = n(data.seller_carryback_term) || 5;
+  const sellerMonthlyPmt = sellerCarrybackAmt > 0
+    ? calculateMonthlyPayment(sellerCarrybackAmt, sellerCarrybackRate, sellerCarrybackTerm)
+    : 0;
+  const sellerAnnualDS = sellerMonthlyPmt * 12;
+
+  const downPayment = calculateAdjustedDownPayment(purchasePrice, loanAmount, sellerCarrybackAmt);
   const monthlyPmt = calculateMonthlyPayment(loanAmount, n(data.interest_rate), n(data.amortization_years));
-  const annualDS = calculateAnnualDebtService(monthlyPmt);
+  const bankAnnualDS = calculateAnnualDebtService(monthlyPmt);
+  const annualDS = bankAnnualDS + sellerAnnualDS;
   const closingCosts = calculateClosingCosts(purchasePrice, n(data.closing_costs_percent));
   const totalCashRequired = calculateTotalCashRequired(downPayment, closingCosts);
   const beforeTaxCF = calculateBeforeTaxCashFlow(noi, annualDS);
@@ -261,7 +352,8 @@ export default function InvestmentAnalysis({
     holdingPeriod,
     exitCapRate,
     sellingCosts: sellingCostsPercent,
-  }), [egi, totalExpenses, data.income_growth_rate, data.expense_growth_rate, purchasePrice, loanAmount, data.interest_rate, data.amortization_years, holdingPeriod, exitCapRate, sellingCostsPercent]);
+    additionalAnnualDebtService: sellerAnnualDS,
+  }), [egi, totalExpenses, data.income_growth_rate, data.expense_growth_rate, purchasePrice, loanAmount, data.interest_rate, data.amortization_years, holdingPeriod, exitCapRate, sellingCostsPercent, sellerAnnualDS]);
 
   // Exit & Returns
   const lastYear = projections.length > 0 ? projections[projections.length - 1] : null;
@@ -377,12 +469,18 @@ export default function InvestmentAnalysis({
   // ─── Handlers ──────────────────────────────────────────────────
 
   const handleChange = useCallback((field: string, value: string | number | boolean) => {
-    setData(prev => ({
-      ...prev,
-      [field]: typeof value === 'string' && field !== 'investment_strategy' && !field.includes('note') && field !== 'notes'
-        ? parseNumberInput(value)
-        : value,
-    }));
+    setData(prev => {
+      const updates: Partial<DealAnalysis> = {
+        [field]: typeof value === 'string' && field !== 'investment_strategy' && field !== 'lease_type' && !field.includes('note') && field !== 'notes'
+          ? parseNumberInput(value)
+          : value,
+      };
+      // Clear auto flag when user manually edits an auto-filled expense field
+      if (field === 'property_taxes') updates.auto_property_taxes = false;
+      if (field === 'insurance') updates.auto_insurance = false;
+      if (field === 'utilities') updates.auto_utilities = false;
+      return { ...prev, ...updates };
+    });
   }, []);
 
   const handleSave = useCallback(() => {
@@ -394,9 +492,11 @@ export default function InvestmentAnalysis({
         irr: irrValue,
         equity_multiple: equityMultiple,
         avg_cash_on_cash: avgCashOnCash,
+        seller_carryback_monthly_payment: sellerMonthlyPmt,
+        seller_annual_debt_service: sellerAnnualDS,
       });
     }
-  }, [onSave, data, vaTotalCost, totalProjectCost, irrValue, equityMultiple, avgCashOnCash]);
+  }, [onSave, data, vaTotalCost, totalProjectCost, irrValue, equityMultiple, avgCashOnCash, sellerMonthlyPmt, sellerAnnualDS]);
 
   // Auto-save debounce
   useEffect(() => {
@@ -583,11 +683,21 @@ export default function InvestmentAnalysis({
               {/* Quick financial summary */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-green-50 rounded-xl p-5 border border-green-200">
-                  <h4 className="text-sm font-semibold text-green-800 uppercase mb-3">Income</h4>
+                  <h4 className="text-sm font-semibold text-green-800 uppercase mb-3">
+                    Income
+                    {leaseType !== 'gross' && (
+                      <span className="ml-2 text-xs font-normal text-green-600">
+                        ({leaseType === 'nnn' ? 'NNN' : 'Modified Gross'})
+                      </span>
+                    )}
+                  </h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span>Gross Income</span><span className="font-medium">{formatCurrency(pgi)}</span></div>
                     <div className="flex justify-between text-red-600"><span>Less: Vacancy</span><span>-{formatCurrency(vacancyAmount)}</span></div>
                     <div className="flex justify-between"><span>Other Income</span><span className="font-medium">{formatCurrency(n(data.other_income))}</span></div>
+                    {nnnReimbursements > 0 && (
+                      <div className="flex justify-between text-green-700"><span>Expense Reimbursements</span><span className="font-medium">+{formatCurrency(nnnReimbursements)}</span></div>
+                    )}
                     <div className="flex justify-between pt-2 border-t border-green-300 font-bold"><span>EGI</span><span>{formatCurrency(egi)}</span></div>
                   </div>
                 </div>
@@ -595,7 +705,10 @@ export default function InvestmentAnalysis({
                   <h4 className="text-sm font-semibold text-red-800 uppercase mb-3">Expenses & Debt</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span>Operating Expenses</span><span className="font-medium">{formatCurrency(totalExpenses)}</span></div>
-                    <div className="flex justify-between"><span>Annual Debt Service</span><span className="font-medium">{formatCurrency(annualDS)}</span></div>
+                    <div className="flex justify-between"><span>Bank Debt Service</span><span className="font-medium">{formatCurrency(bankAnnualDS)}</span></div>
+                    {sellerAnnualDS > 0 && (
+                      <div className="flex justify-between"><span>Seller Carryback DS</span><span className="font-medium">{formatCurrency(sellerAnnualDS)}</span></div>
+                    )}
                     <div className="flex justify-between pt-2 border-t border-red-300 font-bold">
                       <span>Before-Tax Cash Flow</span>
                       <span className={beforeTaxCF >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(beforeTaxCF)}</span>
@@ -848,6 +961,35 @@ export default function InvestmentAnalysis({
                 </div>
               </div>
 
+              {/* Lease Structure */}
+              <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-200">
+                <h4 className="text-sm font-semibold text-indigo-800 uppercase mb-3">Lease Structure</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Select
+                    label="Lease Type"
+                    value={data.lease_type || 'gross'}
+                    onChange={(e) => handleChange('lease_type', e.target.value)}
+                    options={[
+                      { value: 'gross', label: 'Gross Lease' },
+                      { value: 'nnn', label: 'NNN (Triple Net)' },
+                      { value: 'modified_gross', label: 'Modified Gross' },
+                    ]}
+                  />
+                  {leaseType === 'nnn' && (
+                    <Input label="NNN Recovery %" type="number" step="1" rightAddon="%" value={data.nnn_reimbursement_rate ?? 100} onChange={(e) => handleChange('nnn_reimbursement_rate', e.target.value)} />
+                  )}
+                  {leaseType === 'modified_gross' && (
+                    <Input label="Annual Reimbursement" type="number" leftAddon="$" value={data.modified_gross_reimbursement || ''} onChange={(e) => handleChange('modified_gross_reimbursement', e.target.value)} />
+                  )}
+                </div>
+                {nnnReimbursements > 0 && (
+                  <div className="flex justify-between text-sm pt-3 mt-3 border-t border-indigo-200 font-medium text-indigo-700">
+                    <span>Expense Reimbursement Income</span>
+                    <span>+{formatCurrency(nnnReimbursements)}/yr</span>
+                  </div>
+                )}
+              </div>
+
               {/* Income & Expense Inputs */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-green-50 rounded-xl p-5 border border-green-200">
@@ -856,6 +998,11 @@ export default function InvestmentAnalysis({
                     <Input label="Potential Gross Income" type="number" leftAddon="$" value={data.potential_gross_income || ''} onChange={(e) => handleChange('potential_gross_income', e.target.value)} />
                     <Input label="Vacancy %" type="number" rightAddon="%" value={data.vacancy_rate || ''} onChange={(e) => handleChange('vacancy_rate', e.target.value)} />
                     <Input label="Other Income" type="number" leftAddon="$" value={data.other_income || ''} onChange={(e) => handleChange('other_income', e.target.value)} />
+                    {nnnReimbursements > 0 && (
+                      <div className="flex justify-between text-sm text-indigo-700">
+                        <span>Expense Reimbursements</span><span className="font-medium">+{formatCurrency(nnnReimbursements)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm pt-2 border-t border-green-300 font-bold">
                       <span>EGI</span><span>{formatCurrency(egi)}</span>
                     </div>
@@ -864,8 +1011,18 @@ export default function InvestmentAnalysis({
                 <div className="bg-red-50 rounded-xl p-5 border border-red-200">
                   <h4 className="text-sm font-semibold text-red-800 uppercase mb-3">Expenses</h4>
                   <div className="space-y-3">
-                    <Input label="Property Taxes" type="number" leftAddon="$" value={data.property_taxes || ''} onChange={(e) => handleChange('property_taxes', e.target.value)} />
-                    <Input label="Insurance" type="number" leftAddon="$" value={data.insurance || ''} onChange={(e) => handleChange('insurance', e.target.value)} />
+                    <div className="relative">
+                      <Input label="Property Taxes" type="number" leftAddon="$" value={data.property_taxes || ''} onChange={(e) => handleChange('property_taxes', e.target.value)} />
+                      {data.auto_property_taxes && <span className="absolute top-0 right-0 text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">auto</span>}
+                    </div>
+                    <div className="relative">
+                      <Input label="Insurance" type="number" leftAddon="$" value={data.insurance || ''} onChange={(e) => handleChange('insurance', e.target.value)} />
+                      {data.auto_insurance && <span className="absolute top-0 right-0 text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">auto</span>}
+                    </div>
+                    <div className="relative">
+                      <Input label="Utilities" type="number" leftAddon="$" value={data.utilities || ''} onChange={(e) => handleChange('utilities', e.target.value)} />
+                      {data.auto_utilities && <span className="absolute top-0 right-0 text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">auto</span>}
+                    </div>
                     <Input label="Mgmt Fee %" type="number" rightAddon="%" value={data.management_fee_percent || ''} onChange={(e) => handleChange('management_fee_percent', e.target.value)} />
                     <Input label="Repairs" type="number" leftAddon="$" value={data.repairs_maintenance || ''} onChange={(e) => handleChange('repairs_maintenance', e.target.value)} />
                     <Input label="Reserves/CapEx" type="number" leftAddon="$" value={data.reserves_capex || ''} onChange={(e) => handleChange('reserves_capex', e.target.value)} />
@@ -877,9 +1034,9 @@ export default function InvestmentAnalysis({
                 </div>
               </div>
 
-              {/* Financing */}
+              {/* Primary Loan */}
               <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
-                <h4 className="text-sm font-semibold text-blue-800 uppercase mb-3">Financing</h4>
+                <h4 className="text-sm font-semibold text-blue-800 uppercase mb-3">Primary Loan</h4>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <Input label="Purchase Price" type="number" leftAddon="$" value={data.purchase_price || ''} onChange={(e) => handleChange('purchase_price', e.target.value)} />
                   <Input label="LTV %" type="number" rightAddon="%" value={data.ltv_percent || ''} onChange={(e) => handleChange('ltv_percent', e.target.value)} />
@@ -887,10 +1044,33 @@ export default function InvestmentAnalysis({
                   <Input label="Amortization" type="number" rightAddon="yrs" value={data.amortization_years || ''} onChange={(e) => handleChange('amortization_years', e.target.value)} />
                   <Input label="Closing Costs" type="number" rightAddon="%" value={data.closing_costs_percent || ''} onChange={(e) => handleChange('closing_costs_percent', e.target.value)} />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 pt-3 border-t border-blue-200 text-sm">
-                  <div><span className="text-gray-600">Loan:</span> <span className="font-medium">{formatCurrency(loanAmount)}</span></div>
-                  <div><span className="text-gray-600">Down:</span> <span className="font-medium">{formatCurrency(downPayment)}</span></div>
-                  <div><span className="text-gray-600">Debt Service:</span> <span className="font-medium">{formatCurrency(annualDS)}/yr</span></div>
+              </div>
+
+              {/* Seller Carryback */}
+              <div className="bg-amber-50 rounded-xl p-5 border border-amber-200">
+                <h4 className="text-sm font-semibold text-amber-800 uppercase mb-3">Seller Carryback</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Input label="Carryback Amount" type="number" leftAddon="$" value={data.seller_carryback_amount || ''} onChange={(e) => handleChange('seller_carryback_amount', e.target.value)} />
+                  <Input label="Interest Rate" type="number" step="0.125" rightAddon="%" value={data.seller_carryback_rate || ''} onChange={(e) => handleChange('seller_carryback_rate', e.target.value)} />
+                  <Input label="Term" type="number" rightAddon="yrs" value={data.seller_carryback_term || ''} onChange={(e) => handleChange('seller_carryback_term', e.target.value)} />
+                </div>
+                {sellerCarrybackAmt > 0 && (
+                  <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-amber-200 text-sm">
+                    <div><span className="text-gray-600">Monthly Payment:</span> <span className="font-medium">{formatCurrency(sellerMonthlyPmt)}</span></div>
+                    <div><span className="text-gray-600">Annual DS:</span> <span className="font-medium">{formatCurrency(sellerAnnualDS)}</span></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Financing Summary */}
+              <div className="bg-gray-100 rounded-xl p-4 border">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div><span className="text-gray-600">Bank Loan:</span> <span className="font-medium">{formatCurrency(loanAmount)}</span></div>
+                  {sellerCarrybackAmt > 0 && (
+                    <div><span className="text-gray-600">Seller Loan:</span> <span className="font-medium">{formatCurrency(sellerCarrybackAmt)}</span></div>
+                  )}
+                  <div><span className="text-gray-600">Down Payment:</span> <span className="font-medium">{formatCurrency(downPayment)}</span></div>
+                  <div><span className="text-gray-600">Total DS:</span> <span className="font-medium">{formatCurrency(annualDS)}/yr</span></div>
                   <div><span className="text-gray-600">DSCR:</span> <span className={`font-medium ${dscr >= 1.25 ? 'text-green-600' : 'text-red-600'}`}>{formatRatio(dscr)}</span></div>
                 </div>
               </div>
@@ -972,9 +1152,15 @@ export default function InvestmentAnalysis({
                     <span>-{formatCurrency(saleProceeds.sellingCosts)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-red-600">
-                    <span>Less: Loan Payoff</span>
+                    <span>Less: Bank Loan Payoff</span>
                     <span>-{formatCurrency(saleProceeds.loanPayoff)}</span>
                   </div>
+                  {sellerCarrybackAmt > 0 && (
+                    <div className="flex justify-between text-sm text-red-600">
+                      <span>Less: Seller Carryback Payoff</span>
+                      <span>-{formatCurrency(sellerCarrybackAmt)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between py-3 border-t-2 border-primary-300 font-bold text-lg">
                     <span>Net Sale Proceeds</span>
                     <span className={saleProceeds.netToSeller >= 0 ? 'text-green-600' : 'text-red-600'}>

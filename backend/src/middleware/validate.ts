@@ -517,6 +517,23 @@ export const dealAnalysisSchema = z
     before_tax_cash_flow: z.number().optional().nullable(),
     cash_on_cash_return: z.number().optional().nullable(),
 
+    // Lease Structure
+    lease_type: z.enum(['gross', 'nnn', 'modified_gross']).optional().nullable(),
+    nnn_reimbursement_rate: z.number().min(0).max(100).optional().nullable(),
+    modified_gross_reimbursement: z.number().nonnegative().optional().nullable(),
+
+    // Seller Carryback
+    seller_carryback_amount: z.number().nonnegative().optional().nullable(),
+    seller_carryback_rate: z.number().min(0).max(50).optional().nullable(),
+    seller_carryback_term: z.number().int().min(1).max(30).optional().nullable(),
+    seller_carryback_monthly_payment: z.number().nonnegative().optional().nullable(),
+    seller_annual_debt_service: z.number().nonnegative().optional().nullable(),
+
+    // Smart Expense Defaults
+    auto_property_taxes: z.boolean().optional().nullable(),
+    auto_insurance: z.boolean().optional().nullable(),
+    auto_utilities: z.boolean().optional().nullable(),
+
     // Notes
     notes: z.string().max(5000).optional().nullable(),
 

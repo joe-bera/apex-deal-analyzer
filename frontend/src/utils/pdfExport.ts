@@ -31,6 +31,8 @@ import {
   solveRequiredRentPSF,
   solveCapexCeiling,
   solveTargetExitCap,
+  calculateNNNReimbursements,
+  calculateAdjustedDownPayment,
 } from './financialCalculations';
 import type { InvestmentStrategy } from './financialCalculations';
 import {
@@ -598,9 +600,22 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   const strategy = (data.investment_strategy ?? 'value_add') as InvestmentStrategy;
   const thresholds = STRATEGY_THRESHOLDS[strategy];
 
+  // Lease type & NNN reimbursements
+  const leaseType = data.lease_type ?? 'gross';
+  const nnnReimbursements = leaseType === 'nnn'
+    ? calculateNNNReimbursements(
+        n(data.property_taxes),
+        n(data.insurance),
+        n(data.repairs_maintenance),
+        n(data.nnn_reimbursement_rate)
+      )
+    : leaseType === 'modified_gross'
+      ? n(data.modified_gross_reimbursement)
+      : 0;
+
   const pgi = n(data.potential_gross_income);
   const vacancyAmount = calculateVacancyAmount(pgi, n(data.vacancy_rate));
-  const egi = calculateEffectiveGrossIncome(pgi, vacancyAmount, n(data.other_income));
+  const egi = calculateEffectiveGrossIncome(pgi, vacancyAmount, n(data.other_income) + nnnReimbursements);
   const managementFee = calculateManagementFee(egi, n(data.management_fee_percent));
   const totalExpenses = calculateTotalExpenses({
     propertyTaxes: n(data.property_taxes),
@@ -615,9 +630,20 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
 
   const purchasePrice = n(data.purchase_price);
   const loanAmount = calculateLoanAmount(purchasePrice, n(data.ltv_percent));
-  const downPayment = calculateDownPayment(purchasePrice, loanAmount);
+
+  // Seller carryback
+  const sellerCarrybackAmt = n(data.seller_carryback_amount);
+  const sellerCarrybackRate = n(data.seller_carryback_rate);
+  const sellerCarrybackTerm = n(data.seller_carryback_term) || 5;
+  const sellerMonthlyPmt = sellerCarrybackAmt > 0
+    ? calculateMonthlyPayment(sellerCarrybackAmt, sellerCarrybackRate, sellerCarrybackTerm)
+    : 0;
+  const sellerAnnualDS = sellerMonthlyPmt * 12;
+
+  const downPayment = calculateAdjustedDownPayment(purchasePrice, loanAmount, sellerCarrybackAmt);
   const monthlyPmt = calculateMonthlyPayment(loanAmount, n(data.interest_rate), n(data.amortization_years));
-  const annualDS = calculateAnnualDebtService(monthlyPmt);
+  const bankAnnualDS = calculateAnnualDebtService(monthlyPmt);
+  const annualDS = bankAnnualDS + sellerAnnualDS;
   const closingCosts = calculateClosingCosts(purchasePrice, n(data.closing_costs_percent));
   const totalCashRequired = calculateTotalCashRequired(downPayment, closingCosts);
   const beforeTaxCF = calculateBeforeTaxCashFlow(noi, annualDS);
@@ -643,6 +669,7 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
     holdingPeriod,
     exitCapRate,
     sellingCosts: sellingCostsPercent,
+    additionalAnnualDebtService: sellerAnnualDS,
   });
 
   const lastYear = projections.length > 0 ? projections[projections.length - 1] : null;
@@ -787,11 +814,17 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   // ── Income & Expense Summary ──
   yPos = sectionHeader('INCOME & EXPENSE SUMMARY', yPos);
 
-  const incExpData = [
-    [{ content: 'INCOME', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+  const leaseLabel = leaseType === 'nnn' ? ' (NNN)' : leaseType === 'modified_gross' ? ' (Modified Gross)' : '';
+  const incExpData: any[] = [
+    [{ content: `INCOME${leaseLabel}`, colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
     ['Potential Gross Income (PGI)', formatCurrency(pgi)],
     [`Less: Vacancy (${n(data.vacancy_rate)}%)`, `(${formatCurrency(vacancyAmount)})`],
     ['Plus: Other Income', formatCurrency(n(data.other_income))],
+  ];
+  if (nnnReimbursements > 0) {
+    incExpData.push(['Plus: Expense Reimbursements', formatCurrency(nnnReimbursements)]);
+  }
+  incExpData.push(
     [{ content: 'Effective Gross Income (EGI)', styles: { fontStyle: boldStyle } }, { content: formatCurrency(egi), styles: { fontStyle: boldStyle } }],
     [{ content: 'OPERATING EXPENSES', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
     ['Property Taxes', formatCurrency(n(data.property_taxes))],
@@ -803,7 +836,7 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
     ['Other Expenses', formatCurrency(n(data.other_expenses))],
     [{ content: 'Total Operating Expenses', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalExpenses), styles: { fontStyle: boldStyle } }],
     [{ content: 'NET OPERATING INCOME (NOI)', styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }, { content: formatCurrency(noi), styles: { fontStyle: boldStyle, fillColor: COLORS.primary, textColor: [255, 255, 255] as [number, number, number] } }],
-  ];
+  );
 
   autoTable(doc, {
     startY: yPos,
@@ -821,21 +854,38 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   // ── Financing ──
   yPos = sectionHeader('FINANCING & CASH REQUIRED', yPos);
 
-  const financingData = [
+  const financingData: any[] = [
     [{ content: 'INVESTMENT SUMMARY', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
     ['Purchase Price', formatCurrency(purchasePrice)],
-    [`Loan Amount (${n(data.ltv_percent)}% LTV)`, formatCurrency(loanAmount)],
+    [`Bank Loan (${n(data.ltv_percent)}% LTV)`, formatCurrency(loanAmount)],
+  ];
+  if (sellerCarrybackAmt > 0) {
+    financingData.push(['Seller Carryback', formatCurrency(sellerCarrybackAmt)]);
+  }
+  financingData.push(
     ['Down Payment', formatCurrency(downPayment)],
     [`Closing Costs (${n(data.closing_costs_percent)}%)`, formatCurrency(closingCosts)],
     ['Value-Add Costs', formatCurrency(vaTotalCost)],
     [{ content: 'Total Cash Required', styles: { fontStyle: boldStyle } }, { content: formatCurrency(totalCashInvested), styles: { fontStyle: boldStyle } }],
-    [{ content: 'DEBT SERVICE', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    [{ content: 'PRIMARY LOAN', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
     ['Interest Rate', `${n(data.interest_rate)}%`],
     ['Amortization', `${n(data.amortization_years)} years`],
-    ['Annual Debt Service', formatCurrency(annualDS)],
+    ['Bank Annual DS', formatCurrency(bankAnnualDS)],
+  );
+  if (sellerCarrybackAmt > 0) {
+    financingData.push(
+      [{ content: 'SELLER CARRYBACK', colSpan: 2, styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+      ['Carryback Amount', formatCurrency(sellerCarrybackAmt)],
+      ['Interest Rate', `${sellerCarrybackRate}%`],
+      ['Term', `${sellerCarrybackTerm} years`],
+      ['Seller Annual DS', formatCurrency(sellerAnnualDS)],
+    );
+  }
+  financingData.push(
+    [{ content: 'Total Annual Debt Service', styles: { fontStyle: boldStyle } }, { content: formatCurrency(annualDS), styles: { fontStyle: boldStyle } }],
     ['Before-Tax Cash Flow', formatCurrency(beforeTaxCF)],
     [{ content: `DSCR: ${dscr.toFixed(2)}x`, styles: { fontStyle: boldStyle } }, { content: `Cash-on-Cash: ${formatPercent(calculateCashOnCash(beforeTaxCF, totalCashInvested))}`, styles: { fontStyle: boldStyle } }],
-  ];
+  );
 
   autoTable(doc, {
     startY: yPos,
@@ -893,14 +943,19 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   // ── Exit Waterfall ──
   yPos = sectionHeader(`EXIT ANALYSIS (YEAR ${holdingPeriod})`, yPos);
 
-  const exitData = [
+  const exitData: any[] = [
     [`Exit NOI (Year ${holdingPeriod})`, formatCurrency(exitNOI)],
     ['Exit Cap Rate', formatPercent(exitCapRate)],
     [{ content: 'Gross Sale Price', styles: { fontStyle: boldStyle } }, { content: formatCurrency(saleProceeds.salePrice), styles: { fontStyle: boldStyle } }],
     [`Less: Selling Costs (${formatPercent(sellingCostsPercent)})`, `(${formatCurrency(saleProceeds.sellingCosts)})`],
-    ['Less: Loan Payoff', `(${formatCurrency(saleProceeds.loanPayoff)})`],
-    [{ content: 'Net Sale Proceeds', styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }, { content: formatCurrency(saleProceeds.netToSeller), styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+    ['Less: Bank Loan Payoff', `(${formatCurrency(saleProceeds.loanPayoff)})`],
   ];
+  if (sellerCarrybackAmt > 0) {
+    exitData.push(['Less: Seller Carryback Payoff', `(${formatCurrency(sellerCarrybackAmt)})`]);
+  }
+  exitData.push(
+    [{ content: 'Net Sale Proceeds', styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }, { content: formatCurrency(saleProceeds.netToSeller - (sellerCarrybackAmt > 0 ? sellerCarrybackAmt : 0)), styles: { fontStyle: boldStyle, fillColor: COLORS.lightGray } }],
+  );
 
   autoTable(doc, {
     startY: yPos,

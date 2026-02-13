@@ -87,6 +87,44 @@ export function calculateGRM(purchasePrice: number, annualGrossIncome: number): 
 }
 
 // ============================================================================
+// Lease Type / NNN Reimbursements
+// ============================================================================
+
+/**
+ * Calculate NNN expense reimbursements from tenants
+ * NNN tenants reimburse taxes + insurance + maintenance at a recovery rate
+ */
+export function calculateNNNReimbursements(
+  taxes: number,
+  insurance: number,
+  maintenance: number,
+  recoveryRate: number
+): number {
+  return (taxes + insurance + maintenance) * (recoveryRate / 100);
+}
+
+/**
+ * Calculate total annual debt service combining bank + seller carryback
+ */
+export function calculateTotalAnnualDebtService(
+  bankMonthlyPayment: number,
+  sellerMonthlyPayment: number
+): number {
+  return (bankMonthlyPayment + sellerMonthlyPayment) * 12;
+}
+
+/**
+ * Calculate adjusted down payment accounting for seller carryback
+ */
+export function calculateAdjustedDownPayment(
+  purchasePrice: number,
+  bankLoan: number,
+  sellerCarryback: number
+): number {
+  return Math.max(0, purchasePrice - bankLoan - sellerCarryback);
+}
+
+// ============================================================================
 // Debt Analysis
 // ============================================================================
 
@@ -254,6 +292,7 @@ export interface ProjectionInputs {
   holdingPeriod: number; // years
   exitCapRate: number; // percentage
   sellingCosts: number; // percentage
+  additionalAnnualDebtService?: number; // seller carryback DS
 }
 
 /**
@@ -294,12 +333,14 @@ export function generateProjections(inputs: ProjectionInputs): YearProjection[] 
     interestRate,
     amortizationYears,
     holdingPeriod,
+    additionalAnnualDebtService,
   } = inputs;
 
   const projections: YearProjection[] = [];
-  const annualDebtService = calculateAnnualDebtService(
+  const bankAnnualDS = calculateAnnualDebtService(
     calculateMonthlyPayment(loanAmount, interestRate, amortizationYears)
   );
+  const annualDebtService = bankAnnualDS + (additionalAnnualDebtService || 0);
 
   for (let year = 1; year <= holdingPeriod; year++) {
     // Compound growth for income and expenses

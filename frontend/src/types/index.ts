@@ -393,6 +393,23 @@ export interface DealAnalysis {
   before_tax_cash_flow?: number | null;
   cash_on_cash_return?: number | null;
 
+  // Lease Structure
+  lease_type?: string | null;
+  nnn_reimbursement_rate?: number | null;
+  modified_gross_reimbursement?: number | null;
+
+  // Seller Carryback
+  seller_carryback_amount?: number | null;
+  seller_carryback_rate?: number | null;
+  seller_carryback_term?: number | null;
+  seller_carryback_monthly_payment?: number | null;
+  seller_annual_debt_service?: number | null;
+
+  // Smart Expense Defaults
+  auto_property_taxes?: boolean | null;
+  auto_insurance?: boolean | null;
+  auto_utilities?: boolean | null;
+
   // Notes
   notes?: string | null;
 
