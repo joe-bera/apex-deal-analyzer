@@ -42,7 +42,7 @@ import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
 import { generateValuationSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
-import { generateExecutiveSummaryPDF } from '../utils/listingProposalPdf';
+import { generateExecutiveSummaryPDF, loadApexColorLogo } from '../utils/listingProposalPdf';
 import type { OwnerInfo } from '../utils/listingProposalPdf';
 import { loadDefaultLogo } from '../utils/pdfBranding';
 
@@ -300,8 +300,9 @@ export default function PropertyDetail() {
   // Listing proposal modal state
   const [showProposalForm, setShowProposalForm] = useState(false);
 
-  // Cached logo for PDF exports
+  // Cached logos for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [apexColorLogoBase64, setApexColorLogoBase64] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -309,9 +310,10 @@ export default function PropertyDetail() {
     }
   }, [id]);
 
-  // Pre-load white logo for PDF exports
+  // Pre-load logos for PDF exports
   useEffect(() => {
     loadDefaultLogo(user?.company_logo_url).then(setLogoBase64);
+    loadApexColorLogo().then(setApexColorLogoBase64);
   }, [user?.company_logo_url]);
 
   const loadPropertyData = async () => {
@@ -553,6 +555,7 @@ export default function PropertyDetail() {
     const formData = new FormData(e.currentTarget);
     const ownerInfo: OwnerInfo = {
       owner_name: formData.get('proposal_owner_name') as string,
+      honorific: formData.get('proposal_honorific') as string || 'Mr.',
       owner_address_line1: formData.get('proposal_owner_address') as string,
       owner_city: formData.get('proposal_owner_city') as string,
       owner_state: formData.get('proposal_owner_state') as string,
@@ -560,15 +563,7 @@ export default function PropertyDetail() {
       entity_name: formData.get('proposal_entity_name') as string,
     };
 
-    const branding = user ? {
-      company_name: user.company_name,
-      company_logo_url: user.company_logo_url,
-      company_phone: user.company_phone,
-      company_email: user.company_email,
-      company_address: user.company_address,
-    } : undefined;
-
-    generateExecutiveSummaryPDF({ property, valuation, ownerInfo, branding, logoBase64 });
+    generateExecutiveSummaryPDF({ property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 });
     setShowProposalForm(false);
   };
 
@@ -992,7 +987,34 @@ export default function PropertyDetail() {
                   </div>
                 )}
 
-                {/* Generate Listing Proposal Button */}
+                {/* Valuation Summary — below Exit Strategy Pricing */}
+                {valuation.executive_summary && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="font-semibold text-indigo-900">Valuation Summary</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadValuationSummaryPDF}
+                        leftIcon={
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        }
+                      >
+                        Download PDF
+                      </Button>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
+                  </div>
+                )}
+
+                {/* Generate Executive Summary Button */}
                 {valuation.pricing_scenarios && (
                   <div className="flex justify-end">
                     <Button
@@ -1151,14 +1173,27 @@ export default function PropertyDetail() {
                   <div>
                     <h4 className="font-medium text-gray-900 mb-3">Property Owner Information</h4>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <Input
-                          name="proposal_owner_name"
-                          required
-                          label="Owner Name *"
-                          placeholder="John Smith"
-                          defaultValue={(property?.additional_data?.owner_name as string) || ''}
+                      <div className="col-span-2 grid grid-cols-3 gap-3">
+                        <Select
+                          name="proposal_honorific"
+                          label="Title *"
+                          options={[
+                            { value: 'Mr.', label: 'Mr.' },
+                            { value: 'Ms.', label: 'Ms.' },
+                            { value: 'Mr. & Mrs.', label: 'Mr. & Mrs.' },
+                            { value: 'Mrs.', label: 'Mrs.' },
+                            { value: 'Dr.', label: 'Dr.' },
+                          ]}
                         />
+                        <div className="col-span-2">
+                          <Input
+                            name="proposal_owner_name"
+                            required
+                            label="Owner Name *"
+                            placeholder="John Smith"
+                            defaultValue={(property?.additional_data?.owner_name as string) || ''}
+                          />
+                        </div>
                       </div>
                       <div className="col-span-2">
                         <Input
@@ -1266,42 +1301,6 @@ export default function PropertyDetail() {
               <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                 <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">{generatedLOI.loi_text}</pre>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Executive Summary */}
-        {valuation?.executive_summary && (
-          <Card variant="elevated">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-100 rounded-lg">
-                    <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <CardTitle>Valuation Summary</CardTitle>
-                    <p className="text-sm text-gray-500">AI-generated investment brief</p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownloadValuationSummaryPDF}
-                  leftIcon={
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  }
-                >
-                  Download PDF
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
             </CardContent>
           </Card>
         )}

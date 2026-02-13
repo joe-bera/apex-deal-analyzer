@@ -1,10 +1,6 @@
 import jsPDF from 'jspdf';
 import type { Property, ValuationResult } from '../types';
-import {
-  CompanyBranding,
-  renderBrandedHeader,
-  renderBrandedFooter,
-} from './pdfBranding';
+import { loadLogoImage } from './pdfBranding';
 
 // ============================================================================
 // Types
@@ -12,6 +8,7 @@ import {
 
 export interface OwnerInfo {
   owner_name: string;
+  honorific: string; // Mr. / Ms. / Mr. & Mrs.
   owner_address_line1: string;
   owner_city: string;
   owner_state: string;
@@ -19,12 +16,12 @@ export interface OwnerInfo {
   entity_name: string;
 }
 
-export interface ListingProposalOptions {
+export interface ExecSummaryOptions {
   property: Property;
   valuation: ValuationResult;
   ownerInfo: OwnerInfo;
-  branding?: CompanyBranding;
   logoBase64?: string | null;
+  apexColorLogoBase64?: string | null;
 }
 
 // ============================================================================
@@ -33,7 +30,6 @@ export interface ListingProposalOptions {
 
 interface PricingTier {
   label: string;
-  timeline: string;
   scenarioKey: 'quick_sale' | 'market_sale' | 'premium_sale';
 }
 
@@ -41,6 +37,7 @@ interface PropertyTypeTemplate {
   displayName: string;
   keyConsiderations: { bold: string; description: string }[];
   timingNote: string;
+  timingPrefix: string; // "Notes on timing:" vs "NOTE:"
   marketingTargeting: string;
   directCalls: string;
   noteText: string;
@@ -58,13 +55,14 @@ const INDUSTRIAL_CONDO_TEMPLATE: PropertyTypeTemplate = {
     { bold: 'Unit Attributes:', description: 'Clear height, power (amps/phase), loading, office build-out.' },
     { bold: 'Market Liquidity:', description: 'Competing small-bay inventory and lender appetite (SBA/conventional).' },
   ],
+  timingPrefix: 'Notes on timing:',
   timingNote: 'Owner-user purchases (often SBA 504/7(a)) generally run ~60\u201375 days from acceptance to close; conventional/1031 timelines vary with lender, appraisal, and HOA estoppels.',
   marketingTargeting: 'owner-user and small-bay industrial investors',
   directCalls: 'top small-bay industrial/owner-user brokers and agents in Inland Empire',
   noteText: 'In the current Inland Empire small-bay industrial condo market, well-positioned assets typically see 90\u2013180 days on market depending on pricing, occupancy, and condition. Investor buyers will underwrite to stabilized NOI and may seek credits for vacancy or repairs. Owner-users (often SBA 504/7(a)) generally require 60\u201375 days from acceptance to close. Our best leverage comes from providing: recent roof/HVAC reports, parking count, traffic counts (ADT), signage rights, any association documents, and clear utility/service information.',
   pricingTiers: [
-    { label: 'Sell Fast Price', timeline: '90\u2013120 days', scenarioKey: 'quick_sale' },
-    { label: 'Sell Long Range', timeline: '6\u201312 months', scenarioKey: 'premium_sale' },
+    { label: 'Sell Fast Price (90 \u2013 120 days)', scenarioKey: 'quick_sale' },
+    { label: 'Sell long range (6 \u2013 12 months)', scenarioKey: 'premium_sale' },
   ],
 };
 
@@ -80,31 +78,24 @@ const RETAIL_TEMPLATE: PropertyTypeTemplate = {
     { bold: 'Ops & costs:', description: 'Separate meters, typical NNN/CAM (if multi-tenant), taxes/insurance history.' },
     { bold: 'Diligence/timeline:', description: 'DD 30\u201345 days; close 45\u201360 (longer with SBA); provide reports, plans, utilities, any HOA docs upfront.' },
   ],
+  timingPrefix: 'NOTE:',
   timingNote: 'Typical retail timelines are 30\u201345 days due diligence and 45\u201360 days to close; SBA buyers often need 60\u201375 days total.',
   marketingTargeting: 'owner-users and small retail investors',
   directCalls: 'top 20 retail/owner-user brokers and agents in Inland Empire',
   noteText: 'In the current Inland Empire retail market, well-positioned assets typically see 90\u2013180 days on market depending on pricing, occupancy, and condition. Investor buyers will underwrite to stabilized NOI and may seek credits for vacancy or repairs. Owner-users (often SBA 504/7(a)) generally require 60\u201375 days from acceptance to close. Our best leverage comes from providing: recent roof/HVAC reports, parking count, traffic counts (ADT), signage rights, any association documents, and clear utility/service information.',
   pricingTiers: [
-    { label: 'Sell Fast Price', timeline: '90\u2013120 days', scenarioKey: 'quick_sale' },
-    { label: 'Market Ask', timeline: '3\u20136 months', scenarioKey: 'market_sale' },
-    { label: 'Sell Long Range', timeline: '6\u201312 months', scenarioKey: 'premium_sale' },
+    { label: 'Sell Fast Price (90 \u2013 120 days)', scenarioKey: 'quick_sale' },
+    { label: 'Market Ask (3 \u2013 6 months)', scenarioKey: 'market_sale' },
+    { label: 'Sell Long Range (6 \u2013 12 months)', scenarioKey: 'premium_sale' },
   ],
 };
 
 // TODO: Add specific templates for these property types as real-world examples become available.
 // For now they fall back to the Industrial Condo template with a console warning.
-// - Warehouse
-// - Distribution Center
-// - Manufacturing
-// - Flex Space
-// - Office
-// - Land
-// - Multifamily
-// - Mixed Use
+// - Warehouse, Distribution Center, Manufacturing, Flex Space, Office, Land, Multifamily, Mixed Use
 
 function getTemplate(propertyType?: string): PropertyTypeTemplate {
   const normalized = (propertyType || '').toLowerCase().replace(/[_\s]+/g, '_');
-
   switch (normalized) {
     case 'retail':
       return RETAIL_TEMPLATE;
@@ -112,23 +103,22 @@ function getTemplate(propertyType?: string): PropertyTypeTemplate {
     case 'industrial':
       return INDUSTRIAL_CONDO_TEMPLATE;
     default:
-      // Fallback — use industrial condo as default
       if (propertyType) {
-        console.warn(`[listingProposalPdf] No specific template for "${propertyType}"; using Industrial Condo as default.`);
+        console.warn(`[execSummaryPdf] No specific template for "${propertyType}"; using Industrial Condo as default.`);
       }
       return INDUSTRIAL_CONDO_TEMPLATE;
   }
 }
 
 // ============================================================================
-// Colors & Constants
+// Colors & Layout Constants
 // ============================================================================
 
 const RED: [number, number, number] = [178, 31, 36];
-const DARK: [number, number, number] = [31, 41, 55];
-const GRAY: [number, number, number] = [107, 114, 128];
+const BLACK: [number, number, number] = [0, 0, 0];
 
-const MARGIN = 14;
+const MARGIN = 20;
+const LINE_HEIGHT = 5; // ~11pt text line height
 
 // ============================================================================
 // Helpers
@@ -144,8 +134,62 @@ const formatPricePerSf = (value?: number | null): string => {
   return `$${value.toFixed(0)}/SF`;
 };
 
-/** Render a bold red section header with underline, returns new yPos. */
+/** Load the Apex color logo from public folder. */
+export async function loadApexColorLogo(): Promise<string | null> {
+  return loadLogoImage('/apex-logo.png');
+}
+
+// ============================================================================
+// KW Commercial Header (matches real templates)
+// ============================================================================
+
+function renderKWHeader(doc: jsPDF, logoBase64?: string | null): number {
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Red KW box + COMMERCIAL text
+  // The real header is a KW Commercial banner image. We'll approximate it:
+  // Red rectangle for "KW" portion
+  const kwBoxW = 42;
+  const kwBoxH = 28;
+  const kwX = (pageWidth - 180) / 2; // Center the whole banner
+
+  if (logoBase64) {
+    // Use the Apex white logo in a red box as the KW stand-in
+    doc.setFillColor(...RED);
+    doc.roundedRect(kwX, 10, kwBoxW, kwBoxH, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('KW', kwX + kwBoxW / 2, 28, { align: 'center' });
+  } else {
+    doc.setFillColor(...RED);
+    doc.roundedRect(kwX, 10, kwBoxW, kwBoxH, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('KW', kwX + kwBoxW / 2, 28, { align: 'center' });
+  }
+
+  // "COMMERCIAL" text to the right
+  doc.setTextColor(...BLACK);
+  doc.setFontSize(26);
+  doc.setFont('helvetica', 'normal');
+  doc.text('C O M M E R C I A L', kwX + kwBoxW + 6, 30);
+
+  // Thin line under header
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, 44, pageWidth - MARGIN, 44);
+
+  return 55; // Y position after header
+}
+
+// ============================================================================
+// Section Header — bold red underlined (matching templates)
+// ============================================================================
+
 function sectionHeader(doc: jsPDF, title: string, y: number): number {
+  if (y > 265) { doc.addPage(); y = 20; }
   doc.setTextColor(...RED);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -153,179 +197,226 @@ function sectionHeader(doc: jsPDF, title: string, y: number): number {
   const titleWidth = doc.getTextWidth(title);
   doc.setDrawColor(...RED);
   doc.setLineWidth(0.5);
-  doc.line(MARGIN, y + 1, MARGIN + titleWidth, y + 1);
-  doc.setTextColor(...DARK);
+  doc.line(MARGIN, y + 1.5, MARGIN + titleWidth, y + 1.5);
+  doc.setTextColor(...BLACK);
   return y + 7;
 }
 
-/** Wraps text and renders it, returning the new yPos. Handles page breaks. */
-function renderWrappedText(
-  doc: jsPDF,
-  text: string,
-  y: number,
-  options?: { fontSize?: number; fontStyle?: string; italic?: boolean; indent?: number; maxWidth?: number }
-): number {
-  const fontSize = options?.fontSize ?? 9;
-  const fontStyle = options?.italic ? 'italic' : (options?.fontStyle ?? 'normal');
+// ============================================================================
+// Text Rendering Helpers
+// ============================================================================
+
+function renderText(doc: jsPDF, text: string, y: number, options?: {
+  fontSize?: number;
+  fontStyle?: string;
+  bold?: boolean;
+  italic?: boolean;
+  color?: [number, number, number];
+  indent?: number;
+  maxWidth?: number;
+}): number {
+  const fontSize = options?.fontSize ?? 10;
   const indent = options?.indent ?? 0;
   const pageWidth = doc.internal.pageSize.getWidth();
   const maxWidth = options?.maxWidth ?? (pageWidth - MARGIN * 2 - indent);
+  const color = options?.color ?? BLACK;
+
+  let fontStyle = 'normal';
+  if (options?.bold && options?.italic) fontStyle = 'bolditalic';
+  else if (options?.bold) fontStyle = 'bold';
+  else if (options?.italic) fontStyle = 'italic';
 
   doc.setFontSize(fontSize);
   doc.setFont('helvetica', fontStyle);
+  doc.setTextColor(...color);
   const lines: string[] = doc.splitTextToSize(text, maxWidth);
 
   for (const line of lines) {
-    if (y > 275) {
-      doc.addPage();
-      y = 20;
-    }
+    if (y > 278) { doc.addPage(); y = 20; }
     doc.text(line, MARGIN + indent, y);
-    y += fontSize * 0.45 + 1;
+    y += fontSize * 0.42 + 1;
   }
   return y;
 }
 
-/** Render a bullet point with bold label + normal description. */
-function renderBullet(doc: jsPDF, boldPart: string, normalPart: string, y: number): number {
+/** Render a bullet point with bold label + normal description (matching template format). */
+function renderBulletItem(doc: jsPDF, boldPart: string, normalPart: string, y: number, indent?: number): number {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const bulletIndent = 4;
-  const textIndent = 8;
-  const maxWidth = pageWidth - MARGIN * 2 - textIndent;
+  const bulletX = MARGIN + (indent ?? 8);
+  const textX = bulletX + 5;
+  const maxWidth = pageWidth - MARGIN - textX;
 
-  if (y > 270) {
-    doc.addPage();
-    y = 20;
-  }
+  if (y > 272) { doc.addPage(); y = 20; }
 
-  // Bullet character
-  doc.setFontSize(9);
+  // Bullet
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
-  doc.text('\u2022', MARGIN + bulletIndent, y);
+  doc.setTextColor(...BLACK);
+  doc.text('\u2022', bulletX, y);
 
-  // Bold part
+  // Bold label
   doc.setFont('helvetica', 'bold');
-  const boldWidth = doc.getTextWidth(boldPart + ' ');
-  doc.text(boldPart, MARGIN + textIndent, y);
+  const boldText = boldPart + ' ';
+  const boldWidth = doc.getTextWidth(boldText);
 
-  // Normal part — may wrap
+  // Check if everything fits on one line
   doc.setFont('helvetica', 'normal');
-  const remainingWidth = maxWidth - boldWidth;
-  if (remainingWidth > 20 && doc.getTextWidth(normalPart) <= remainingWidth) {
-    // Fits on same line
-    doc.text(normalPart, MARGIN + textIndent + boldWidth, y);
-    y += 5;
+  const normalWidth = doc.getTextWidth(normalPart);
+
+  if (boldWidth + normalWidth <= maxWidth) {
+    // Single line
+    doc.setFont('helvetica', 'bold');
+    doc.text(boldText, textX, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(normalPart, textX + boldWidth, y);
+    y += LINE_HEIGHT;
   } else {
-    // Wrap full text
-    const fullText = boldPart + ' ' + normalPart;
-    const lines: string[] = doc.splitTextToSize(fullText, maxWidth);
-    // First line — already rendered bold part, so render full wrapped
-    // Clear and re-render
-    // Actually, simpler to just render the combined text with bold label
-    y -= 0; // Reset
-    for (let i = 0; i < lines.length; i++) {
-      if (y > 275) { doc.addPage(); y = 20; }
-      if (i === 0) {
-        // Re-render first line: bold part + beginning of normal
-        doc.setFont('helvetica', 'bold');
-        doc.text(boldPart + ' ', MARGIN + textIndent, y);
-        const normalStart = lines[0].substring(boldPart.length).trim();
-        doc.setFont('helvetica', 'normal');
-        doc.text(normalStart, MARGIN + textIndent + boldWidth, y);
+    // Multi-line: render the full combined text using splitTextToSize
+    // First render the bold part on the first line
+    doc.setFont('helvetica', 'bold');
+    doc.text(boldText, textX, y);
+
+    // Then wrap the normal part starting after the bold
+    doc.setFont('helvetica', 'normal');
+    const remainingWidth = maxWidth - boldWidth;
+    if (remainingWidth > 30) {
+      // Some normal text fits on first line
+      const normalLines: string[] = doc.splitTextToSize(normalPart, maxWidth);
+      // First chunk goes after bold
+      const firstLineText = normalLines[0] || '';
+      // Check if first line fits in remaining space
+      if (doc.getTextWidth(firstLineText) <= remainingWidth) {
+        doc.text(firstLineText, textX + boldWidth, y);
+        y += LINE_HEIGHT;
+        // Remaining lines at full width
+        for (let i = 1; i < normalLines.length; i++) {
+          if (y > 278) { doc.addPage(); y = 20; }
+          doc.text(normalLines[i], textX, y);
+          y += LINE_HEIGHT;
+        }
       } else {
-        doc.setFont('helvetica', 'normal');
-        doc.text(lines[i], MARGIN + textIndent, y);
+        // Re-wrap with full width from the second line
+        y += LINE_HEIGHT;
+        const rewrapped: string[] = doc.splitTextToSize(normalPart, maxWidth);
+        for (const line of rewrapped) {
+          if (y > 278) { doc.addPage(); y = 20; }
+          doc.text(line, textX, y);
+          y += LINE_HEIGHT;
+        }
       }
-      y += 4.5;
+    } else {
+      y += LINE_HEIGHT;
+      const normalLines: string[] = doc.splitTextToSize(normalPart, maxWidth);
+      for (const line of normalLines) {
+        if (y > 278) { doc.addPage(); y = 20; }
+        doc.text(line, textX, y);
+        y += LINE_HEIGHT;
+      }
     }
   }
   return y;
 }
 
+/** Render a simple bold bullet (no label:description split). */
+function renderSimpleBoldBullet(doc: jsPDF, text: string, y: number): number {
+  if (y > 272) { doc.addPage(); y = 20; }
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...BLACK);
+  doc.text('\u2022', MARGIN + 8, y);
+  doc.text(text, MARGIN + 14, y);
+  y += LINE_HEIGHT + 1;
+  return y;
+}
+
 // ============================================================================
-// Marketing Boilerplate (shared across all types)
+// Marketing Page (verbatim from templates)
 // ============================================================================
 
-function renderMarketingPage(doc: jsPDF, template: PropertyTypeTemplate, city: string): number {
+function renderMarketingPage(doc: jsPDF, template: PropertyTypeTemplate, city: string, apexLogoBase64?: string | null): number {
   let y = 20;
 
   y = sectionHeader(doc, 'MARKETING THE PROPERTY', y);
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
-
-  const introText = `We will implement a comprehensive marketing strategy designed to maximize exposure to ${template.marketingTargeting} in the ${city} market and surrounding areas. Our approach includes:`;
-  y = renderWrappedText(doc, introText, y);
+  const introText = 'KW Commercial has a unique marketing platform that allows us to easily market properties through a variety of mediums and to selected target audiences. The goal of the marketing plan is to quickly expose your property to the maximum number of qualified purchasers and cooperating brokers to obtain the highest sales price in the shortest amount of time. The Apex Real Estate Services complete Commercial Marketing Blueprint deliverables include:';
+  y = renderText(doc, introText, y, { fontSize: 10 });
   y += 3;
 
-  // Section I — MLS / Commercial Databases
-  y = renderBulletSection(doc, 'I. MLS & Commercial Databases', [
-    'List property on LoopNet, CoStar, Crexi, and the local MLS.',
-    'Syndicate to all major commercial real estate platforms for maximum online visibility.',
-    'Include professional photography, floor plans, and virtual tours where applicable.',
+  // I. Preparation & Asset Creation
+  y = renderMarketingSection(doc, 'I. Preparation & Asset Creation (Weeks 1\u20132)', [
+    'Professional Aerial & Drone Photography: Capture corner exposure, freeway proximity, surrounding retail/industrial.',
+    'Property Maps & Site Plans: Parcel maps, zoning/uses, floor plan and site plan (parking count/ratio, ingress/egress, signage locations).',
+    'Offering Memorandum (OM) Brochure: Branded Apex/KW, including executive summary, maps, comps, zoning, demographics, city projects, contact info.',
+    'Property Website/Landing Page: Custom URL, central hub with aerials, brochure, video tour, and downloadable PDFs.',
   ], y);
 
-  // Section II — Direct Outreach
-  y = renderBulletSection(doc, 'II. Direct Outreach', [
-    `Place targeted calls to ${template.directCalls}.`,
-    'Contact known active buyers and 1031 exchange investors in the area.',
-    'Leverage our proprietary database of qualified buyers and investors.',
+  // II. Online Listing & Digital Marketing
+  y = renderMarketingSection(doc, 'II. Online Listing & Digital Marketing (Weeks 2\u20133, Ongoing)', [
+    'CRE Platforms: CoStar, LoopNet, CREXi Premium \u2013 full buildout with aerials, zoning, pricing, refreshed biweekly.',
+    `Social Media Campaigns: LinkedIn posts targeting ${template.marketingTargeting}, Facebook/Instagram ads, YouTube spotlight video with SEO tags.`,
+    `Email Marketing: Broker blast, targeted ${template.marketingTargeting.replace('owner-user and ', 'owner-user and ')} outreach, nurture follow-up campaigns.`,
   ], y);
 
-  // Section III — Email Marketing
-  y = renderBulletSection(doc, 'III. Email Marketing', [
-    `Deploy targeted email campaigns to ${template.marketingTargeting} in our database.`,
-    'Send property alerts to buyers with matching search criteria.',
-    'Follow-up drip campaigns to maintain interest and urgency.',
+  // III. Offline & Traditional Marketing
+  y = renderMarketingSection(doc, 'III. Offline & Traditional Marketing (Weeks 3\u20134, Ongoing)', [
+    'Signage: 4\'x8\' branded sign at site with QR code to brochure/video.',
+    `Canvassing/Direct Outreach: Target ${template.marketingTargeting}; distribute mini-brochures.`,
+    `City/ED Collaboration: Partner with City of ${city} Economic Development Department.`,
   ], y);
 
-  // Section IV — Signage & Property Marketing
-  y = renderBulletSection(doc, 'IV. Signage & Property Marketing', [
-    'Install professional "For Sale" signage with QR code linking to property details.',
-    'Create a professional property flyer / one-sheet for distribution.',
-    'Prepare offering memorandum for qualified prospects.',
+  // IV. Broker-to-Broker Cooperation
+  y = renderMarketingSection(doc, 'IV. Broker-to-Broker Cooperation', [
+    'Exposure: AIRCRE, NAR, MLS for broadest reach.',
+    `Direct Calls: Outreach to ${template.directCalls}.`,
+    'Broker Open Tour: Host on-site with presentation and refreshments.',
   ], y);
 
-  // Section V — Digital Marketing
-  y = renderBulletSection(doc, 'V. Digital Marketing', [
-    'Feature property on Apex Real Estate Services website and social media channels.',
-    'Targeted social media advertising to reach local business owners and investors.',
-    'Google Ads targeting relevant commercial real estate search terms.',
+  // V. Showings & Follow-Up
+  y = renderMarketingSection(doc, 'V. Showings & Follow-Up', [
+    'Streamlined Tours: Provide zoning overlays, comps, and aerials.',
+    'Feedback Tracking: Record and analyze prospect/broker input.',
+    'Seller Reports: Weekly updates with activity and interest.',
   ], y);
 
-  // Section VI — Networking & Referrals
-  y = renderBulletSection(doc, 'VI. Networking & Referrals', [
-    'Present at local commercial real estate association meetings and broker tours.',
-    'Coordinate with SBA lenders to identify pre-qualified buyers.',
-    'Tap referral network of attorneys, CPAs, and financial advisors working with potential buyers.',
+  // VI. Negotiation & Closing
+  y = renderMarketingSection(doc, 'VI. Negotiation & Closing', [
+    'Negotiation focus: Clear LOI terms (price, deposits, due diligence, closing timeline), minimal contingencies, and defined repair/credit structure.',
+    'Due Diligence Support: Provide zoning codes, infrastructure updates, city contacts.',
+    'Transaction Support: Efficient LOIs, PSA drafting, and coordination with escrow/legal.',
   ], y);
+
+  // Apex logo bottom-right
+  renderApexLogo(doc, apexLogoBase64);
 
   return y;
 }
 
-function renderBulletSection(doc: jsPDF, title: string, items: string[], y: number): number {
+function renderMarketingSection(doc: jsPDF, title: string, items: string[], y: number): number {
   if (y > 258) { doc.addPage(); y = 20; }
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...RED);
+  doc.setTextColor(...BLACK);
+  // Title with underline
   doc.text(title, MARGIN, y);
-  y += 5;
+  const titleWidth = doc.getTextWidth(title);
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, y + 1.2, MARGIN + titleWidth, y + 1.2);
+  y += 6;
 
-  doc.setTextColor(...DARK);
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BLACK);
 
   for (const item of items) {
-    if (y > 275) { doc.addPage(); y = 20; }
-    doc.text('\u2022', MARGIN + 4, y);
-    const lines: string[] = doc.splitTextToSize(item, doc.internal.pageSize.getWidth() - MARGIN * 2 - 10);
-    for (const line of lines) {
-      if (y > 275) { doc.addPage(); y = 20; }
-      doc.text(line, MARGIN + 8, y);
-      y += 4.5;
+    if (y > 272) { doc.addPage(); y = 20; }
+    doc.text('\u2022', MARGIN + 8, y);
+    const lines: string[] = doc.splitTextToSize(item, doc.internal.pageSize.getWidth() - MARGIN * 2 - 16);
+    for (let j = 0; j < lines.length; j++) {
+      if (y > 278) { doc.addPage(); y = 20; }
+      doc.text(lines[j], MARGIN + 14, y);
+      y += LINE_HEIGHT;
     }
   }
   y += 3;
@@ -333,54 +424,73 @@ function renderBulletSection(doc: jsPDF, title: string, items: string[], y: numb
 }
 
 // ============================================================================
-// Challenges Boilerplate (shared)
+// Apex Logo (bottom-right corner, pages 2 & 3)
+// ============================================================================
+
+function renderApexLogo(doc: jsPDF, apexLogoBase64?: string | null): void {
+  if (!apexLogoBase64) return;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  try {
+    doc.addImage(apexLogoBase64, 'AUTO', pageWidth - MARGIN - 35, pageHeight - 45, 35, 35);
+  } catch {
+    // Logo failed, continue without it
+  }
+}
+
+// ============================================================================
+// Challenges (verbatim from templates)
 // ============================================================================
 
 const CHALLENGES = [
-  'Market Conditions: Interest rate fluctuations and lending environment may impact buyer pool and pricing.',
-  'Buyer Financing: SBA and conventional loan timelines can extend closing periods; pre-qualification helps mitigate delays.',
-  'Property Condition: Deferred maintenance, environmental concerns, or code compliance issues may surface during due diligence.',
-  'Appraisal Risk: The appraised value may come in below the agreed-upon price, requiring renegotiation or additional buyer equity.',
-  'Competitive Inventory: New listings or price reductions on competing properties may affect positioning and negotiation leverage.',
+  'Building condition',
+  'CapEx: age of roof/HVAC',
+  'Electrical capacity',
+  'ADA compliance',
+  'Any deferred maintenance.',
 ];
 
 // ============================================================================
-// Signature Block
+// Signature Block (verbatim from templates)
 // ============================================================================
 
 function renderSignatureBlock(doc: jsPDF, y: number): number {
-  if (y > 240) { doc.addPage(); y = 20; }
+  if (y > 220) { doc.addPage(); y = 20; }
 
-  y += 6;
+  y += 8;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
+  doc.setTextColor(...BLACK);
   doc.text('Regards,', MARGIN, y);
-  y += 12;
+  y += 16; // Space for signature
 
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Robert Mendieta', MARGIN, y);
   y += 5;
-  doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
   doc.text('Associate Broker', MARGIN, y);
-  y += 4.5;
+  y += 4;
   doc.text('Apex Real Estate Services', MARGIN, y);
-  y += 4.5;
+  y += 4;
   doc.text('Keller Williams Commercial', MARGIN, y);
-  y += 4.5;
-  doc.text('DRE #01422904', MARGIN, y);
-  y += 7;
+  y += 4;
+  doc.text('CA DRE Broker License #01422904', MARGIN, y);
+  y += 8;
 
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text('Phone: (909) 792-2988  |  Fax: (909) 792-2989', MARGIN, y);
+  doc.setFontSize(9);
+  doc.text('Tel: (951) 977-3251', MARGIN + 8, y);
   y += 4;
-  doc.text('Email: Robert@ApexRealEstateServices.com', MARGIN, y);
+  doc.text('Fax: (909) 793-8200', MARGIN + 8, y);
+  y += 6;
+  doc.text('RobMendi@gmail.com', MARGIN + 8, y);
   y += 4;
-  doc.text('Web: www.ApexRealEstateServices.com', MARGIN, y);
+  doc.text('www.WarehousesInlandEmpire.com', MARGIN + 8, y);
+  y += 6;
+  doc.text('3750 E. Florida Ave. Suite A', MARGIN + 8, y);
   y += 4;
-  doc.text('10535 Foothill Blvd., Suite 460, Rancho Cucamonga, CA 91730', MARGIN, y);
+  doc.text('Hemet, CA. 92544', MARGIN + 8, y);
 
   return y + 6;
 }
@@ -389,119 +499,162 @@ function renderSignatureBlock(doc: jsPDF, y: number): number {
 // Main PDF Generator
 // ============================================================================
 
-export function generateExecutiveSummaryPDF(options: ListingProposalOptions): void {
-  const { property, valuation, ownerInfo, branding, logoBase64 } = options;
+export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
+  const { property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 } = options;
 
   const template = getTemplate(property.property_type);
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const scenarios = valuation.pricing_scenarios;
+  const propertyAddress = property.address || 'Address Not Available';
+  const cityStateZip = [property.city, property.state, property.zip_code].filter(Boolean).join(', ');
+  const fullAddress = `${propertyAddress}, ${cityStateZip}`;
 
   // ============================
   // PAGE 1
   // ============================
 
-  let y = renderBrandedHeader(doc, branding, logoBase64);
+  let y = renderKWHeader(doc, logoBase64);
 
-  // Date — right-aligned
+  // Date — left-aligned
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
-  doc.text(dateStr, pageWidth - MARGIN, y, { align: 'right' });
-  y += 8;
+  doc.setTextColor(...BLACK);
+  doc.text(dateStr, MARGIN, y);
+  y += 12;
 
   // Owner address block
   doc.setFontSize(10);
   doc.text(ownerInfo.owner_name, MARGIN, y);
-  y += 5;
+  y += LINE_HEIGHT;
   doc.text(ownerInfo.owner_address_line1, MARGIN, y);
-  y += 5;
+  y += LINE_HEIGHT;
   doc.text(`${ownerInfo.owner_city}, ${ownerInfo.owner_state} ${ownerInfo.owner_zip}`, MARGIN, y);
-  y += 10;
+  y += 12;
 
-  // Greeting
+  // Greeting with honorific
   const lastName = ownerInfo.owner_name.split(' ').pop() || ownerInfo.owner_name;
   doc.setFontSize(10);
-  doc.text(`Dear ${lastName},`, MARGIN, y);
-  y += 7;
+  doc.text(`Dear ${ownerInfo.honorific} ${lastName},`, MARGIN, y);
+  y += 8;
 
-  // Intro paragraph
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const introText = `Apex Real Estate Services & KW Commercial is pleased to present this listing proposal for the property identified below. We believe our marketing strategy, market knowledge, and extensive buyer network will position your property for a successful sale.`;
-  y = renderWrappedText(doc, introText, y);
-  y += 5;
+  // Intro paragraph (verbatim from templates)
+  const introText = `Apex Real Estate Services & KW Commercial is pleased to present the following proposal to market your property at ${fullAddress}. This proposal is for the referenced property on the terms and conditions set forth below:`;
+  y = renderText(doc, introText, y, { fontSize: 10 });
+  y += 6;
 
   // ─── THE PROPERTY ───
   y = sectionHeader(doc, 'THE PROPERTY', y);
 
-  const propertyAddress = property.address || 'Address Not Available';
-  const cityStateZip = [property.city, property.state, property.zip_code].filter(Boolean).join(', ');
-  const sfDisplay = property.building_size ? `\u00b1${property.building_size.toLocaleString()} SF` : '';
-  const typeDisplay = template.displayName;
-  const zoningDisplay = property.zoning ? `Zoning: ${property.zoning}` : '';
+  // Address line — bold
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...BLACK);
+  doc.text(fullAddress, MARGIN, y);
+  y += LINE_HEIGHT;
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
-  doc.text(`${propertyAddress}, ${cityStateZip}`, MARGIN, y);
-  y += 4.5;
-  const propertyDescParts = [typeDisplay, sfDisplay, zoningDisplay].filter(Boolean);
-  doc.text(propertyDescParts.join(' | '), MARGIN, y);
-  y += 7;
+  // APN if available
+  if (property.apn) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(`APN: ${property.apn}`, MARGIN, y);
+    y += LINE_HEIGHT;
+  }
+
+  // Property Type line with SF
+  const buildingSf = property.building_size ? `\u00b1${property.building_size.toLocaleString()} SF Building` : '';
+  const lotSf = property.lot_size
+    ? (property.additional_data?.lot_size_unit === 'acres'
+      ? `on \u00b1${property.lot_size} Acre Lot`
+      : `on \u00b1${property.lot_size.toLocaleString()} SF Lot`)
+    : '';
+  const sfParts = [buildingSf, lotSf].filter(Boolean).join(' ');
+  const typeDisplayName = template.displayName === 'Industrial Condo' ? 'Industrial Condo Building' : `${template.displayName} Building`;
+  const typeLine = sfParts
+    ? `Property Type: ${typeDisplayName} (${sfParts})`
+    : `Property Type: ${typeDisplayName}`;
+
+  doc.setFont('helvetica', 'bold');
+  const typeLines: string[] = doc.splitTextToSize(typeLine, pageWidth - MARGIN * 2);
+  for (const line of typeLines) {
+    doc.text(line, MARGIN, y);
+    y += LINE_HEIGHT;
+  }
+
+  // Zoning
+  if (property.zoning) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Zoning: ${property.zoning}`, MARGIN, y);
+    y += LINE_HEIGHT;
+  }
+  y += 4;
 
   // ─── RECOMMENDED ASKING ───
   y = sectionHeader(doc, 'RECOMMENDED ASKING', y);
 
   if (scenarios) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...BLACK);
+
     for (const tier of template.pricingTiers) {
       const scenario = scenarios[tier.scenarioKey];
       if (!scenario) continue;
-
-      doc.setFontSize(9);
+      const priceLine = `${tier.label}: ${formatCurrency(scenario.price)} (${formatPricePerSf(scenario.price_per_sqft)})`;
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...DARK);
-      doc.text(`${tier.label}:`, MARGIN + 4, y);
-      const labelWidth = doc.getTextWidth(`${tier.label}: `);
-      doc.setFont('helvetica', 'normal');
-      doc.text(
-        `${formatCurrency(scenario.price)} (${formatPricePerSf(scenario.price_per_sqft)})`,
-        MARGIN + 4 + labelWidth, y
-      );
-      y += 4.5;
+      doc.text(priceLine, MARGIN, y);
+      y += LINE_HEIGHT;
     }
 
-    // Italic timing note
-    y += 2;
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
-    y = renderWrappedText(doc, template.timingNote, y, { fontSize: 8, italic: true });
-    y += 4;
+    // Timing note — italic
+    y += 1;
+    const timingFull = `${template.timingPrefix} ${template.timingNote}`;
+    y = renderText(doc, timingFull, y, { fontSize: 10, italic: true });
+    y += 5;
   } else {
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text('Pricing scenarios not available. Run AI Valuation first.', MARGIN + 4, y);
+    doc.text('Pricing scenarios not available. Run AI Valuation first.', MARGIN, y);
     y += 7;
   }
 
   // ─── SCOPE OF SERVICE ───
   y = sectionHeader(doc, 'SCOPE OF SERVICE', y);
 
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...DARK);
-  const scopeText = `Apex Real Estate Services will serve as the exclusive listing broker for ${ownerInfo.entity_name} in connection with the marketing and sale of the property located at ${propertyAddress}, ${cityStateZip}. Our scope includes pricing strategy, property marketing, buyer qualification, offer negotiation, due diligence coordination, and transaction management through close of escrow.`;
-  y = renderWrappedText(doc, scopeText, y);
-  y += 5;
+  doc.setTextColor(...BLACK);
+  doc.text('Apex Real Estate Services & KW Commercial to represent:', MARGIN, y);
+  y += LINE_HEIGHT;
+
+  // Entity name bold + "in the sale of..." with address bold
+  doc.setFont('helvetica', 'bold');
+  const entityText = ownerInfo.entity_name;
+  const entityWidth = doc.getTextWidth(entityText + ' ');
+  doc.text(entityText, MARGIN, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text('in the sale of the property located at', MARGIN + entityWidth, y);
+  y += LINE_HEIGHT;
+  doc.setFont('helvetica', 'bold');
+  const addrLines: string[] = doc.splitTextToSize(`${fullAddress}.`, pageWidth - MARGIN * 2);
+  for (const line of addrLines) {
+    doc.text(line, MARGIN, y);
+    y += LINE_HEIGHT;
+  }
+  y += 4;
 
   // ─── KEY CONSIDERATIONS ───
-  y = sectionHeader(doc, `KEY CONSIDERATIONS (${typeDisplay.toUpperCase()})`, y);
+  y = sectionHeader(doc, `KEY CONSIDERATIONS (${template.displayName.toUpperCase()})`, y);
 
-  for (let i = 0; i < template.keyConsiderations.length; i++) {
-    const item = template.keyConsiderations[i];
-    y = renderBullet(doc, `${i + 1}. ${item.bold}`, item.description, y);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BLACK);
+  const kcIntro = 'There are several things to consider when determining a go-to-market price per square foot for commercial properties such as yours. For example:';
+  y = renderText(doc, kcIntro, y, { fontSize: 10 });
+  y += 4;
+
+  for (const item of template.keyConsiderations) {
+    y = renderBulletItem(doc, item.bold, item.description, y);
   }
   y += 3;
 
@@ -509,7 +662,8 @@ export function generateExecutiveSummaryPDF(options: ListingProposalOptions): vo
   // PAGE 2 — Marketing
   // ============================
   doc.addPage();
-  y = renderMarketingPage(doc, template, property.city || 'Inland Empire');
+  // If key considerations spilled onto page 2, MARKETING starts on next page
+  y = renderMarketingPage(doc, template, property.city || 'Inland Empire', apexColorLogoBase64);
 
   // ============================
   // PAGE 3 — Challenges, Note, Signature
@@ -517,34 +671,64 @@ export function generateExecutiveSummaryPDF(options: ListingProposalOptions): vo
   doc.addPage();
   y = 20;
 
+  // Continue VI items if page 2 ended mid-section (handled by page breaks in renderMarketingPage)
+
   // ─── CHALLENGES ───
   y = sectionHeader(doc, 'CHALLENGES', y);
 
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BLACK);
+  doc.text('Based on the information we have acquired about the area, here are some', MARGIN, y);
+  y += LINE_HEIGHT;
+  doc.text('challenges that may arise:', MARGIN, y);
+  y += 8;
+
   for (const challenge of CHALLENGES) {
-    y = renderBullet(doc, challenge.split(':')[0] + ':', challenge.split(':').slice(1).join(':').trim(), y);
+    y = renderSimpleBoldBullet(doc, challenge, y);
   }
-  y += 5;
+  y += 10;
 
   // ─── NOTE ───
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...RED);
-  doc.text('NOTE:', MARGIN, y);
-  y += 5;
+  const notePrefix = 'NOTE: ';
+  const notePrefixWidth = doc.getTextWidth(notePrefix);
+  doc.text(notePrefix, MARGIN, y);
 
-  doc.setTextColor(...DARK);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  y = renderWrappedText(doc, template.noteText, y);
-  y += 8;
+  // Rest of NOTE text in bold black
+  doc.setTextColor(...BLACK);
+  const noteLines: string[] = doc.splitTextToSize(template.noteText, pageWidth - MARGIN * 2);
+  // First line starts after "NOTE: "
+  const firstLineRemaining = pageWidth - MARGIN * 2 - notePrefixWidth;
+  const firstNoteLines: string[] = doc.splitTextToSize(template.noteText, firstLineRemaining);
+
+  if (firstNoteLines.length > 0) {
+    doc.text(firstNoteLines[0], MARGIN + notePrefixWidth, y);
+    y += LINE_HEIGHT;
+    // Re-wrap remaining text at full width
+    const remainingText = template.noteText.substring(firstNoteLines[0].length).trim();
+    if (remainingText) {
+      const restLines: string[] = doc.splitTextToSize(remainingText, pageWidth - MARGIN * 2);
+      for (const line of restLines) {
+        if (y > 278) { doc.addPage(); y = 20; }
+        doc.text(line, MARGIN, y);
+        y += LINE_HEIGHT;
+      }
+    }
+  }
+  y += 5;
 
   // ─── Signature block ───
   y = renderSignatureBlock(doc, y);
 
+  // Apex logo bottom-right on page 3
+  renderApexLogo(doc, apexColorLogoBase64);
+
   // ============================
-  // Footer on all pages
+  // No branded footer — templates don't have one
   // ============================
-  renderBrandedFooter(doc, branding);
 
   // ============================
   // Save
