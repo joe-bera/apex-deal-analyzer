@@ -499,7 +499,7 @@ function renderSignatureBlock(doc: jsPDF, y: number): number {
 // Main PDF Generator
 // ============================================================================
 
-export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
+export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string {
   const { property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 } = options;
 
   const template = getTemplate(property.property_type);
