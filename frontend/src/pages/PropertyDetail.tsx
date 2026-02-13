@@ -505,16 +505,17 @@ export default function PropertyDetail() {
       const numericFields = ['price', 'building_size', 'cap_rate', 'noi', 'lot_size', 'year_built', 'parking_spaces', 'occupancy_rate'];
       const stringFields = ['zoning', 'property_type', 'address', 'city', 'state', 'zip_code'];
 
+      // Only include fields that have values — omit empty ones to pass Zod strict validation
       for (const key of numericFields) {
         const val = editForm[key];
-        if (val === '' || val === null || val === undefined) {
-          updates[key] = null;
-        } else {
+        if (val !== '' && val !== null && val !== undefined) {
           updates[key] = parseFloat(val);
         }
       }
       for (const key of stringFields) {
-        updates[key] = editForm[key] || null;
+        if (editForm[key]) {
+          updates[key] = editForm[key];
+        }
       }
 
       // Auto-calculate price per sqft
