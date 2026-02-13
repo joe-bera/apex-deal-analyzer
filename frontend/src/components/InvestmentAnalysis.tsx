@@ -1069,13 +1069,14 @@ export default function InvestmentAnalysis({
 
               {/* Financing Summary */}
               <div className="bg-gray-100 rounded-xl p-4 border">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
                   <div><span className="text-gray-600">Bank Loan:</span> <span className="font-medium">{formatCurrency(loanAmount)}</span></div>
                   <div><span className="text-gray-600">Monthly Pmt:</span> <span className="font-medium">{formatCurrency(monthlyPmt)}</span></div>
                   {sellerCarrybackAmt > 0 && (
                     <div><span className="text-gray-600">Seller Loan:</span> <span className="font-medium">{formatCurrency(sellerCarrybackAmt)}</span></div>
                   )}
                   <div><span className="text-gray-600">Down Payment:</span> <span className="font-medium">{formatCurrency(downPayment)}</span></div>
+                  <div><span className="text-gray-600">Total DS:</span> <span className="font-medium">{formatCurrency(annualDS / 12)}/mo</span></div>
                   <div><span className="text-gray-600">Total DS:</span> <span className="font-medium">{formatCurrency(annualDS)}/yr</span></div>
                   <div><span className="text-gray-600">DSCR:</span> <span className={`font-medium ${dscr >= 1.25 ? 'text-green-600' : 'text-red-600'}`}>{formatRatio(dscr)}</span></div>
                 </div>
