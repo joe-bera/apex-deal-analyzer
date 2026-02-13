@@ -798,48 +798,6 @@ export default function PropertyDetail() {
           </CardContent>
         </Card>
 
-        {/* Transaction History */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg">
-                <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <div>
-                <CardTitle>Transaction History</CardTitle>
-                <p className="text-sm text-gray-500">
-                  {transactions.length > 0
-                    ? `${transactions.length} record${transactions.length !== 1 ? 's' : ''} from Property Database`
-                    : 'No transactions found'
-                  }
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {transactions.length > 0 ? (
-              <div className="space-y-3">
-                {transactions.map((tx) => (
-                  <TransactionCard key={tx.id} tx={tx} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-500 text-sm">No transaction history found for this property.</p>
-                {txDebug && (
-                  <div className="mt-3 text-left bg-gray-50 rounded-lg p-3 text-xs text-gray-500 font-mono">
-                    <p>Debug: address="{txDebug.address}", city="{txDebug.city}"</p>
-                    <p>Matched master IDs: {txDebug.masterIds?.length || 0}</p>
-                    <p>Transactions found: {txDebug.txCount || 0}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Investment Analysis Engine */}
         {property && (
           <InvestmentAnalysis
@@ -1043,42 +1001,6 @@ export default function PropertyDetail() {
           </Card>
         )}
 
-        {/* Executive Summary - Separate Card */}
-        {valuation?.executive_summary && (
-          <Card variant="elevated">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-100 rounded-lg">
-                    <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <CardTitle>Executive Summary</CardTitle>
-                    <p className="text-sm text-gray-500">AI-generated investment brief</p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownloadExecSummaryPDF}
-                  leftIcon={
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  }
-                >
-                  Download PDF
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
-            </CardContent>
-          </Card>
-        )}
-
         {/* LOI Generation Form Modal */}
         {showLOIForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1208,6 +1130,42 @@ export default function PropertyDetail() {
               <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                 <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">{generatedLOI.loi_text}</pre>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Executive Summary */}
+        {valuation?.executive_summary && (
+          <Card variant="elevated">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle>Executive Summary</CardTitle>
+                    <p className="text-sm text-gray-500">AI-generated investment brief</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadExecSummaryPDF}
+                  leftIcon={
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                >
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.executive_summary}</p>
             </CardContent>
           </Card>
         )}
@@ -1502,6 +1460,48 @@ export default function PropertyDetail() {
             </Card>
           </div>
         </div>
+
+        {/* Transaction History */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <div>
+                <CardTitle>Transaction History</CardTitle>
+                <p className="text-sm text-gray-500">
+                  {transactions.length > 0
+                    ? `${transactions.length} record${transactions.length !== 1 ? 's' : ''} from Property Database`
+                    : 'No transactions found'
+                  }
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {transactions.length > 0 ? (
+              <div className="space-y-3">
+                {transactions.map((tx) => (
+                  <TransactionCard key={tx.id} tx={tx} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-gray-500 text-sm">No transaction history found for this property.</p>
+                {txDebug && (
+                  <div className="mt-3 text-left bg-gray-50 rounded-lg p-3 text-xs text-gray-500 font-mono">
+                    <p>Debug: address="{txDebug.address}", city="{txDebug.city}"</p>
+                    <p>Matched master IDs: {txDebug.masterIds?.length || 0}</p>
+                    <p>Transactions found: {txDebug.txCount || 0}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Comp Detail Modal */}
