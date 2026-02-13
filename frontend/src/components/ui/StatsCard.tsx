@@ -27,21 +27,21 @@ export const StatsCard = ({
       className={`
         rounded-xl p-5
         ${isHighlight
-          ? 'bg-gradient-to-br from-primary-600 to-primary-700 text-white'
+          ? 'bg-gradient-to-br from-[#B21F24] to-[#8a181c] text-white'
           : 'bg-white border border-gray-200'
         }
       `}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className={`text-sm font-medium ${isHighlight ? 'text-primary-100' : 'text-gray-500'}`}>
+          <p className={`text-sm font-medium ${isHighlight ? 'text-red-100' : 'text-gray-500'}`}>
             {label}
           </p>
           <p className={`text-2xl font-bold mt-1 ${isHighlight ? 'text-white' : 'text-gray-900'}`}>
             {value}
           </p>
           {subValue && (
-            <p className={`text-sm mt-0.5 ${isHighlight ? 'text-primary-200' : 'text-gray-500'}`}>
+            <p className={`text-sm mt-0.5 ${isHighlight ? 'text-red-200' : 'text-gray-500'}`}>
               {subValue}
             </p>
           )}
@@ -65,7 +65,7 @@ export const StatsCard = ({
           )}
         </div>
         {icon && (
-          <div className={`p-2 rounded-lg ${isHighlight ? 'bg-primary-500/30' : 'bg-gray-100'}`}>
+          <div className={`p-2 rounded-lg ${isHighlight ? 'bg-white/20' : 'bg-gray-100'}`}>
             {icon}
           </div>
         )}
