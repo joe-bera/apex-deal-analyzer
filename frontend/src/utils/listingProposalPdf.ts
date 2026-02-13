@@ -20,8 +20,8 @@ export interface ExecSummaryOptions {
   property: Property;
   valuation: ValuationResult;
   ownerInfo: OwnerInfo;
-  logoBase64?: string | null;
   apexColorLogoBase64?: string | null;
+  kwLogoBase64?: string | null;
 }
 
 // ============================================================================
@@ -139,49 +139,59 @@ export async function loadApexColorLogo(): Promise<string | null> {
   return loadLogoImage('/apex-logo.png');
 }
 
+/** Load the KW Commercial logo from public folder. */
+export async function loadKWCommercialLogo(): Promise<string | null> {
+  return loadLogoImage('/kw-commercial-logo.jpeg');
+}
+
 // ============================================================================
 // KW Commercial Header (matches real templates)
 // ============================================================================
 
-function renderKWHeader(doc: jsPDF, logoBase64?: string | null): number {
+function renderKWHeader(doc: jsPDF, kwLogoBase64?: string | null): number {
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Red KW box + COMMERCIAL text
-  // The real header is a KW Commercial banner image. We'll approximate it:
-  // Red rectangle for "KW" portion
-  const kwBoxW = 42;
-  const kwBoxH = 28;
-  const kwX = (pageWidth - 180) / 2; // Center the whole banner
-
-  if (logoBase64) {
-    // Use the Apex white logo in a red box as the KW stand-in
-    doc.setFillColor(...RED);
-    doc.roundedRect(kwX, 10, kwBoxW, kwBoxH, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('KW', kwX + kwBoxW / 2, 28, { align: 'center' });
+  if (kwLogoBase64) {
+    // Use the actual KW Commercial logo image — wide banner, centered
+    const logoW = 160;
+    const logoH = 22; // aspect ratio ~7.3:1 from the original image
+    const logoX = (pageWidth - logoW) / 2;
+    try {
+      doc.addImage(kwLogoBase64, 'JPEG', logoX, 10, logoW, logoH);
+    } catch {
+      // Fallback to text if image fails
+      renderKWHeaderText(doc);
+    }
   } else {
-    doc.setFillColor(...RED);
-    doc.roundedRect(kwX, 10, kwBoxW, kwBoxH, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('KW', kwX + kwBoxW / 2, 28, { align: 'center' });
+    renderKWHeaderText(doc);
   }
-
-  // "COMMERCIAL" text to the right
-  doc.setTextColor(...BLACK);
-  doc.setFontSize(26);
-  doc.setFont('helvetica', 'normal');
-  doc.text('C O M M E R C I A L', kwX + kwBoxW + 6, 30);
 
   // Thin line under header
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
-  doc.line(MARGIN, 44, pageWidth - MARGIN, 44);
+  doc.line(MARGIN, 38, pageWidth - MARGIN, 38);
 
-  return 55; // Y position after header
+  return 48; // Y position after header
+}
+
+/** Fallback text-based KW header when logo image is unavailable */
+function renderKWHeaderText(doc: jsPDF): void {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const kwBoxW = 42;
+  const kwBoxH = 28;
+  const kwX = (pageWidth - 180) / 2;
+
+  doc.setFillColor(...RED);
+  doc.roundedRect(kwX, 10, kwBoxW, kwBoxH, 3, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('KW', kwX + kwBoxW / 2, 28, { align: 'center' });
+
+  doc.setTextColor(...BLACK);
+  doc.setFontSize(26);
+  doc.setFont('helvetica', 'normal');
+  doc.text('C O M M E R C I A L', kwX + kwBoxW + 6, 30);
 }
 
 // ============================================================================
@@ -500,7 +510,7 @@ function renderSignatureBlock(doc: jsPDF, y: number): number {
 // ============================================================================
 
 export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string {
-  const { property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 } = options;
+  const { property, valuation, ownerInfo, apexColorLogoBase64, kwLogoBase64 } = options;
 
   const template = getTemplate(property.property_type);
   const doc = new jsPDF();
@@ -514,7 +524,7 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string
   // PAGE 1
   // ============================
 
-  let y = renderKWHeader(doc, logoBase64);
+  let y = renderKWHeader(doc, kwLogoBase64);
 
   // Date — left-aligned
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });

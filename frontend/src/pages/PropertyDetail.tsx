@@ -42,7 +42,7 @@ import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
 import { generateValuationSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
-import { generateExecutiveSummaryPDF, loadApexColorLogo } from '../utils/listingProposalPdf';
+import { generateExecutiveSummaryPDF, loadApexColorLogo, loadKWCommercialLogo } from '../utils/listingProposalPdf';
 import type { OwnerInfo } from '../utils/listingProposalPdf';
 import { loadDefaultLogo } from '../utils/pdfBranding';
 
@@ -304,6 +304,7 @@ export default function PropertyDetail() {
   // Cached logos for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [apexColorLogoBase64, setApexColorLogoBase64] = useState<string | null>(null);
+  const [kwLogoBase64, setKwLogoBase64] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -315,6 +316,7 @@ export default function PropertyDetail() {
   useEffect(() => {
     loadDefaultLogo(user?.company_logo_url).then(setLogoBase64);
     loadApexColorLogo().then(setApexColorLogoBase64);
+    loadKWCommercialLogo().then(setKwLogoBase64);
   }, [user?.company_logo_url]);
 
   const loadPropertyData = async () => {
@@ -566,7 +568,7 @@ export default function PropertyDetail() {
 
     // Revoke previous blob URL to avoid memory leak
     if (execSummaryPdfUrl) URL.revokeObjectURL(execSummaryPdfUrl);
-    const pdfUrl = generateExecutiveSummaryPDF({ property, valuation, ownerInfo, logoBase64, apexColorLogoBase64 });
+    const pdfUrl = generateExecutiveSummaryPDF({ property, valuation, ownerInfo, apexColorLogoBase64, kwLogoBase64 });
     setExecSummaryPdfUrl(pdfUrl);
     setShowProposalForm(false);
   };
