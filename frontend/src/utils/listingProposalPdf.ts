@@ -739,13 +739,7 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): string
   // No branded footer — templates don't have one
   // ============================
 
-  // ============================
-  // Save
-  // ============================
-  const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(fileName);
-
-  // Return blob URL for inline preview
+  // Return blob URL for inline preview (no auto-download)
   const blob = doc.output('blob');
   return URL.createObjectURL(blob);
 }
