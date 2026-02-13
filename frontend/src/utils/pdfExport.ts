@@ -713,21 +713,7 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   doc.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 10;
 
-  // Exterior photo (right side) + property info (left side)
-  const photoWidth = 65;
-  const photoHeight = 45;
-  let hasPhoto = false;
-
-  if (photoBase64) {
-    try {
-      doc.addImage(photoBase64, 'AUTO', pageWidth - margin - photoWidth, yPos - 2, photoWidth, photoHeight);
-      hasPhoto = true;
-    } catch {
-      // Photo failed, continue without it
-    }
-  }
-
-  // Property info (left side, next to photo)
+  // Property info
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...COLORS.dark);
@@ -741,10 +727,11 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   doc.text(locationLine, margin, yPos);
   yPos += 4;
   doc.text(typeLine, margin, yPos);
-  yPos += hasPhoto ? Math.max(8, photoHeight - 7) : 8;
+  yPos += 8;
 
   // Verdict badge row
   const verdictColor = verdict === 'GO' ? COLORS.success : verdict === 'REVIEW' ? COLORS.warning : COLORS.danger;
+  const strategyLabel = strategy === 'core' ? 'Core' : strategy === 'value_add' ? 'Value-Add' : 'Opportunistic';
   doc.setFillColor(...verdictColor);
   doc.roundedRect(margin, yPos - 4, 50, 14, 3, 3, 'F');
   doc.setTextColor(255, 255, 255);
@@ -755,9 +742,23 @@ export function generateInvestmentAnalysisPDF(options: InvestmentAnalysisPDFOpti
   doc.setTextColor(...COLORS.gray);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const strategyLabel = strategy === 'core' ? 'Core' : strategy === 'value_add' ? 'Value-Add' : 'Opportunistic';
   doc.text(`${strategyLabel} Strategy | ${passCount}/${decisionMetrics.length} metrics pass`, margin + 55, yPos + 4);
   yPos += 18;
+
+  // Exterior photo — full-width hero image
+  if (photoBase64) {
+    try {
+      const photoHeight = 70;
+      // Dark border/frame around photo
+      doc.setDrawColor(...COLORS.dark);
+      doc.setLineWidth(0.5);
+      doc.rect(margin, yPos, contentWidth, photoHeight);
+      doc.addImage(photoBase64, 'AUTO', margin, yPos, contentWidth, photoHeight);
+      yPos += photoHeight + 6;
+    } catch {
+      // Photo failed, continue without it
+    }
+  }
 
   // Key Metrics cards row
   const metricCards = [
