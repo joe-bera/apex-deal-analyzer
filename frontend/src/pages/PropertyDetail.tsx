@@ -293,6 +293,7 @@ export default function PropertyDetail() {
   const [dealAnalysis, setDealAnalysis] = useState<DealAnalysis | null>(null);
   const [savingAnalysis, setSavingAnalysis] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txDebug, setTxDebug] = useState<any>(null);
 
   // Cached logo for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -324,6 +325,7 @@ export default function PropertyDetail() {
       setPhotos((photosData as { photos: Photo[] }).photos || []);
       setDealAnalysis((analysisData as DealAnalysisResponse).analysis || null);
       setTransactions((txData as any).transactions || []);
+      setTxDebug((txData as any)._debug || null);
       const savedValuation = (valuationData as any)?.valuation;
       if (savedValuation) {
         setValuation(savedValuation);
@@ -797,30 +799,46 @@ export default function PropertyDetail() {
         </Card>
 
         {/* Transaction History */}
-        {transactions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 rounded-lg">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <div>
-                  <CardTitle>Transaction History</CardTitle>
-                  <p className="text-sm text-gray-500">{transactions.length} record{transactions.length !== 1 ? 's' : ''} from Property Database</p>
-                </div>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
               </div>
-            </CardHeader>
-            <CardContent>
+              <div>
+                <CardTitle>Transaction History</CardTitle>
+                <p className="text-sm text-gray-500">
+                  {transactions.length > 0
+                    ? `${transactions.length} record${transactions.length !== 1 ? 's' : ''} from Property Database`
+                    : 'No transactions found'
+                  }
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {transactions.length > 0 ? (
               <div className="space-y-3">
                 {transactions.map((tx) => (
                   <TransactionCard key={tx.id} tx={tx} />
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-gray-500 text-sm">No transaction history found for this property.</p>
+                {txDebug && (
+                  <div className="mt-3 text-left bg-gray-50 rounded-lg p-3 text-xs text-gray-500 font-mono">
+                    <p>Debug: address="{txDebug.address}", city="{txDebug.city}"</p>
+                    <p>Matched master IDs: {txDebug.masterIds?.length || 0}</p>
+                    <p>Transactions found: {txDebug.txCount || 0}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Investment Analysis Engine */}
         {property && (

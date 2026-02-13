@@ -827,7 +827,7 @@ export const analyzePropertyValuation = async (
  *
  * Strategy:
  * 1. Check additional_data.master_property_id for a direct link
- * 2. Fall back to flexible address matching (ilike with wildcards)
+ * 2. Fall back to flexible address matching (multiple strategies)
  */
 export const getPropertyTransactions = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -856,48 +856,72 @@ export const getPropertyTransactions = async (req: Request, res: Response): Prom
       masterIds.push(directMasterId);
     }
 
-    // Strategy 2: Address matching (flexible with wildcards and city)
-    if (property.address) {
+    // Strategy 2: Address matching (multiple approaches)
+    if (property.address && masterIds.length === 0) {
       const addr = property.address.trim();
+      console.log(`[getPropertyTransactions] Looking for master_properties matching address: "${addr}", city: "${property.city}"`);
 
-      // Try exact ilike match first
-      let lookupQuery = supabaseAdmin
+      // 2a: Exact ilike match
+      const { data: exactMatches } = await supabaseAdmin
         .from('master_properties')
-        .select('id')
+        .select('id, address')
         .ilike('address', addr)
         .eq('is_deleted', false);
 
-      const { data: exactMatches } = await lookupQuery;
-
       if (exactMatches && exactMatches.length > 0) {
+        console.log(`[getPropertyTransactions] Found ${exactMatches.length} exact matches`);
         for (const mp of exactMatches) {
           if (!masterIds.includes(mp.id)) masterIds.push(mp.id);
         }
-      } else {
-        // Try fuzzy match: wildcard around address, filtered by city
-        let fuzzyQuery = supabaseAdmin
+      }
+
+      // 2b: Contains match (address might be a substring or have extra info)
+      if (masterIds.length === 0) {
+        const { data: containsMatches } = await supabaseAdmin
           .from('master_properties')
-          .select('id')
+          .select('id, address')
           .ilike('address', `%${addr}%`)
           .eq('is_deleted', false);
 
-        if (property.city) {
-          fuzzyQuery = fuzzyQuery.ilike('city', property.city.trim());
-        }
-
-        const { data: fuzzyMatches } = await fuzzyQuery;
-        if (fuzzyMatches) {
-          for (const mp of fuzzyMatches) {
+        if (containsMatches && containsMatches.length > 0) {
+          console.log(`[getPropertyTransactions] Found ${containsMatches.length} contains matches`);
+          for (const mp of containsMatches) {
             if (!masterIds.includes(mp.id)) masterIds.push(mp.id);
+          }
+        }
+      }
+
+      // 2c: Use just the street number + first word of street name + city
+      if (masterIds.length === 0 && property.city) {
+        const addrMatch = addr.match(/^(\d+\s+\S+)/);
+        if (addrMatch) {
+          const streetStart = addrMatch[1];
+          console.log(`[getPropertyTransactions] Trying fuzzy: "${streetStart}%" in city "${property.city}"`);
+
+          const { data: fuzzyMatches } = await supabaseAdmin
+            .from('master_properties')
+            .select('id, address')
+            .ilike('address', `${streetStart}%`)
+            .ilike('city', property.city.trim())
+            .eq('is_deleted', false);
+
+          if (fuzzyMatches && fuzzyMatches.length > 0) {
+            console.log(`[getPropertyTransactions] Found ${fuzzyMatches.length} fuzzy matches: ${fuzzyMatches.map(m => m.address).join(', ')}`);
+            for (const mp of fuzzyMatches) {
+              if (!masterIds.includes(mp.id)) masterIds.push(mp.id);
+            }
           }
         }
       }
     }
 
     if (masterIds.length === 0) {
-      res.status(200).json({ success: true, transactions: [] });
+      console.log(`[getPropertyTransactions] No master_properties found for property ${id} (address: "${property.address}")`);
+      res.status(200).json({ success: true, transactions: [], _debug: { address: property.address, city: property.city, matched: 0 } });
       return;
     }
+
+    console.log(`[getPropertyTransactions] Found ${masterIds.length} master property IDs: ${masterIds.join(', ')}`);
 
     // Fetch all transactions for matching master properties
     const { data: transactions, error: txError } = await supabaseAdmin
@@ -910,9 +934,12 @@ export const getPropertyTransactions = async (req: Request, res: Response): Prom
       throw new AppError(500, 'Failed to fetch transactions');
     }
 
+    console.log(`[getPropertyTransactions] Found ${transactions?.length || 0} transactions`);
+
     res.status(200).json({
       success: true,
       transactions: transactions || [],
+      _debug: { address: property.address, city: property.city, masterIds, txCount: transactions?.length || 0 },
     });
   } catch (error) {
     if (error instanceof AppError) {
