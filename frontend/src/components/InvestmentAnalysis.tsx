@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select } from './ui';
 import type { Property, Comp, DealAnalysis } from '../types';
 import { generateInvestmentAnalysisPDF } from '../utils/pdfExport';
-import { loadLogoImage } from '../utils/pdfBranding';
+import { loadDefaultLogo } from '../utils/pdfBranding';
 import { useAuth } from '../contexts/AuthContext';
 import {
   calculateVacancyAmount,
@@ -74,11 +74,9 @@ export default function InvestmentAnalysis({
   const [expanded, setExpanded] = useState(true);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
-  // Pre-load logo for PDF export
+  // Pre-load white logo for PDF export
   useEffect(() => {
-    if (user?.company_logo_url) {
-      loadLogoImage(user.company_logo_url).then(setLogoBase64);
-    }
+    loadDefaultLogo(user?.company_logo_url).then(setLogoBase64);
   }, [user?.company_logo_url]);
 
   // ─── Form State ────────────────────────────────────────────────

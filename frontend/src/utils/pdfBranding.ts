@@ -10,6 +10,7 @@ export interface CompanyBranding {
 
 const DEFAULT_COMPANY = 'APEX REAL ESTATE';
 const DEFAULT_TAGLINE = 'Commercial Real Estate Services';
+const DEFAULT_LOGO_PATH = '/apex-white-logo.png';
 
 /**
  * Fetch an image URL and convert to base64 data URL for jsPDF embedding.
@@ -29,6 +30,19 @@ export async function loadLogoImage(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Load the default Apex white logo from the public folder.
+ * Falls back to a custom logo URL if provided.
+ */
+export async function loadDefaultLogo(customUrl?: string | null): Promise<string | null> {
+  // Always prefer the default white logo for PDF headers (white on red)
+  const defaultLogo = await loadLogoImage(DEFAULT_LOGO_PATH);
+  if (defaultLogo) return defaultLogo;
+  // Fallback to custom logo if default not available
+  if (customUrl) return loadLogoImage(customUrl);
+  return null;
 }
 
 /**

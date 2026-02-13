@@ -42,7 +42,7 @@ import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
 import { generateExecutiveSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
-import { loadLogoImage } from '../utils/pdfBranding';
+import { loadDefaultLogo } from '../utils/pdfBranding';
 
 interface Photo {
   id: string;
@@ -98,11 +98,9 @@ export default function PropertyDetail() {
     }
   }, [id]);
 
-  // Pre-load logo when user has one
+  // Pre-load white logo for PDF exports
   useEffect(() => {
-    if (user?.company_logo_url) {
-      loadLogoImage(user.company_logo_url).then(setLogoBase64);
-    }
+    loadDefaultLogo(user?.company_logo_url).then(setLogoBase64);
   }, [user?.company_logo_url]);
 
   const loadPropertyData = async () => {

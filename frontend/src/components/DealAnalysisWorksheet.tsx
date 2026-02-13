@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from './ui';
 import type { Property, Comp } from '../types';
 import { generateDealAnalysisPDF } from '../utils/pdfExport';
-import { loadLogoImage } from '../utils/pdfBranding';
+import { loadDefaultLogo } from '../utils/pdfBranding';
 import { useAuth } from '../contexts/AuthContext';
 import ProjectionTable from './ProjectionTable';
 import SensitivityTable from './SensitivityTable';
@@ -106,7 +106,7 @@ export default function DealAnalysisWorksheet({
   // Pre-load logo for PDF export
   useEffect(() => {
     if (user?.company_logo_url) {
-      loadLogoImage(user.company_logo_url).then(setLogoBase64);
+      loadDefaultLogo(user.company_logo_url).then(setLogoBase64);
     }
   }, [user?.company_logo_url]);
 
