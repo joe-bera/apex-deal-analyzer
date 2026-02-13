@@ -297,6 +297,11 @@ export default function PropertyDetail() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [txDebug, setTxDebug] = useState<any>(null);
 
+  // Property edit state
+  const [editingProperty, setEditingProperty] = useState(false);
+  const [savingProperty, setSavingProperty] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+
   // Listing proposal modal state
   const [showProposalForm, setShowProposalForm] = useState(false);
   const [execSummaryHistory, setExecSummaryHistory] = useState<Array<{
@@ -468,6 +473,63 @@ export default function PropertyDetail() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete property';
       setError(message);
+    }
+  };
+
+  const startEditProperty = () => {
+    if (!property) return;
+    setEditForm({
+      price: property.price || '',
+      building_size: property.building_size || '',
+      cap_rate: property.cap_rate || '',
+      noi: property.noi || '',
+      lot_size: property.lot_size || '',
+      year_built: property.year_built || '',
+      zoning: property.zoning || '',
+      parking_spaces: property.parking_spaces || '',
+      property_type: property.property_type || '',
+      occupancy_rate: property.occupancy_rate || '',
+      address: property.address || '',
+      city: property.city || '',
+      state: property.state || '',
+      zip_code: property.zip_code || '',
+    });
+    setEditingProperty(true);
+  };
+
+  const handleSavePropertyEdits = async () => {
+    if (!property) return;
+    setSavingProperty(true);
+    try {
+      const updates: Record<string, any> = {};
+      const numericFields = ['price', 'building_size', 'cap_rate', 'noi', 'lot_size', 'year_built', 'parking_spaces', 'occupancy_rate'];
+      const stringFields = ['zoning', 'property_type', 'address', 'city', 'state', 'zip_code'];
+
+      for (const key of numericFields) {
+        const val = editForm[key];
+        if (val === '' || val === null || val === undefined) {
+          updates[key] = null;
+        } else {
+          updates[key] = parseFloat(val);
+        }
+      }
+      for (const key of stringFields) {
+        updates[key] = editForm[key] || null;
+      }
+
+      // Auto-calculate price per sqft
+      if (updates.price && updates.building_size) {
+        updates.price_per_sqft = Math.round(updates.price / updates.building_size);
+      }
+
+      await api.updateProperty(id!, updates);
+      setProperty({ ...property, ...updates });
+      setEditingProperty(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update property';
+      setError(message);
+    } finally {
+      setSavingProperty(false);
     }
   };
 
@@ -1693,33 +1755,227 @@ export default function PropertyDetail() {
             {/* Property Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Property Details</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Property Details</CardTitle>
+                  {!editingProperty ? (
+                    <Button variant="ghost" size="sm" onClick={startEditProperty}>
+                      <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                      Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setEditingProperty(false)} disabled={savingProperty}>
+                        Cancel
+                      </Button>
+                      <Button variant="primary" size="sm" onClick={handleSavePropertyEdits} isLoading={savingProperty}>
+                        Save
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <dl className="space-y-4">
-                  {property.apn && (
-                    <Metric label="APN" value={property.apn} />
-                  )}
-                  {property.building_size && (
-                    <Metric label="Building Size" value={property.building_size} format="number" />
-                  )}
-                  {property.lot_size && (
-                    <Metric label="Lot Size" value={
-                      property.additional_data?.lot_size_unit === 'acres'
-                        ? `${property.lot_size} acres`
-                        : `${formatNumber(property.lot_size)} SF`
-                    } />
-                  )}
-                  {property.year_built && (
-                    <Metric label="Year Built" value={property.year_built} />
-                  )}
-                  {property.noi && (
-                    <Metric label="NOI" value={property.noi} format="currency" />
-                  )}
-                  {property.submarket && (
-                    <Metric label="Submarket" value={property.submarket} />
-                  )}
-                </dl>
+                {editingProperty ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">List Price</label>
+                      <input
+                        type="number"
+                        value={editForm.price}
+                        onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Building Size (SF)</label>
+                      <input
+                        type="number"
+                        value={editForm.building_size}
+                        onChange={(e) => setEditForm(f => ({ ...f, building_size: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">CAP Rate (%)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.cap_rate}
+                          onChange={(e) => setEditForm(f => ({ ...f, cap_rate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">NOI</label>
+                        <input
+                          type="number"
+                          value={editForm.noi}
+                          onChange={(e) => setEditForm(f => ({ ...f, noi: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Property Type</label>
+                      <select
+                        value={editForm.property_type}
+                        onChange={(e) => setEditForm(f => ({ ...f, property_type: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                      >
+                        <option value="">Select type</option>
+                        <option value="warehouse">Warehouse</option>
+                        <option value="distribution_center">Distribution Center</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="flex_space">Flex Space</option>
+                        <option value="cold_storage">Cold Storage</option>
+                        <option value="industrial">Industrial</option>
+                        <option value="office">Office</option>
+                        <option value="retail">Retail</option>
+                        <option value="multifamily">Multifamily</option>
+                        <option value="land">Land</option>
+                        <option value="mixed_use">Mixed Use</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Lot Size</label>
+                        <input
+                          type="number"
+                          value={editForm.lot_size}
+                          onChange={(e) => setEditForm(f => ({ ...f, lot_size: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Year Built</label>
+                        <input
+                          type="number"
+                          value={editForm.year_built}
+                          onChange={(e) => setEditForm(f => ({ ...f, year_built: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="1990"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Zoning</label>
+                        <input
+                          type="text"
+                          value={editForm.zoning}
+                          onChange={(e) => setEditForm(f => ({ ...f, zoning: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="M-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Parking</label>
+                        <input
+                          type="number"
+                          value={editForm.parking_spaces}
+                          onChange={(e) => setEditForm(f => ({ ...f, parking_spaces: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Occupancy (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editForm.occupancy_rate}
+                        onChange={(e) => setEditForm(f => ({ ...f, occupancy_rate: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="100"
+                      />
+                    </div>
+                    <div className="border-t pt-3 mt-3">
+                      <p className="text-xs font-medium text-gray-500 mb-2">Address</p>
+                      <input
+                        type="text"
+                        value={editForm.address}
+                        onChange={(e) => setEditForm(f => ({ ...f, address: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-2"
+                        placeholder="Street address"
+                      />
+                      <div className="grid grid-cols-4 gap-2">
+                        <input
+                          type="text"
+                          value={editForm.city}
+                          onChange={(e) => setEditForm(f => ({ ...f, city: e.target.value }))}
+                          className="col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="City"
+                        />
+                        <input
+                          type="text"
+                          value={editForm.state}
+                          onChange={(e) => setEditForm(f => ({ ...f, state: e.target.value }))}
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="CA"
+                          maxLength={2}
+                        />
+                        <input
+                          type="text"
+                          value={editForm.zip_code}
+                          onChange={(e) => setEditForm(f => ({ ...f, zip_code: e.target.value }))}
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                          placeholder="Zip"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <dl className="space-y-4">
+                    {property.apn && (
+                      <Metric label="APN" value={property.apn} />
+                    )}
+                    <Metric label="List Price" value={formatCurrency(property.price)} />
+                    {property.building_size && (
+                      <Metric label="Building Size" value={`${formatNumber(property.building_size)} SF`} />
+                    )}
+                    {property.price_per_sqft && (
+                      <Metric label="Price / SF" value={`$${property.price_per_sqft}`} />
+                    )}
+                    {property.cap_rate && (
+                      <Metric label="CAP Rate" value={`${property.cap_rate}%`} />
+                    )}
+                    {property.noi && (
+                      <Metric label="NOI" value={formatCurrency(property.noi)} />
+                    )}
+                    {property.lot_size && (
+                      <Metric label="Lot Size" value={
+                        property.additional_data?.lot_size_unit === 'acres'
+                          ? `${property.lot_size} acres`
+                          : `${formatNumber(property.lot_size)} SF`
+                      } />
+                    )}
+                    {property.year_built && (
+                      <Metric label="Year Built" value={property.year_built} />
+                    )}
+                    {property.zoning && (
+                      <Metric label="Zoning" value={property.zoning} />
+                    )}
+                    {property.parking_spaces && (
+                      <Metric label="Parking" value={`${property.parking_spaces} spaces`} />
+                    )}
+                    {property.occupancy_rate && (
+                      <Metric label="Occupancy" value={`${property.occupancy_rate}%`} />
+                    )}
+                    {property.submarket && (
+                      <Metric label="Submarket" value={property.submarket} />
+                    )}
+                  </dl>
+                )}
               </CardContent>
             </Card>
 
