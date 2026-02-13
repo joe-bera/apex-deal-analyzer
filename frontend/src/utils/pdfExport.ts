@@ -351,7 +351,7 @@ interface ExecSummaryOptions {
   logoBase64?: string | null;
 }
 
-export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
+export function generateValuationSummaryPDF(options: ExecSummaryOptions): void {
   const { property, valuation, branding, logoBase64 } = options;
 
   const doc = new jsPDF();
@@ -366,7 +366,7 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
   doc.setTextColor(...COLORS.dark);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('EXECUTIVE SUMMARY', margin, yPos);
+  doc.text('VALUATION SUMMARY', margin, yPos);
   yPos += 3;
   doc.setDrawColor(...COLORS.primary);
   doc.setLineWidth(0.8);
@@ -475,7 +475,7 @@ export function generateExecutiveSummaryPDF(options: ExecSummaryOptions): void {
   // Footer
   renderBrandedFooter(doc, branding);
 
-  const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const fileName = `Valuation_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 }
 

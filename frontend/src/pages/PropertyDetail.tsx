@@ -41,8 +41,8 @@ import {
 import { CompAnalysisCharts } from '../components/charts';
 import PhotoGallery from '../components/PhotoGallery';
 import { STATUS_OPTIONS } from '../components/StatusBadge';
-import { generateExecutiveSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
-import { generateListingProposalPDF } from '../utils/listingProposalPdf';
+import { generateValuationSummaryPDF, generateLOIPDF } from '../utils/pdfExport';
+import { generateExecutiveSummaryPDF } from '../utils/listingProposalPdf';
 import type { OwnerInfo } from '../utils/listingProposalPdf';
 import { loadDefaultLogo } from '../utils/pdfBranding';
 
@@ -534,7 +534,7 @@ export default function PropertyDetail() {
     generateLOIPDF({ property, loi: generatedLOI, branding, logoBase64 });
   };
 
-  const handleDownloadExecSummaryPDF = () => {
+  const handleDownloadValuationSummaryPDF = () => {
     if (!valuation || !property) return;
     const branding = user ? {
       company_name: user.company_name,
@@ -543,10 +543,10 @@ export default function PropertyDetail() {
       company_email: user.company_email,
       company_address: user.company_address,
     } : undefined;
-    generateExecutiveSummaryPDF({ property, valuation, branding, logoBase64 });
+    generateValuationSummaryPDF({ property, valuation, branding, logoBase64 });
   };
 
-  const handleGenerateListingProposal = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleGenerateExecSummary = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!property || !valuation) return;
 
@@ -568,7 +568,7 @@ export default function PropertyDetail() {
       company_address: user.company_address,
     } : undefined;
 
-    generateListingProposalPDF({ property, valuation, ownerInfo, branding, logoBase64 });
+    generateExecutiveSummaryPDF({ property, valuation, ownerInfo, branding, logoBase64 });
     setShowProposalForm(false);
   };
 
@@ -1005,7 +1005,7 @@ export default function PropertyDetail() {
                         </svg>
                       }
                     >
-                      Generate Listing Proposal
+                      Generate Executive Summary
                     </Button>
                   </div>
                 )}
@@ -1138,7 +1138,7 @@ export default function PropertyDetail() {
             <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Generate Listing Proposal</CardTitle>
+                  <CardTitle>Generate Executive Summary</CardTitle>
                   <Button variant="ghost" size="sm" onClick={() => setShowProposalForm(false)}>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1147,7 +1147,7 @@ export default function PropertyDetail() {
                 </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleGenerateListingProposal} className="space-y-4">
+                <form onSubmit={handleGenerateExecSummary} className="space-y-4">
                   <div>
                     <h4 className="font-medium text-gray-900 mb-3">Property Owner Information</h4>
                     <div className="grid grid-cols-2 gap-3">
@@ -1282,14 +1282,14 @@ export default function PropertyDetail() {
                     </svg>
                   </div>
                   <div>
-                    <CardTitle>Executive Summary</CardTitle>
+                    <CardTitle>Valuation Summary</CardTitle>
                     <p className="text-sm text-gray-500">AI-generated investment brief</p>
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleDownloadExecSummaryPDF}
+                  onClick={handleDownloadValuationSummaryPDF}
                   leftIcon={
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

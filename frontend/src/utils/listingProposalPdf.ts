@@ -389,7 +389,7 @@ function renderSignatureBlock(doc: jsPDF, y: number): number {
 // Main PDF Generator
 // ============================================================================
 
-export function generateListingProposalPDF(options: ListingProposalOptions): void {
+export function generateExecutiveSummaryPDF(options: ListingProposalOptions): void {
   const { property, valuation, ownerInfo, branding, logoBase64 } = options;
 
   const template = getTemplate(property.property_type);
@@ -549,6 +549,6 @@ export function generateListingProposalPDF(options: ListingProposalOptions): voi
   // ============================
   // Save
   // ============================
-  const fileName = `Listing_Proposal_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const fileName = `Executive_Summary_${(property.address || 'Property').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
 }
