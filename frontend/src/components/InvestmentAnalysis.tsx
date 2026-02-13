@@ -13,7 +13,6 @@ import {
   calculateCapRate,
   calculatePricePerSqft,
   calculateLoanAmount,
-  calculateDownPayment,
   calculateMonthlyPayment,
   calculateAnnualDebtService,
   calculateDSCR,
@@ -42,7 +41,6 @@ import {
   solveTargetExitCap,
   calculateNNNReimbursements,
   calculateAdjustedDownPayment,
-  calculateTotalAnnualDebtService,
 } from '../utils/financialCalculations';
 import type { InvestmentStrategy } from '../utils/financialCalculations';
 import {
