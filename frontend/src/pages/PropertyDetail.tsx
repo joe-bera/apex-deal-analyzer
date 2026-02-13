@@ -54,6 +54,210 @@ interface Photo {
   url: string;
 }
 
+interface Transaction {
+  id: string;
+  transaction_type: string;
+  transaction_date?: string;
+  recording_date?: string;
+  sale_price?: number;
+  price_per_sf?: number;
+  cap_rate?: number;
+  noi?: number;
+  buyer_name?: string;
+  seller_name?: string;
+  broker_name?: string;
+  broker_company?: string;
+  tenant_name?: string;
+  lease_type?: string;
+  lease_term_months?: number;
+  rent_per_sf_year?: number;
+  lease_start_date?: string;
+  lease_end_date?: string;
+  asking_price?: number;
+  asking_price_per_sf?: number;
+  days_on_market?: number;
+  listing_status?: string;
+  asking_cap_rate?: number;
+  lender?: string;
+  loan_amount?: number;
+  loan_type?: string;
+  interest_rate?: number;
+  maturity_date?: string;
+  source?: string;
+  notes?: string;
+  created_at?: string;
+}
+
+const formatDateStr = (value?: string | null) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const fmtCurrency = (value?: number | null) => {
+  if (value === null || value === undefined) return 'N/A';
+  return `$${value.toLocaleString()}`;
+};
+
+function TxField({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value || value === '-' || value === 'N/A') return null;
+  return (
+    <div>
+      <dt className="text-xs text-gray-500">{label}</dt>
+      <dd className="text-sm font-medium text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
+function TransactionCard({ tx }: { tx: Transaction }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const typeBadge: Record<string, { color: string; label: string }> = {
+    sale: { color: 'bg-green-100 text-green-800', label: 'Sale' },
+    lease: { color: 'bg-blue-100 text-blue-800', label: 'Lease' },
+    listing: { color: 'bg-purple-100 text-purple-800', label: 'Listing' },
+    off_market: { color: 'bg-gray-100 text-gray-800', label: 'Off Market' },
+  };
+  const badge = typeBadge[tx.transaction_type] || typeBadge.off_market;
+
+  const headline = tx.transaction_type === 'sale'
+    ? fmtCurrency(tx.sale_price)
+    : tx.transaction_type === 'lease'
+    ? (tx.tenant_name || 'Lease')
+    : tx.transaction_type === 'listing'
+    ? `Asking ${fmtCurrency(tx.asking_price)}`
+    : 'Off Market';
+
+  const subline = tx.transaction_type === 'sale'
+    ? [tx.price_per_sf ? `$${tx.price_per_sf.toFixed(0)}/SF` : null, tx.cap_rate ? `${tx.cap_rate.toFixed(2)}% Cap` : null].filter(Boolean).join(' · ')
+    : tx.transaction_type === 'lease'
+    ? [tx.lease_type, tx.rent_per_sf_year ? `$${tx.rent_per_sf_year.toFixed(2)}/SF/yr` : null].filter(Boolean).join(' · ')
+    : tx.transaction_type === 'listing'
+    ? [tx.asking_price_per_sf ? `$${tx.asking_price_per_sf.toFixed(0)}/SF` : null, tx.days_on_market ? `${tx.days_on_market} DOM` : null, tx.listing_status].filter(Boolean).join(' · ')
+    : '';
+
+  const hasSaleDetails = tx.transaction_type === 'sale' && (tx.noi || tx.buyer_name || tx.seller_name || tx.recording_date);
+  const hasLeaseDetails = tx.transaction_type === 'lease' && (tx.lease_term_months || tx.lease_start_date || tx.lease_end_date || tx.rent_per_sf_year);
+  const hasListingDetails = tx.transaction_type === 'listing' && (tx.asking_cap_rate || tx.days_on_market || tx.listing_status);
+  const hasParties = tx.buyer_name || tx.seller_name || tx.broker_name || tx.broker_company;
+  const hasFinancing = tx.lender || tx.loan_amount || tx.loan_type || tx.interest_rate || tx.maturity_date;
+  const hasMeta = tx.source || tx.notes;
+  const hasDetails = hasSaleDetails || hasLeaseDetails || hasListingDetails || hasParties || hasFinancing || hasMeta;
+
+  return (
+    <div className={`border rounded-xl overflow-hidden transition-all ${expanded ? 'border-gray-300 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
+      <button
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        className={`w-full flex items-center justify-between px-5 py-4 text-left ${hasDetails ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${badge.color}`}>
+            {badge.label}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">{headline}</p>
+            {subline && <p className="text-xs text-gray-500 mt-0.5">{subline}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+          <span className="text-sm text-gray-500">{formatDateStr(tx.transaction_date)}</span>
+          {hasDetails && (
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </div>
+      </button>
+
+      {expanded && hasDetails && (
+        <div className="border-t bg-gray-50 px-5 py-4 space-y-5">
+          {tx.transaction_type === 'sale' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Sale Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Sale Price" value={fmtCurrency(tx.sale_price)} />
+                <TxField label="Price/SF" value={tx.price_per_sf ? `$${tx.price_per_sf.toFixed(2)}` : null} />
+                <TxField label="Cap Rate" value={tx.cap_rate ? `${tx.cap_rate.toFixed(2)}%` : null} />
+                <TxField label="NOI" value={fmtCurrency(tx.noi)} />
+                <TxField label="Recording Date" value={formatDateStr(tx.recording_date)} />
+              </dl>
+            </div>
+          )}
+
+          {tx.transaction_type === 'lease' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Lease Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Tenant" value={tx.tenant_name} />
+                <TxField label="Lease Type" value={tx.lease_type} />
+                <TxField label="Rent/SF/Yr" value={tx.rent_per_sf_year ? `$${tx.rent_per_sf_year.toFixed(2)}` : null} />
+                <TxField label="Term" value={tx.lease_term_months ? `${tx.lease_term_months} months` : null} />
+                <TxField label="Start Date" value={formatDateStr(tx.lease_start_date)} />
+                <TxField label="End Date" value={formatDateStr(tx.lease_end_date)} />
+              </dl>
+            </div>
+          )}
+
+          {tx.transaction_type === 'listing' && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Listing Details</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Asking Price" value={fmtCurrency(tx.asking_price)} />
+                <TxField label="Asking $/SF" value={tx.asking_price_per_sf ? `$${tx.asking_price_per_sf.toFixed(0)}` : null} />
+                <TxField label="Asking Cap" value={tx.asking_cap_rate ? `${tx.asking_cap_rate.toFixed(2)}%` : null} />
+                <TxField label="Days on Market" value={tx.days_on_market?.toString()} />
+                <TxField label="Status" value={tx.listing_status} />
+              </dl>
+            </div>
+          )}
+
+          {hasParties && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Parties</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Buyer" value={tx.buyer_name} />
+                <TxField label="Seller" value={tx.seller_name} />
+                <TxField label="Broker" value={tx.broker_name} />
+                <TxField label="Brokerage" value={tx.broker_company} />
+              </dl>
+            </div>
+          )}
+
+          {hasFinancing && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Financing</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Lender" value={tx.lender} />
+                <TxField label="Loan Amount" value={fmtCurrency(tx.loan_amount)} />
+                <TxField label="Loan Type" value={tx.loan_type} />
+                <TxField label="Interest Rate" value={tx.interest_rate ? `${tx.interest_rate}%` : null} />
+                <TxField label="Maturity" value={formatDateStr(tx.maturity_date)} />
+                {tx.loan_amount && tx.sale_price ? (
+                  <TxField label="LTV" value={`${((tx.loan_amount / tx.sale_price) * 100).toFixed(0)}%`} />
+                ) : null}
+              </dl>
+            </div>
+          )}
+
+          {hasMeta && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Source & Notes</h4>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                <TxField label="Source" value={tx.source?.replace('_', ' ')} />
+                {tx.notes && (
+                  <div className="col-span-full">
+                    <dt className="text-xs text-gray-500">Notes</dt>
+                    <dd className="text-sm text-gray-700 mt-0.5">{tx.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -88,6 +292,7 @@ export default function PropertyDetail() {
   // Deal analysis state
   const [dealAnalysis, setDealAnalysis] = useState<DealAnalysis | null>(null);
   const [savingAnalysis, setSavingAnalysis] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   // Cached logo for PDF exports
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -106,17 +311,19 @@ export default function PropertyDetail() {
   const loadPropertyData = async () => {
     try {
       setLoading(true);
-      const [propData, compsData, photosData, analysisData, valuationData] = await Promise.all([
+      const [propData, compsData, photosData, analysisData, valuationData, txData] = await Promise.all([
         api.getProperty(id!),
         api.getComps(id!).catch(() => ({ comps: [] })),
         api.getPhotos(id!).catch(() => ({ photos: [] })),
         api.getDealAnalysis(id!).catch(() => ({ analysis: null })),
         api.getValuation(id!).catch(() => ({ valuation: null })),
+        api.getPropertyTransactions(id!).catch(() => ({ transactions: [] })),
       ]);
       setProperty((propData as PropertyResponse).property);
       setComps((compsData as CompsResponse).comps || []);
       setPhotos((photosData as { photos: Photo[] }).photos || []);
       setDealAnalysis((analysisData as DealAnalysisResponse).analysis || null);
+      setTransactions((txData as any).transactions || []);
       const savedValuation = (valuationData as any)?.valuation;
       if (savedValuation) {
         setValuation(savedValuation);
@@ -588,6 +795,32 @@ export default function PropertyDetail() {
             />
           </CardContent>
         </Card>
+
+        {/* Transaction History */}
+        {transactions.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-100 rounded-lg">
+                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div>
+                  <CardTitle>Transaction History</CardTitle>
+                  <p className="text-sm text-gray-500">{transactions.length} record{transactions.length !== 1 ? 's' : ''} from Property Database</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {transactions.map((tx) => (
+                  <TransactionCard key={tx.id} tx={tx} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Investment Analysis Engine */}
         {property && (

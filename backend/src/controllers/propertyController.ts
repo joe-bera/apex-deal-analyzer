@@ -790,3 +790,70 @@ export const analyzePropertyValuation = async (
     }
   }
 };
+
+/**
+ * Get transaction history for a property by matching to master_properties
+ * GET /api/properties/:id/transactions
+ */
+export const getPropertyTransactions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const { id } = req.params;
+
+    // Get the property to find its address
+    const { data: property, error: propError } = await supabaseAdmin
+      .from('properties')
+      .select('address, city, state')
+      .eq('id', id)
+      .single();
+
+    if (propError || !property) {
+      throw new AppError(404, 'Property not found');
+    }
+
+    if (!property.address) {
+      res.status(200).json({ success: true, transactions: [] });
+      return;
+    }
+
+    // Look up matching master_properties by address (case-insensitive)
+    const { data: masterProps } = await supabaseAdmin
+      .from('master_properties')
+      .select('id')
+      .ilike('address', property.address)
+      .eq('is_deleted', false);
+
+    if (!masterProps || masterProps.length === 0) {
+      res.status(200).json({ success: true, transactions: [] });
+      return;
+    }
+
+    const masterIds = masterProps.map((mp: any) => mp.id);
+
+    // Fetch all transactions for matching master properties
+    const { data: transactions, error: txError } = await supabaseAdmin
+      .from('transactions')
+      .select('*')
+      .in('property_id', masterIds)
+      .order('transaction_date', { ascending: false });
+
+    if (txError) {
+      throw new AppError(500, 'Failed to fetch transactions');
+    }
+
+    res.status(200).json({
+      success: true,
+      transactions: transactions || [],
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({ success: false, error: error.message });
+    } else {
+      console.error('Get property transactions error:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+    }
+  }
+};

@@ -277,6 +277,9 @@ export const api = {
 
   getProperty: (id: string) => request(`/properties/${id}`),
 
+  getPropertyTransactions: (propertyId: string) =>
+    request(`/properties/${propertyId}/transactions`),
+
   updateProperty: (id: string, updates: any) =>
     request(`/properties/${id}`, {
       method: 'PATCH',

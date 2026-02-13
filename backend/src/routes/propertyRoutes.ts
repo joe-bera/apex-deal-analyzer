@@ -9,6 +9,7 @@ import {
   deleteProperty,
   analyzePropertyValuation,
   getPropertyValuation,
+  getPropertyTransactions,
 } from '../controllers/propertyController';
 import {
   generatePropertyLOI,
@@ -93,6 +94,13 @@ router.delete(
   authenticate,
   validate(uuidParamSchema, 'params'),
   deleteProperty
+);
+
+// Get transaction history for a property (from master_properties match)
+router.get(
+  '/:id/transactions',
+  authenticate,
+  getPropertyTransactions
 );
 
 // Get latest valuation result
